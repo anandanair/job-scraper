@@ -34,4 +34,4 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           # Add other secrets your config.py or script might need, e.g., for proxies
           # PROXY_LIST_JSON: ${{ secrets.PROXY_LIST_JSON }} # Example if you pass proxies as JSON
-        run: python jobs/scraper.py # Execute your script
+        run: python scraper.py # Execute your script
