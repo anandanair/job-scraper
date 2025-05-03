@@ -1,0 +1,37 @@
+# .github/workflows/scrape_jobs.yml
+name: Daily Job Scraper
+
+on:
+  schedule:
+    # Runs every day at 10:00 UTC (6:00 PM SGT)
+    - cron: "0 10 * * *"
+  workflow_dispatch: # Allows manual triggering from the Actions tab
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest # Use a standard Linux runner
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4 # Checks out your code
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11" # Specify your desired Python version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run scraper script
+        env:
+          # Define environment variables needed by your script
+          # These should be set as Secrets in your GitHub repository settings
+          # (Settings > Secrets and variables > Actions > New repository secret)
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Add other secrets your config.py or script might need, e.g., for proxies
+          # PROXY_LIST_JSON: ${{ secrets.PROXY_LIST_JSON }} # Example if you pass proxies as JSON
+        run: python jobs/scraper.py # Execute your script

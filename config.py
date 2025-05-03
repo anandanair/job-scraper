@@ -1,0 +1,52 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# --- Supabase Configuration ---
+SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_TABLE_NAME: str = "jobs" 
+
+# --- LinkedIn Configuration ---
+LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "next js", "application support", "cybersecurity analyst"]
+LINKEDIN_LOCATION = "Singapore"
+LINKEDIN_GEO_ID = 102454443 # Singapore
+LINKEDIN_JOB_TYPE = "F" # Full-time
+LINKEDIN_JOB_POSTING_DATE = "" # anytime
+# LINKEDIN_JOB_POSTING_DATE = "r86400" # Past 24 hours
+
+# --- Scraping Parameters ---
+# LINKEDIN_MAX_START = 0 # Testing with a smaller number (0 means 1 page)
+LINKEDIN_MAX_START = 990 # Maximum start value for full scrape
+# LINKEDIN_DETAIL_FETCH_LIMIT = 2 # Max new jobs to fetch details for per query (for testing)
+REQUEST_TIMEOUT = 30 # Timeout for HTTP requests in seconds
+
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/110.0',
+]
+
+raw_proxies = [
+    "38.154.227.167:5868:fbjewpss:9nwozqnmpvqq",
+    "45.127.248.127:5128:fbjewpss:9nwozqnmpvqq",
+    "198.23.239.134:6540:fbjewpss:9nwozqnmpvqq",
+    "38.153.152.244:9594:fbjewpss:9nwozqnmpvqq",
+    "86.38.234.176:6630:fbjewpss:9nwozqnmpvqq",
+    "173.211.0.148:6641:fbjewpss:9nwozqnmpvqq",
+    "216.10.27.159:6837:fbjewpss:9nwozqnmpvqq",
+    "154.36.110.199:6853:fbjewpss:9nwozqnmpvqq",
+    "45.151.162.198:6600:fbjewpss:9nwozqnmpvqq",
+    "188.74.210.21:6100:fbjewpss:9nwozqnmpvqq"
+]
+
+proxy_list = [
+    f"http://{user}:{password}@{ip}:{port}"
+    for ip, port, user, password in (proxy.split(":") for proxy in raw_proxies)
+]
