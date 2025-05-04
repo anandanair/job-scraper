@@ -7,6 +7,10 @@ load_dotenv()
 SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_TABLE_NAME: str = "jobs" 
+SUPABASE_RESUME_TABLE_NAME = "resumes"
+
+# --- Google Configuration ---
+GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")  
 
 # --- LinkedIn Configuration ---
 LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "next js", "application support", "cybersecurity analyst"]
