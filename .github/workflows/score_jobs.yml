@@ -1,0 +1,35 @@
+# .github/workflows/score_jobs.yml
+name: Hourly Job Scorer
+
+on:
+  schedule:
+    # Runs every hour at the beginning of the hour
+    - cron: "0 * * * *"
+  workflow_dispatch: # Allows manual triggering from the Actions tab
+
+jobs:
+  score:
+    runs-on: ubuntu-latest # Use a standard Linux runner
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4 # Checks out your code
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11" # Specify your desired Python version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run job scoring script
+        env:
+          # Define environment variables needed by score_jobs.py
+          # These should be set as Secrets in your GitHub repository settings
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }} # Gemini API Key
+        run: python score_jobs.py # Execute the job scoring script
