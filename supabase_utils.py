@@ -1,6 +1,7 @@
 from supabase import create_client, Client
 import config # Import configuration
 import datetime # Import datetime module
+import logging # Import logging
 
 # --- Initialize Supabase Client ---
 # Ensure URL and Key are provided
@@ -151,3 +152,105 @@ def save_resume_to_supabase(resume_data: dict):
         print(f"Error upserting resume data to Supabase: {e}")
         # Consider logging the data that failed to upsert
         # print(f"Failed data: {resume_data}")
+
+
+def get_resume_by_email(email: str) -> dict | None:
+    """
+    Fetches a single resume record from the Supabase 'resumes' table based on email.
+    """
+    if not email:
+        logging.error("No email provided to fetch resume.")
+        return None
+    if not hasattr(config, 'SUPABASE_RESUME_TABLE_NAME') or not config.SUPABASE_RESUME_TABLE_NAME:
+        logging.error("SUPABASE_RESUME_TABLE_NAME is not defined in config.py")
+        return None
+
+    try:
+        logging.info(f"Fetching resume for email: {email} from table '{config.SUPABASE_RESUME_TABLE_NAME}'")
+        response = supabase.table(config.SUPABASE_RESUME_TABLE_NAME)\
+                           .select("*")\
+                           .eq("email", email)\
+                           .limit(1)\
+                           .execute()
+
+        if response.data:
+            logging.info(f"Successfully fetched resume data for {email}.")
+            return response.data[0] # Return the first matching resume
+        else:
+            logging.warning(f"No resume found for email: {email}")
+            return None
+
+    except Exception as e:
+        logging.error(f"Error fetching resume data from Supabase for email {email}: {e}")
+        return None
+
+
+def get_jobs_to_score(limit: int) -> list:
+    """
+    Fetches jobs from the Supabase 'jobs' table that need scoring.
+    Filters by is_active = true and resume_score = null.
+    Selects only necessary fields (job_id, job_title, description).
+    Orders by scraped_at ascending to process older jobs first.
+    """
+    if limit <= 0:
+        logging.warning("Limit for jobs to score must be positive.")
+        return []
+
+    try:
+        logging.info(f"Fetching up to {limit} jobs needing scoring...")
+        response = supabase.table(config.SUPABASE_TABLE_NAME)\
+                           .select("job_id, job_title, description")\
+                           .eq("is_active", True)\
+                           .is_("resume_score", None)\
+                           .order("scraped_at", desc=False)\
+                           .limit(limit)\
+                           .execute()
+
+        if response.data:
+            logging.info(f"Successfully fetched {len(response.data)} jobs to score.")
+            return response.data
+        else:
+            logging.info("No jobs found needing scoring at this time.")
+            return []
+
+    except Exception as e:
+        logging.error(f"Error fetching jobs to score from Supabase: {e}")
+        return []
+
+
+def update_job_score(job_id: str, score: int) -> bool:
+    """
+    Updates the 'resume_score' for a specific job_id in the Supabase 'jobs' table.
+    Returns True on success, False on failure.
+    """
+    if not job_id or score is None:
+        logging.error(f"Invalid input for updating job score: job_id={job_id}, score={score}")
+        return False
+
+    try:
+        logging.info(f"Updating score for job_id {job_id} to {score}...")
+        response = supabase.table(config.SUPABASE_TABLE_NAME)\
+                           .update({"resume_score": score})\
+                           .eq("job_id", job_id)\
+                           .execute()
+
+        # Check if the update was successful (response structure might vary)
+        # A common pattern is checking if data is returned or count is non-zero
+        if hasattr(response, 'data') and response.data:
+             logging.info(f"Successfully updated score for job_id {job_id}.")
+             return True
+        elif hasattr(response, 'count') and response.count is not None and response.count > 0:
+             logging.info(f"Successfully updated score for job_id {job_id} (count={response.count}).")
+             return True
+        elif not hasattr(response, 'data') and not hasattr(response, 'count'):
+             # Handle cases where the response might not have data/count but didn't error
+             logging.warning(f"Update score for job_id {job_id} executed, but response structure unclear: {response}")
+             return True # Assume success if no exception occurred
+        else:
+             logging.warning(f"Update score for job_id {job_id} might have failed or job not found. Response: {response}")
+             return False
+
+
+    except Exception as e:
+        logging.error(f"Error updating score for job_id {job_id} in Supabase: {e}")
+        return False

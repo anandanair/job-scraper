@@ -6,11 +6,18 @@ load_dotenv()
 # --- Supabase Configuration ---
 SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-SUPABASE_TABLE_NAME: str = "jobs" 
+SUPABASE_TABLE_NAME: str = "jobs"
 SUPABASE_RESUME_TABLE_NAME = "resumes"
 
 # --- Google Configuration ---
-GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")  
+GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
+# Consider using a specific model version if needed, e.g., "gemini-1.5-flash"
+GEMINI_MODEL_NAME = "gemini-2.0-flash"
+
+# --- Resume Scoring Configuration ---
+TARGET_RESUME_EMAIL = "anand@itsmeanand.com" # Email of the resume to use for scoring
+JOBS_TO_SCORE_PER_RUN = 40 # Limit jobs processed per script execution (respects API limits)
+GEMINI_REQUEST_DELAY_SECONDS = 6 # Delay between Gemini API calls (10 requests/min)
 
 # --- LinkedIn Configuration ---
 LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "next js", "application support", "cybersecurity analyst"]
