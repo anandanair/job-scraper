@@ -6,3 +6,4 @@ httpx
 pdfplumber
 google-genai
 pydantic
+groq
