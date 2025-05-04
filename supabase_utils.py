@@ -17,7 +17,7 @@ def get_existing_job_ids_from_supabase() -> set:
     existing_ids = set()
     try:
         # Use table name from config
-        response = supabase.table(config.SUPABASE_TABLE_NAME).select("job_id").eq('is_active', True).execute()
+        response = supabase.table(config.SUPABASE_TABLE_NAME).select("job_id").execute()
 
         if response.data:
             for item in response.data:
@@ -39,27 +39,58 @@ def get_existing_job_ids_from_supabase() -> set:
 
 def save_jobs_to_supabase(jobs_data: list):
     """
-    Saves a list of job data dictionaries to the Supabase table.
+    Saves or updates a list of job data dictionaries to the Supabase table using upsert.
+    This avoids duplicate key errors by updating existing records based on job_id.
     """
     if not jobs_data:
-        print("No new job data provided to save.")
+        print("No job data provided to save/update.")
         return
 
-    print(f"Attempting to save {len(jobs_data)} new jobs to Supabase...")
+    # Ensure job_id is present and potentially convert to the correct type if needed
+    # (Assuming job_id in jobs_data is already the correct string type for your 'text' column)
+    processed_jobs_data = []
+    for job in jobs_data:
+        if 'job_id' in job and job['job_id'] is not None:
+             # If your Supabase job_id column was numeric, you'd convert here:
+             # try:
+             #     job['job_id'] = int(job['job_id'])
+             #     processed_jobs_data.append(job)
+             # except (ValueError, TypeError):
+             #     print(f"Warning: Invalid job_id format found: {job.get('job_id')}. Skipping.")
+             # Since it's text, just ensure it's a string (it likely already is)
+             job['job_id'] = str(job['job_id'])
+             processed_jobs_data.append(job)
+        else:
+            print(f"Warning: Job data missing job_id. Skipping: {job}")
+
+
+    if not processed_jobs_data:
+        print("No valid job data remaining after processing.")
+        return
+
+    print(f"Attempting to upsert {len(processed_jobs_data)} jobs to Supabase...")
 
     try:
         # Use table name from config
-        data, count = supabase.table(config.SUPABASE_TABLE_NAME).insert(jobs_data).execute()
-        # Check the actual response structure from your Supabase client version
-        # Assuming the first element of 'data' contains the result list if successful
+        # Use upsert instead of insert. It will insert new rows
+        # or update existing rows if a job_id conflict occurs based on the primary key.
+        # Ensure 'job_id' is the primary key or has a unique constraint in your Supabase table.
+        # By default, supabase-py's upsert updates the row on conflict.
+        data, count = supabase.table(config.SUPABASE_TABLE_NAME).upsert(processed_jobs_data).execute()
+
+        # Check the actual response structure from your Supabase client version for upsert
+        # It might differ slightly from insert's response structure
         if data and isinstance(data, tuple) and len(data) > 1:
-             actual_data = data[0] # Or data[1] depending on client version
-             print(f"Successfully attempted to save {len(jobs_data)} jobs. Supabase response count (may vary): {count}")
-             # You might want to log the actual response data for debugging: print(f"Supabase response data: {actual_data}")
+             # The actual data returned might be in data[1] for upsert
+             actual_data = data[1]
+             print(f"Successfully upserted/updated {len(processed_jobs_data)} jobs. Supabase response count: {count}")
+             # You might want to log the actual response data for debugging:
+             # print(f"Supabase response data: {actual_data}")
         else:
-             print(f"Attempted to save {len(jobs_data)} jobs. Supabase response: {data}") # Log raw response if structure is unexpected
+             # Log raw response if structure is unexpected or for debugging
+             print(f"Attempted to upsert {len(processed_jobs_data)} jobs. Supabase response: {data}")
 
     except Exception as e:
-        print(f"Error saving data to Supabase: {e}")
-        # Consider logging the data that failed to insert for debugging
-        # print(f"Failed data: {jobs_data}")
+        print(f"Error upserting data to Supabase: {e}")
+        # Consider logging the data that failed to upsert for debugging
+        # print(f"Failed data: {processed_jobs_data}")
