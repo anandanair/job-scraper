@@ -21,6 +21,8 @@ LINKEDIN_JOB_POSTING_DATE = "" # anytime
 LINKEDIN_MAX_START = 990 # Maximum start value for full scrape
 # LINKEDIN_DETAIL_FETCH_LIMIT = 2 # Max new jobs to fetch details for per query (for testing)
 REQUEST_TIMEOUT = 30 # Timeout for HTTP requests in seconds
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 15
 
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
