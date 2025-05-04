@@ -9,6 +9,9 @@ SUPABASE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_TABLE_NAME: str = "jobs"
 SUPABASE_RESUME_TABLE_NAME = "resumes"
 
+# --- Groq Configuration ---
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
 # --- Google Configuration ---
 GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 # Consider using a specific model version if needed, e.g., "gemini-1.5-flash"
