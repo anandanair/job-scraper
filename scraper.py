@@ -283,7 +283,7 @@ def _fetch_job_details(job_id: str) -> dict | None:
 def process_linkedin_query(search_query: str, location: str) -> list:
     """
     Orchestrates scraping and detail fetching for a single query,
-    filtering against existing jobs in Supabase.
+    filtering against existing jobs in Supabase BEFORE fetching details.
     Returns a list of new job details found.
     """
 
@@ -293,14 +293,20 @@ def process_linkedin_query(search_query: str, location: str) -> list:
         print("No job IDs found in Phase 1. Skipping detail fetching.")
         return []
 
-    # 2. Fetch existing job IDs from Supabase
+    # Make the list unique *before* checking against Supabase
+    unique_linkedin_job_ids = list(set(scraped_job_ids))
+    print(f"Found {len(scraped_job_ids)} raw job IDs, {len(unique_linkedin_job_ids)} unique IDs after scraping.")
+
+    # 2. Fetch existing job IDs from Supabase (ensure this function fetches ALL IDs as strings)
     print("\n--- Starting Filtering Step: Checking against Supabase ---")
+    # Make sure get_existing_job_ids_from_supabase fetches ALL IDs as strings
     existing_supabase_ids = supabase_utils.get_existing_job_ids_from_supabase()
 
-    # 3. Identify new job IDs
-    new_job_ids_to_process = [job_id for job_id in scraped_job_ids if job_id not in existing_supabase_ids]
+    # 3. Identify new job IDs by filtering unique scraped IDs against existing ones
+    new_job_ids_to_process = [job_id for job_id in unique_linkedin_job_ids if job_id not in existing_supabase_ids]
 
-    print(f"Found {len(scraped_job_ids)} total scraped IDs.")
+    # Corrected print statement placement and content
+    print(f"Found {len(unique_linkedin_job_ids)} unique scraped IDs.")
     print(f"Found {len(existing_supabase_ids)} existing IDs in Supabase.")
     print(f"Identified {len(new_job_ids_to_process)} new job IDs to fetch details for.")
 
@@ -308,22 +314,25 @@ def process_linkedin_query(search_query: str, location: str) -> list:
         print("No new job IDs to process after filtering.")
         return []
 
-    # 4. Fetch details for new job IDs (with limit for testing)
-    # print(f"\n--- Starting Phase 2: Fetching Job Details for New IDs (Limit: {config.LINKEDIN_DETAIL_FETCH_LIMIT}) ---")
-    print(f"\n--- Starting Phase 2: Fetching Job Details for New IDs ---")
+    # 4. Fetch details ONLY for the genuinely new job IDs
+    print(f"\n--- Starting Phase 2: Fetching Job Details for {len(new_job_ids_to_process)} New IDs ---")
     detailed_new_jobs = []
     processed_count = 0
 
-    # Apply the limit from config
-    # ids_to_fetch = new_job_ids_to_process[:config.LINKEDIN_DETAIL_FETCH_LIMIT]
+    # No limit applied here unless specifically desired via config
     ids_to_fetch = new_job_ids_to_process
-    print(f"Processing the first {len(ids_to_fetch)} new job(s) based on limit...")
+    # print(f"Processing {len(ids_to_fetch)} new job(s)...") # Optional: less verbose
 
-    for job_id in ids_to_fetch: 
+    for job_id in ids_to_fetch:
         details = _fetch_job_details(job_id)
         if details:
-            detailed_new_jobs.append(details)
-            processed_count += 1
+            # Ensure the job_id key exists in details before adding
+            if 'job_id' in details and details['job_id'] is not None:
+                 detailed_new_jobs.append(details)
+                 processed_count += 1
+            else:
+                 print(f"Warning: Fetched details for {job_id} but missing 'job_id' key. Skipping.")
+
 
     print(f"--- Finished Phase 2: Successfully fetched details for {processed_count} new job(s) ---")
     return detailed_new_jobs
