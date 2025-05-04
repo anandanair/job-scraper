@@ -254,3 +254,77 @@ def update_job_score(job_id: str, score: int) -> bool:
     except Exception as e:
         logging.error(f"Error updating score for job_id {job_id} in Supabase: {e}")
         return False
+
+# Need to delete after testing
+def get_jobs_needing_markdown_conversion() -> list:
+    """
+    Fetches jobs from the Supabase 'jobs' table that need Markdown conversion.
+    Filters by description IS NOT NULL and description_is_markdown IS NOT TRUE.
+    Selects only necessary fields (job_id, description).
+    Orders by scraped_at ascending.
+    """
+    # if limit <= 0:
+    #     logging.warning("Limit for jobs to convert must be positive.")
+    #     return []
+
+    try:
+        logging.info(f"Fetching jobs needing Markdown conversion...")
+        # Filter for jobs where description exists and markdown flag is not true
+        response = supabase.table(config.SUPABASE_TABLE_NAME)\
+            .select("job_id, description")\
+            .not_.is_("description", None)\
+            .not_.is_("description_is_markdown", True)\
+            .order("scraped_at", desc=False)\
+            .execute()
+
+
+        if response.data:
+            logging.info(f"Successfully fetched {len(response.data)} jobs to convert.")
+            return response.data
+        else:
+            logging.info("No jobs found needing Markdown conversion at this time.")
+            return []
+
+    except Exception as e:
+        logging.error(f"Error fetching jobs for Markdown conversion from Supabase: {e}")
+        return []
+
+
+# Need to delete after testing
+def update_job_markdown_description(job_id: str, markdown_description: str) -> bool:
+    """
+    Updates the 'description' with Markdown content and sets 'description_is_markdown' to True
+    for a specific job_id in the Supabase 'jobs' table.
+    Returns True on success, False on failure.
+    """
+    if not job_id or markdown_description is None: # Allow empty string for markdown
+        logging.error(f"Invalid input for updating job markdown: job_id={job_id}")
+        return False
+
+    try:
+        logging.info(f"Updating markdown description and flag for job_id {job_id}...")
+        update_payload = {
+            "description": markdown_description,
+            "description_is_markdown": True # Set the flag to true
+        }
+        response = supabase.table(config.SUPABASE_TABLE_NAME)\
+                           .update(update_payload)\
+                           .eq("job_id", job_id)\
+                           .execute()
+
+        # Check if the update was successful (response structure might vary)
+        if hasattr(response, 'data') and response.data:
+             logging.info(f"Successfully updated markdown and flag for job_id {job_id}.")
+             return True
+        elif hasattr(response, 'count') and response.count is not None and response.count > 0:
+             logging.info(f"Successfully updated markdown and flag for job_id {job_id} (count={response.count}).")
+             return True
+        elif not hasattr(response, 'data') and not hasattr(response, 'count'):
+             logging.warning(f"Update markdown/flag for job_id {job_id} executed, but response structure unclear: {response}")
+             return True # Assume success if no exception occurred
+        else:
+             logging.warning(f"Update markdown/flag for job_id {job_id} might have failed or job not found. Response: {response}")
+             return False
+
+    except Exception as e:
+        logging.error(f"Error updating markdown/flag for job_id {job_id} in Supabase: {e}")
