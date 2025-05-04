@@ -16,7 +16,7 @@ GEMINI_MODEL_NAME = "gemini-2.0-flash"
 
 # --- Resume Scoring Configuration ---
 TARGET_RESUME_EMAIL = "anand@itsmeanand.com" # Email of the resume to use for scoring
-JOBS_TO_SCORE_PER_RUN = 40 # Limit jobs processed per script execution (respects API limits)
+JOBS_TO_SCORE_PER_RUN = 20 # Limit jobs processed per script execution (respects API limits)
 GEMINI_REQUEST_DELAY_SECONDS = 6 # Delay between Gemini API calls (10 requests/min)
 
 # --- LinkedIn Configuration ---
