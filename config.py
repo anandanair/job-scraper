@@ -24,6 +24,15 @@ REQUEST_TIMEOUT = 30 # Timeout for HTTP requests in seconds
 MAX_RETRIES = 3
 RETRY_DELAY_SECONDS = 15
 
+# --- Job Management Parameters ---
+JOB_EXPIRY_DAYS = 30 # Mark jobs as expired after this many days if not applied/interviewing etc.
+JOB_CHECK_DAYS = 3   # Check if a job is still active if last_checked is older than this
+JOB_DELETION_DAYS = 60 # Delete inactive ('expired', 'removed') jobs older than this
+JOB_CHECK_LIMIT = 50 # Max number of jobs to check for activity per run
+ACTIVE_CHECK_TIMEOUT = 20 # Timeout for checking if a job is active
+ACTIVE_CHECK_MAX_RETRIES = 2
+ACTIVE_CHECK_RETRY_DELAY = 10 # Base delay for retrying active check
+
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
