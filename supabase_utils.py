@@ -1,5 +1,6 @@
 from supabase import create_client, Client
 import config # Import configuration
+import datetime # Import datetime module
 
 # --- Initialize Supabase Client ---
 # Ensure URL and Key are provided
@@ -94,3 +95,59 @@ def save_jobs_to_supabase(jobs_data: list):
         print(f"Error upserting data to Supabase: {e}")
         # Consider logging the data that failed to upsert for debugging
         # print(f"Failed data: {processed_jobs_data}")
+
+def save_resume_to_supabase(resume_data: dict):
+    """
+    Saves or updates parsed resume data to the Supabase 'resumes' table based on email.
+    Includes a timestamp indicating when the parsing occurred.
+    Requires the 'email' column in the Supabase table to have a UNIQUE constraint.
+    """
+    if not resume_data:
+        print("No resume data provided to save.")
+        return
+
+    # Ensure email is present, as it's the key for upsert
+    if 'email' not in resume_data or not resume_data['email']:
+        print("Error: Resume data must contain a valid 'email' field for upserting.")
+        return
+
+    # Ensure the resume table name is configured
+    if not hasattr(config, 'SUPABASE_RESUME_TABLE_NAME') or not config.SUPABASE_RESUME_TABLE_NAME:
+        print("Error: SUPABASE_RESUME_TABLE_NAME is not defined in config.py")
+        return
+
+    # Add/Update the current timestamp for the operation
+    # Use ISO 8601 format, which Supabase handles well for TIMESTAMPTZ
+    resume_data['parsed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    print(f"Attempting to upsert resume data for {resume_data['email']} into table '{config.SUPABASE_RESUME_TABLE_NAME}'...")
+
+    try:
+        # Use upsert instead of insert.
+        # Specify 'email' as the column to check for conflicts.
+        # If a row with the same email exists, it will be updated. Otherwise, a new row is inserted.
+        # Ensure your Supabase 'resumes' table columns match the keys in resume_data
+        # and that columns for lists/nested objects (like skills, education, experience) are JSONB type.
+        data, count = supabase.table(config.SUPABASE_RESUME_TABLE_NAME)\
+                              .upsert(resume_data, on_conflict='email')\
+                              .execute()
+
+        # Check response structure for upsert (might be similar to insert or jobs upsert)
+        if data and isinstance(data, tuple) and len(data) > 1:
+             actual_data = data[1]
+             # Check if actual_data is a list and not empty to determine if records were returned
+             if isinstance(actual_data, list) and actual_data:
+                 print(f"Successfully upserted resume data for {resume_data['email']}. Records affected/returned: {len(actual_data)}.")
+                 # print(f"Supabase response data: {actual_data}") # Optional: log response
+             else:
+                 # Upsert might return an empty list or different structure on success depending on version/scenario
+                 print(f"Successfully executed upsert for resume data for {resume_data['email']}. Supabase response count: {count}")
+        else:
+             # Log raw response if structure is unexpected
+             print(f"Attempted to upsert resume data for {resume_data['email']}. Supabase response: {data}")
+
+
+    except Exception as e:
+        print(f"Error upserting resume data to Supabase: {e}")
+        # Consider logging the data that failed to upsert
+        # print(f"Failed data: {resume_data}")
