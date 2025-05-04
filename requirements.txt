@@ -3,3 +3,6 @@ beautifulsoup4
 python-dotenv
 supabase
 httpx
+pdfplumber
+google-genai
+pydantic
