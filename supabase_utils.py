@@ -310,7 +310,7 @@ def get_jobs_needing_markdown_conversion() -> list:
             .not_.is_("description", None)\
             .not_.is_("description_is_markdown", True)\
             .order("scraped_at", desc=False)\
-            .limit(100)\
+            .limit(20)\
             .execute()
 
 
