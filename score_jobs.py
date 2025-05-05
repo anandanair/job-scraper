@@ -170,9 +170,9 @@ def main():
     start_time = time.time()
 
     # 1. Fetch Resume Data
-    resume_data = supabase_utils.get_resume_by_email(config.TARGET_RESUME_EMAIL)
+    resume_data = supabase_utils.get_resume_by_email(config.LINKEDIN_EMAIL)
     if not resume_data:
-        logging.error(f"Could not retrieve resume for {config.TARGET_RESUME_EMAIL}. Exiting.")
+        logging.error(f"Could not retrieve resume for {config.LINKEDIN_EMAIL}. Exiting.")
         return
 
     # 2. Format Resume to Text
@@ -228,7 +228,7 @@ if __name__ == "__main__":
         logging.error("GOOGLE_API_KEY environment variable not set.")
     elif not config.SUPABASE_URL or not config.SUPABASE_KEY:
         logging.error("Supabase URL or Key environment variable not set.")
-    elif not config.TARGET_RESUME_EMAIL:
-        logging.error("TARGET_RESUME_EMAIL not set in config.py")
+    elif not config.LINKEDIN_EMAIL:
+        logging.error("LINKEDIN_EMAIL not set in config.py")
     else:
         main()
