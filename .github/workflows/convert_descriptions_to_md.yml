@@ -2,7 +2,9 @@
 name: Manual Markdown Conversion
 
 on:
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+  schedule:
+    - cron: '0 */2 * * *' # Runs every 2 hours
+  workflow_dispatch: {} # Allows manual triggering from the Actions tab
 
 jobs:
   convert:

@@ -198,8 +198,9 @@ def get_jobs_to_score(limit: int) -> list:
 
     try:
         logging.info(f"Fetching up to {limit} jobs needing scoring...")
+        # Select fields needed for scoring
         response = supabase.table(config.SUPABASE_TABLE_NAME)\
-                           .select("job_id, job_title, description")\
+                           .select("job_id, job_title, company, description, level")\
                            .eq("is_active", True)\
                            .is_("resume_score", None)\
                            .order("scraped_at", desc=False)\
@@ -215,6 +216,40 @@ def get_jobs_to_score(limit: int) -> list:
 
     except Exception as e:
         logging.error(f"Error fetching jobs to score from Supabase: {e}")
+        return []
+
+
+def get_top_scored_jobs_to_apply(limit: int) -> list:
+    """
+    Fetches the top-scored jobs from Supabase that are ready for application.
+    Filters by is_active = true, resume_score is not null, and status is null.
+    Orders by resume_score descending.
+    Selects fields needed for the application process.
+    """
+    if limit <= 0:
+        logging.warning("Limit for jobs to apply must be positive.")
+        return []
+
+    try:
+        logging.info(f"Fetching up to {limit} top-scored jobs to apply for...")
+        response = supabase.table(config.SUPABASE_TABLE_NAME)\
+                           .select("job_id, job_title, company, resume_score")\
+                           .eq("is_active", True)\
+                           .eq("status", "new")\
+                           .not_.is_("resume_score", None)\
+                           .order("resume_score", desc=True)\
+                           .limit(limit)\
+                           .execute()
+
+        if response.data:
+            logging.info(f"Successfully fetched {len(response.data)} top-scored jobs to apply for.")
+            return response.data
+        else:
+            logging.info("No top-scored jobs found ready for application at this time.")
+            return []
+
+    except Exception as e:
+        logging.error(f"Error fetching top-scored jobs to apply for from Supabase: {e}")
         return []
 
 
@@ -275,6 +310,7 @@ def get_jobs_needing_markdown_conversion() -> list:
             .not_.is_("description", None)\
             .not_.is_("description_is_markdown", True)\
             .order("scraped_at", desc=False)\
+            .limit(100)\
             .execute()
 
 
