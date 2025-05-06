@@ -18,7 +18,7 @@ GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 GEMINI_MODEL_NAME = "gemini-2.0-flash"
 
 # --- Resume Scoring Configuration ---
-JOBS_TO_SCORE_PER_RUN = 20 # Limit jobs processed per script execution (respects API limits)
+JOBS_TO_SCORE_PER_RUN = 10 # Limit jobs processed per script execution (respects API limits)
 GEMINI_REQUEST_DELAY_SECONDS = 6 # Delay between Gemini API calls (10 requests/min)
 
 # --- LinkedIn Configuration ---
