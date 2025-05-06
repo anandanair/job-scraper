@@ -27,6 +27,7 @@ LINKEDIN_PASSWORD = os.environ.get("LINKEDIN_PASSWORD")
 PERSISTENT_PROFILE_PATH = r"C:\Users\anand\AppData\Local\linkedin_job_applier_profile"
 RESUME_FILE_PATH="./resume_files/resume.pdf"
 USER_PHONE_NUMBER= os.environ.get("PHONE_NUMBER")
+LINKEDIN_CITY = "Singapore, Singapore"
 
 # --- LinkedIn Configuration ---
 LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "next js", "application support", "cybersecurity analyst"]
