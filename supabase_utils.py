@@ -252,20 +252,61 @@ def get_top_scored_jobs_to_apply(limit: int) -> list:
         logging.error(f"Error fetching top-scored jobs to apply for from Supabase: {e}")
         return []
 
-
-def update_job_score(job_id: str, score: int) -> bool:
+def get_jobs_to_rescore(limit: int) -> list:
     """
-    Updates the 'resume_score' for a specific job_id in the Supabase 'jobs' table.
+    Fetches jobs from Supabase that are ready for re-scoring with a custom resume.
+    Filters by is_active = true, resume_link is not null, and resume_score_stage = 'initial'.
+    Orders by resume_score descending.
+    Selects fields needed for the re-scoring process.
+    """
+    if limit <= 0:
+        logging.warning("Limit for jobs to rescore must be positive.")
+        return []
+
+    try:
+        logging.info(f"Fetching up to {limit} jobs for re-scoring...")
+        response = supabase.table(config.SUPABASE_TABLE_NAME)\
+                           .select("job_id, job_title, company, resume_score, resume_link")\
+                           .eq("is_active", True)\
+                           .not_.is_("resume_link", None)\
+                           .eq("resume_score_stage", "initial")\
+                           .order("resume_score", desc=True)\
+                           .limit(limit)\
+                           .execute()
+
+        if response.data:
+            logging.info(f"Successfully fetched {len(response.data)} jobs for re-scoring.")
+            return response.data
+        else:
+            logging.info("No jobs found meeting re-scoring criteria at this time.")
+            return []
+
+    except Exception as e:
+        logging.error(f"Error fetching jobs to rescore from Supabase: {e}")
+        return []
+
+
+def update_job_score(job_id: str, score: int, resume_score_stage: str = "initial") -> bool:
+    """
+    Updates the 'resume_score' and 'resume_score_stage' for a specific job_id in the Supabase 'jobs' table.
     Returns True on success, False on failure.
     """
     if not job_id or score is None:
         logging.error(f"Invalid input for updating job score: job_id={job_id}, score={score}")
         return False
 
+    if resume_score_stage not in ["initial", "custom"]:
+        logging.error(f"Invalid resume_score_stage: {resume_score_stage}. Must be 'initial' or 'custom'.")
+        return False
+
     try:
-        logging.info(f"Updating score for job_id {job_id} to {score}...")
+        logging.info(f"Updating score for job_id {job_id} to {score} and stage to {resume_score_stage}...")
+        update_payload = {
+            "resume_score": score,
+            "resume_score_stage": resume_score_stage
+        }
         response = supabase.table(config.SUPABASE_TABLE_NAME)\
-                           .update({"resume_score": score})\
+                           .update(update_payload)\
                            .eq("job_id", job_id)\
                            .execute()
 
