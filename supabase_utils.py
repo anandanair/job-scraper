@@ -266,7 +266,7 @@ def get_jobs_to_rescore(limit: int) -> list:
     try:
         logging.info(f"Fetching up to {limit} jobs for re-scoring...")
         response = supabase.table(config.SUPABASE_TABLE_NAME)\
-                           .select("job_id, job_title, company, resume_score, resume_link")\
+                           .select("job_id, job_title, company, description, level, resume_score, resume_link")\
                            .eq("is_active", True)\
                            .not_.is_("resume_link", None)\
                            .eq("resume_score_stage", "initial")\
