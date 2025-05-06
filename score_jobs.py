@@ -3,6 +3,9 @@ import time
 import json
 import logging
 from typing import List, Optional, Dict, Any
+import requests
+import io
+import pdfplumber
 
 import config
 import supabase_utils
@@ -162,65 +165,163 @@ def get_resume_score_from_ai(resume_text: str, job_details: Dict[str, Any]) -> O
         return None
 
 
+def extract_text_from_pdf_url(pdf_url: str) -> Optional[str]:
+    """
+    Downloads a PDF from a URL and extracts text from it.
+    """
+    if not pdf_url:
+        logging.warning("No PDF URL provided for text extraction.")
+        return None
+    try:
+        logging.info(f"Downloading PDF from URL: {pdf_url}")
+        response = requests.get(pdf_url, timeout=30) 
+        response.raise_for_status()  # Raise an exception for bad status codes
+
+        logging.info(f"Successfully downloaded PDF. Extracting text...")
+        text = ""
+        with io.BytesIO(response.content) as pdf_file:
+            with pdfplumber.open(pdf_file) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
+        
+        if not text.strip():
+            logging.warning(f"Extracted no text from PDF at {pdf_url}. The PDF might be image-based or empty.")
+            return None
+            
+        logging.info(f"Successfully extracted text from PDF URL: {pdf_url[:70]}...")
+        return text.strip()
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error downloading PDF from {pdf_url}: {e}")
+        return None
+    except pdfplumber.exceptions.PDFSyntaxError: # Catch specific pdfplumber error
+        logging.error(f"Error: Could not open PDF from {pdf_url}. It might be corrupted or not a PDF.")
+        return None
+    except Exception as e:
+        logging.error(f"An unexpected error occurred while extracting text from PDF URL {pdf_url}: {e}")
+        return None
+
+def rescore_jobs_with_custom_resume():
+    """Fetches jobs with custom resumes and re-scores them."""
+    logging.info("--- Starting Job Re-scoring with Custom Resumes ---")
+    rescore_start_time = time.time()
+
+    jobs_to_rescore = supabase_utils.get_jobs_to_rescore(config.JOBS_TO_SCORE_PER_RUN)
+    if not jobs_to_rescore:
+        logging.info("No jobs require re-scoring with custom resumes at this time.")
+        logging.info("--- Job Re-scoring Finished (No Jobs) ---")
+        return
+
+    logging.info(f"Processing {len(jobs_to_rescore)} jobs for re-scoring...")
+    successful_rescores = 0
+    failed_rescores = 0
+
+    for i, job in enumerate(jobs_to_rescore):
+        job_id = job.get('job_id')
+        resume_link = job.get('resume_link')
+
+        if not job_id or not resume_link:
+            logging.warning(f"Skipping re-scoring for job due to missing job_id or resume_link: {job}")
+            failed_rescores += 1
+            continue
+
+        logging.info(f"--- Re-scoring Job {i+1}/{len(jobs_to_rescore)} (ID: {job_id}) using custom resume from {resume_link[:70]}... ---")
+
+        custom_resume_text = extract_text_from_pdf_url(resume_link)
+
+        if not custom_resume_text:
+            logging.error(f"Failed to extract text from custom resume PDF for job_id {job_id}. Skipping re-score.")
+            failed_rescores += 1
+            if i < len(jobs_to_rescore) - 1:
+                logging.debug(f"Waiting {config.GEMINI_REQUEST_DELAY_SECONDS} seconds before next job...")
+                time.sleep(config.GEMINI_REQUEST_DELAY_SECONDS)
+            continue
+        
+        logging.debug(f"Custom resume text for job {job_id} (first 200 chars): {custom_resume_text[:200]}")
+        score = get_resume_score_from_ai(custom_resume_text, job)
+
+        if score is not None:
+            if supabase_utils.update_job_score(job_id, score, resume_score_stage="custom"):
+                successful_rescores += 1
+            else:
+                failed_rescores += 1 
+        else:
+            failed_rescores += 1 
+
+        if i < len(jobs_to_rescore) - 1: 
+            logging.debug(f"Waiting {config.GEMINI_REQUEST_DELAY_SECONDS} seconds before next API call...")
+            time.sleep(config.GEMINI_REQUEST_DELAY_SECONDS)
+
+    rescore_end_time = time.time()
+    logging.info("--- Job Re-scoring Finished ---")
+    logging.info(f"Successfully re-scored: {successful_rescores}")
+    logging.info(f"Failed/Skipped re-scores: {failed_rescores}")
+    logging.info(f"Total re-scoring time: {rescore_end_time - rescore_start_time:.2f} seconds")
+
 # --- Main Execution ---
 
 def main():
     """Main function to score jobs based on the target resume."""
     logging.info("--- Starting Job Scoring Script ---")
-    start_time = time.time()
+    overall_start_time = time.time()
 
-    # 1. Fetch Resume Data
-    resume_data = supabase_utils.get_resume_by_email(config.LINKEDIN_EMAIL)
-    if not resume_data:
-        logging.error(f"Could not retrieve resume for {config.LINKEDIN_EMAIL}. Exiting.")
-        return
+    # --- Phase 1: Initial Scoring with Default Resume ---
+    logging.info("--- Phase 1: Initial Scoring with Default Resume ---")
+    initial_score_start_time = time.time()
+    default_resume_data = supabase_utils.get_resume_by_email(config.LINKEDIN_EMAIL)
+    if not default_resume_data:
+        logging.error(f"Could not retrieve resume for {config.LINKEDIN_EMAIL}. Skipping initial scoring phase.")
+    else:
+        # 2. Format Resume to Text
+        default_resume_text = format_resume_to_text(default_resume_data)
+        logging.info("Default resume data formatted to text.")
 
-    # 2. Format Resume to Text
-    resume_text = format_resume_to_text(resume_data)
-    logging.info("Resume data formatted to text.")
-    # logging.debug(f"Formatted Resume Text:\n{resume_text[:500]}...") # Optional: Log snippet
-
-    # 3. Fetch Jobs to Score
-    jobs_to_score = supabase_utils.get_jobs_to_score(config.JOBS_TO_SCORE_PER_RUN)
-    if not jobs_to_score:
-        logging.info("No jobs require scoring at this time.")
-        return
-
-    logging.info(f"Processing {len(jobs_to_score)} jobs for scoring...")
-    successful_scores = 0
-    failed_scores = 0
-
-    # 4. Loop Through Jobs and Score
-    for i, job in enumerate(jobs_to_score):
-        job_id = job.get('job_id')
-        if not job_id:
-            logging.warning("Found job data without job_id. Skipping.")
-            continue
-
-        logging.info(f"--- Scoring Job {i+1}/{len(jobs_to_score)} (ID: {job_id}) ---")
-
-        # Get score from AI
-        score = get_resume_score_from_ai(resume_text, job)
-
-        if score is not None:
-            # Update score in Supabase
-            if supabase_utils.update_job_score(job_id, score):
-                successful_scores += 1
-            else:
-                failed_scores += 1 # Failed to update DB
+        # 3. Fetch Jobs to Score
+        jobs_to_score_initially = supabase_utils.get_jobs_to_score(config.JOBS_TO_SCORE_PER_RUN)
+        if not jobs_to_score_initially:
+            logging.info("No jobs require initial scoring at this time.")
         else:
-            failed_scores += 1 # Failed to get score from AI
+            logging.info(f"Processing {len(jobs_to_score_initially)} jobs for initial scoring...")
+            successful_initial_scores = 0
+            failed_initial_scores = 0
 
-        # Implement delay to respect API rate limits
-        if i < len(jobs_to_score) - 1: # Don't sleep after the last job
-            logging.debug(f"Waiting {config.GEMINI_REQUEST_DELAY_SECONDS} seconds before next API call...")
-            time.sleep(config.GEMINI_REQUEST_DELAY_SECONDS)
+            # 4. Loop Through Jobs and Score Them
+            for i, job in enumerate(jobs_to_score_initially):
+                job_id = job.get('job_id')
+                if not job_id:
+                    logging.warning("Found job data without job_id during initial scoring. Skipping.")
+                    failed_initial_scores +=1
+                    continue
 
-    end_time = time.time()
-    logging.info("--- Job Scoring Script Finished ---")
-    logging.info(f"Successfully scored: {successful_scores}")
-    logging.info(f"Failed/Skipped scores: {failed_scores}")
-    logging.info(f"Total time: {end_time - start_time:.2f} seconds")
+                logging.info(f"--- Initial Scoring Job {i+1}/{len(jobs_to_score_initially)} (ID: {job_id}) ---")
+                score = get_resume_score_from_ai(default_resume_text, job)
+
+                if score is not None:
+                    if supabase_utils.update_job_score(job_id, score, resume_score_stage="initial"):
+                        successful_initial_scores += 1
+                    else:
+                        failed_initial_scores += 1
+                else:
+                    failed_initial_scores += 1
+
+                if i < len(jobs_to_score_initially) - 1:
+                    logging.debug(f"Waiting {config.GEMINI_REQUEST_DELAY_SECONDS} seconds before next API call...")
+                    time.sleep(config.GEMINI_REQUEST_DELAY_SECONDS)
+            
+            initial_score_end_time = time.time()
+            logging.info("--- Initial Scoring Phase Finished ---")
+            logging.info(f"Successfully initially scored: {successful_initial_scores}")
+            logging.info(f"Failed/Skipped initial scores: {failed_initial_scores}")
+            logging.info(f"Total initial scoring time: {initial_score_end_time - initial_score_start_time:.2f} seconds")
+
+    # # --- Phase 2: Re-scoring with Custom Resumes ---
+    rescore_jobs_with_custom_resume() 
+
+    overall_end_time = time.time()
+    logging.info("--- Job Scoring Script Finished (All Phases) ---")
+    logging.info(f"Total script execution time: {overall_end_time - overall_start_time:.2f} seconds")
 
 
 if __name__ == "__main__":
