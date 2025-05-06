@@ -7,3 +7,4 @@ pdfplumber
 google-genai
 pydantic
 groq
+playwright
