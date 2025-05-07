@@ -266,13 +266,15 @@ def get_jobs_to_rescore(limit: int) -> list:
     try:
         logging.info(f"Fetching up to {limit} jobs for re-scoring...")
         response = supabase.table(config.SUPABASE_TABLE_NAME)\
-                           .select("job_id, job_title, company, description, level, resume_score, resume_link")\
-                           .eq("is_active", True)\
-                           .not_.is_("resume_link", None)\
-                           .eq("resume_score_stage", "initial")\
-                           .order("resume_score", desc=True)\
-                           .limit(limit)\
-                           .execute()
+                            .select("job_id, job_title, company, description, level, resume_score, resume_link")\
+                            .eq("is_active", True)\
+                            .eq("status", "new")\
+                            .eq("job_state", "new")\
+                            .not_.is_("customized_resume_id", None)\
+                            .eq("resume_score_stage", "initial")\
+                            .order("resume_score", desc=True)\
+                            .limit(limit)\
+                            .execute()
 
         if response.data:
             logging.info(f"Successfully fetched {len(response.data)} jobs for re-scoring.")
