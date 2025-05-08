@@ -179,8 +179,7 @@ async def check_linkedin_job_activity():
     async with httpx.AsyncClient() as client:
         tasks = []
         for job in jobs_to_check:
-            if(job['provider'] == 'linkedin'):
-                tasks.append(_check_single_linkedin_job_active(job['job_id'], client))
+            tasks.append(_check_single_linkedin_job_active(job['job_id'], client))
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
     inactive_job_ids = []
