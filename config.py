@@ -16,6 +16,7 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 # Consider using a specific model version if needed, e.g., "gemini-1.5-flash"
 GEMINI_MODEL_NAME = "gemini-2.0-flash"
+GEMINI_SECONDARY_MODEL_NAME = "gemini-2.0-flash-lite"
 
 # --- Resume Scoring Configuration ---
 JOBS_TO_SCORE_PER_RUN = 10 # Limit jobs processed per script execution (respects API limits)
