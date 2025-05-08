@@ -33,7 +33,7 @@ async def _check_single_job_active(job_id: str, client: httpx.AsyncClient) -> bo
     """
     job_detail_url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
     retries = 0
-    inactive_keywords = ["this job is no longer available", "job is closed"] # Add more if needed
+    inactive_keywords = ["this job is no longer available", "job is closed", "No longer accepting applications"] # Add more if needed
 
     while retries <= config.ACTIVE_CHECK_MAX_RETRIES:
         try:
