@@ -5,6 +5,7 @@ import supabase_utils
 import asyncio
 import json
 from playwright.async_api import Page, async_playwright, TimeoutError as PlaywrightTimeoutError
+import re
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -190,6 +191,9 @@ async def get_llm_answer_for_field(question_label: str, element_tag: str, elemen
 
     # --- Placeholder Logic ---
     # In a real implementation:
+    logging.info(f"question_label: {question_label}")
+    logging.info(f"element_tag: {element_tag}")
+    logging.info(f"element_type: {element_type}")
     # 1. Load or access config.CUSTOM_ANSWERS4
     # 2. Format a prompt for the LLM including the question_label and CUSTOM_ANSWERS context.
     # 3. Make an HTTP POST request to your Ollama endpoint (e.g., http://localhost:11434/api/generate)
@@ -290,7 +294,6 @@ async def apply_to_job(job_details: dict, resume_path: str) -> tuple[bool, str]:
 
             # --- Look for 'Easy Apply' button ---
             easy_apply_button_selector = "div.jobs-apply-button--top-card button.jobs-apply-button"
-            apply_button_selector = "button:has-text('Apply')"
 
             try:
                 logging.info(f"Waiting for Easy Apply button ({easy_apply_button_selector}) to be visible...")
@@ -310,499 +313,541 @@ async def apply_to_job(job_details: dict, resume_path: str) -> tuple[bool, str]:
                          return False, "failed_button_disabled"
 
                     logging.info("Attempting application...")
-                    try:
-                        await asyncio.sleep(0.5)
-                        await target_button.click(timeout=10000) 
-                        logging.info("Clicked 'Easy Apply' button.")
-
-                        # --- Handle 'Easy Apply' Modal Dynamically ---
-                        modal_selector = "div[role='dialog'].jobs-easy-apply-modal" 
-                        modal_locator = page.locator(modal_selector)
-
+                    apply_button_text = await target_button.text_content()
+                    if "easy apply" in apply_button_text.strip().lower():
+                        logging.info("Easy Apply button found and clickable.")
                         try:
-                            logging.info(f"Waiting for modal ({modal_selector}) to appear...")
-                            await modal_locator.wait_for(state='visible', timeout=20000) 
-                            logging.info("'Easy Apply' modal detected.")
-                            await asyncio.sleep(2)
+                            await asyncio.sleep(0.5)
+                            await target_button.click(timeout=10000) 
+                            logging.info("Clicked 'Easy Apply' button.")
 
-                            max_steps = 5 # Safety break to prevent infinite loops
-                            current_step = 0
-                            application_submitted = False
-                            final_status_message = "failed_modal_processing" # Default failure message
+                            # --- Handle 'Easy Apply' Modal Dynamically ---
+                            modal_selector = "div[role='dialog'].jobs-easy-apply-modal" 
+                            modal_locator = page.locator(modal_selector)
 
-                            while current_step < max_steps:
-                                current_step += 1
-                                logging.info(f"--- Processing Modal Step {current_step} ---")
+                            try:
+                                logging.info(f"Waiting for modal ({modal_selector}) to appear...")
+                                await modal_locator.wait_for(state='visible', timeout=20000) 
+                                logging.info("'Easy Apply' modal detected.")
+                                await asyncio.sleep(2)
 
-                                if not await modal_locator.is_visible():
-                                        logging.warning(f"Modal disappeared unexpectedly during step {current_step}.")
-                                        if not application_submitted: # If we haven't clicked submit yet
-                                            final_status_message = "failed_modal_disappeared"
-                                        break # Exit loop
+                                max_steps = 5 # Safety break to prevent infinite loops
+                                current_step = 0
+                                application_submitted = False
+                                final_status_message = "failed_modal_processing" # Default failure message
 
-                                await asyncio.sleep(1)
+                                while current_step < max_steps:
+                                    current_step += 1
+                                    logging.info(f"--- Processing Modal Step {current_step} ---")
 
-                                resume_handled_this_step = False
-                                try:
-                                    # Define selector for the container of the SELECTED resume
-                                    selected_resume_container_selector = "div.jobs-document-upload-redesign-card__container--selected"
-                                    # Be more specific: ensure it's within the resume section if possible
-                                    resume_section_selector = "div:has(> h3:text-is('Resume'))" # Look for div containing the Resume H3
-                                    specific_selected_resume_locator = modal_locator.locator(resume_section_selector).locator(selected_resume_container_selector)
+                                    if not await modal_locator.is_visible():
+                                            logging.warning(f"Modal disappeared unexpectedly during step {current_step}.")
+                                            if not application_submitted: # If we haven't clicked submit yet
+                                                final_status_message = "failed_modal_disappeared"
+                                            break # Exit loop
 
-                                    logging.debug("Checking for pre-selected resume...")
-                                    # Check if the selected container exists and is visible within the resume section
-                                    selected_count = await specific_selected_resume_locator.count()
+                                    await asyncio.sleep(1)
 
-                                    if selected_count > 0:
-                                        selected_resume_element = specific_selected_resume_locator.first
-                                        if await selected_resume_element.is_visible(timeout=3000): # Quick check if visible
-                                            # Optionally, verify the filename matches expectations if needed
-                                            selected_filename_locator = selected_resume_element.locator("h3.jobs-document-upload-redesign-card__file-name")
-                                            selected_filename = "Unknown Filename"
-                                            if await selected_filename_locator.count() > 0:
-                                                 selected_filename = (await selected_filename_locator.text_content() or "").strip()
-                                            logging.info(f"Verified: Pre-uploaded resume '{selected_filename}' is selected.")
-                                            resume_handled_this_step = True # Mark resume as handled for this step
-                                        else:
-                                            logging.debug("Found selected resume container, but it's not visible.")
-                                    else:
-                                        logging.info("No pre-selected resume container found.")
-
-                                except Exception as resume_err:
-                                     logging.error(f"An error occurred during resume handling: {resume_err}", exc_info=True)
-                                # End of Resume Handling Block
-
-                                # --- Dynamic Field Identification and Filling ---
-                                interactive_elements = await modal_locator.locator("input, textarea, select").all()
-                                logging.info(f"Found {len(interactive_elements)} potential input elements on step {current_step}.")
-
-                                for element in interactive_elements:
-                                    if not await element.is_visible(): # Skip hidden elements
-                                        continue
-
-                                    element_tag = await element.evaluate('el => el.tagName.toLowerCase()')
-                                    element_type = (await element.get_attribute('type') or 'text') 
-                                    element_id = await element.get_attribute('id')
-                                    element_name = await element.get_attribute('name')
-                                    element_label = await find_label_for_element(page, element) 
-
-                                    # Ensure this loop does NOT try to handle resume elements again
-                                    is_resume_related = ('resume' in (element_id or "").lower()) or \
-                                                        ('resume' in element_label.lower()) or \
-                                                        ('document' in (element_id or "").lower() and 'resume' in (element_id or "").lower())
-
-                                    if is_resume_related and element_type == 'file':
-                                        logging.debug(f"Skipping resume-related file input in loop: {element_id}")
-                                        continue
-                                    if is_resume_related and element_type == 'radio': # Skip the selection radio button
-                                        logging.debug(f"Skipping resume-related radio button in loop: {element_id}")
-                                        continue
-
-                                    logging.debug(f"Processing other element: Tag={element_tag}, Type={element_type}, ID={element_id}, Label='{element_label}'")
-
-                                    element_handled = False
-                                    answer_data_from_llm = None 
-
-                                    # --- Fill based on label or known attributes ---
-                                    norm_label = element_label.lower().strip() if element_label else ""
-                                    norm_name = element_name.lower().strip() if element_name else ""
-
+                                    resume_handled_this_step = False
                                     try:
-                                        is_editable = await element.is_editable()
-                                        is_visible = await element.is_visible()
+                                        # Define selector for the container of the SELECTED resume
+                                        selected_resume_container_selector = "div.jobs-document-upload-redesign-card__container--selected"
+                                        # Be more specific: ensure it's within the resume section if possible
+                                        resume_section_selector = "div:has(> h3:text-is('Resume'))" # Look for div containing the Resume H3
+                                        specific_selected_resume_locator = modal_locator.locator(resume_section_selector).locator(selected_resume_container_selector)
 
-                                        # Country Code 
-                                        is_country_select = ('country' in norm_label or 'country' in element_id.lower()) and ('phone' in norm_label or 'phone' in element_id.lower())
-                                        if element_tag == 'select' and is_country_select:
-                                            if config.LINKEDIN_LOCATION:
-                                                if is_visible:
-                                                    logging.info(f"Found country code select dropdown (Label: '{element_label}', ID: '{element_id}'). Attempting to select based on location: '{config.LINKEDIN_LOCATION}'.")
-                                                    try:
-                                                        # We need to find the option whose text STARTS WITH the location name
-                                                        options = await element.locator('option').all()
-                                                        matched_option_label = None
-                                                        for option in options:
-                                                            option_text = await option.text_content()
-                                                            if option_text and option_text.strip().startswith(config.LINKEDIN_LOCATION):
-                                                                matched_option_label = option_text.strip()
-                                                                logging.info(f"Found matching country option: '{matched_option_label}'")
-                                                                break # Found the option
+                                        logging.debug("Checking for pre-selected resume...")
+                                        # Check if the selected container exists and is visible within the resume section
+                                        selected_count = await specific_selected_resume_locator.count()
 
-                                                        if matched_option_label:
-                                                            # Check if it's already selected (optional but good)
-                                                            current_value_text = await element.input_value() # input_value gets the text of the selected option for select
-                                                            if current_value_text != matched_option_label:
-                                                                logging.info(f"Selecting country option: '{matched_option_label}'")
-                                                                await element.select_option(label=matched_option_label, timeout=7000)
-                                                                await asyncio.sleep(0.5)
-                                                                element_handled = True
-                                                            else:
-                                                                logging.info(f"Country option '{matched_option_label}' is already selected.")
-                                                                element_handled = True
-                                                        else:
-                                                            logging.warning(f"Could not find an option starting with location '{config.LINKEDIN_LOCATION}' in the country code dropdown.")
-
-                                                    except PlaywrightTimeoutError:
-                                                        logging.warning(f"Timeout trying to select country option for '{config.LINKEDIN_LOCATION}'.")
-                                                    except Exception as select_err:
-                                                        logging.warning(f"Could not select country option for '{config.LINKEDIN_LOCATION}'. Error: {select_err}")
-                                                else:
-                                                    logging.warning(f"Country code select dropdown (Label: '{element_label}') found but is not visible.")
+                                        if selected_count > 0:
+                                            selected_resume_element = specific_selected_resume_locator.first
+                                            if await selected_resume_element.is_visible(timeout=3000): # Quick check if visible
+                                                # Optionally, verify the filename matches expectations if needed
+                                                selected_filename_locator = selected_resume_element.locator("h3.jobs-document-upload-redesign-card__file-name")
+                                                selected_filename = "Unknown Filename"
+                                                if await selected_filename_locator.count() > 0:
+                                                    selected_filename = (await selected_filename_locator.text_content() or "").strip()
+                                                logging.info(f"Verified: Pre-uploaded resume '{selected_filename}' is selected.")
+                                                resume_handled_this_step = True # Mark resume as handled for this step
                                             else:
-                                                logging.warning(f"Country code select dropdown found, but LINKEDIN_LOCATION not set in config.")
-                                            continue # Move to the next element
+                                                logging.debug("Found selected resume container, but it's not visible.")
+                                        else:
+                                            logging.info("No pre-selected resume container found.")
 
-                                        # Phone Number
-                                        if element_tag == 'input' and ('phone' in norm_label or 'phone' in norm_name or 'mobile' in norm_label):
-                                            if config.USER_PHONE_NUMBER and is_editable:
-                                                current_value = await element.input_value()
-                                                if current_value != config.USER_PHONE_NUMBER:
-                                                    logging.info(f"Filling phone number field (Label: '{element_label}')")
-                                                    await element.fill(config.USER_PHONE_NUMBER)
-                                                    await asyncio.sleep(0.5)
-                                                    element_handled = True
+                                    except Exception as resume_err:
+                                        logging.error(f"An error occurred during resume handling: {resume_err}", exc_info=True)
+                                    # End of Resume Handling Block
+
+                                    # --- Dynamic Field Identification and Filling ---
+                                    interactive_elements = await modal_locator.locator("input, textarea, select").all()
+                                    logging.info(f"Found {len(interactive_elements)} potential input elements on step {current_step}.")
+
+                                    for element in interactive_elements:
+                                        if not await element.is_visible(): # Skip hidden elements
+                                            continue
+
+                                        element_tag = await element.evaluate('el => el.tagName.toLowerCase()')
+                                        element_type = (await element.get_attribute('type') or 'text') 
+                                        element_id = await element.get_attribute('id')
+                                        element_name = await element.get_attribute('name')
+                                        element_label = await find_label_for_element(page, element) 
+
+                                        # Ensure this loop does NOT try to handle resume elements again
+                                        is_resume_related = ('resume' in (element_id or "").lower()) or \
+                                                            ('resume' in element_label.lower()) or \
+                                                            ('document' in (element_id or "").lower() and 'resume' in (element_id or "").lower())
+
+                                        if is_resume_related and element_type == 'file':
+                                            logging.debug(f"Skipping resume-related file input in loop: {element_id}")
+                                            continue
+                                        if is_resume_related and element_type == 'radio': # Skip the selection radio button
+                                            logging.debug(f"Skipping resume-related radio button in loop: {element_id}")
+                                            continue
+
+                                        logging.debug(f"Processing other element: Tag={element_tag}, Type={element_type}, ID={element_id}, Label='{element_label}'")
+
+                                        element_handled = False
+                                        answer_data_from_llm = None 
+
+                                        # --- Fill based on label or known attributes ---
+                                        norm_label = element_label.lower().strip() if element_label else ""
+                                        norm_name = element_name.lower().strip() if element_name else ""
+
+                                        try:
+                                            is_editable = await element.is_editable()
+                                            is_visible = await element.is_visible()
+
+                                            # Country Code 
+                                            is_country_select = ('country' in norm_label or 'country' in element_id.lower()) and ('phone' in norm_label or 'phone' in element_id.lower())
+                                            if element_tag == 'select' and is_country_select:
+                                                if config.LINKEDIN_LOCATION:
+                                                    if is_visible:
+                                                        logging.info(f"Found country code select dropdown (Label: '{element_label}', ID: '{element_id}'). Attempting to select based on location: '{config.LINKEDIN_LOCATION}'.")
+                                                        try:
+                                                            # We need to find the option whose text STARTS WITH the location name
+                                                            options = await element.locator('option').all()
+                                                            matched_option_label = None
+                                                            for option in options:
+                                                                option_text = await option.text_content()
+                                                                if option_text and option_text.strip().startswith(config.LINKEDIN_LOCATION):
+                                                                    matched_option_label = option_text.strip()
+                                                                    logging.info(f"Found matching country option: '{matched_option_label}'")
+                                                                    break # Found the option
+
+                                                            if matched_option_label:
+                                                                # Check if it's already selected (optional but good)
+                                                                current_value_text = await element.input_value() # input_value gets the text of the selected option for select
+                                                                if current_value_text != matched_option_label:
+                                                                    logging.info(f"Selecting country option: '{matched_option_label}'")
+                                                                    await element.select_option(label=matched_option_label, timeout=7000)
+                                                                    await asyncio.sleep(0.5)
+                                                                    element_handled = True
+                                                                else:
+                                                                    logging.info(f"Country option '{matched_option_label}' is already selected.")
+                                                                    element_handled = True
+                                                            else:
+                                                                logging.warning(f"Could not find an option starting with location '{config.LINKEDIN_LOCATION}' in the country code dropdown.")
+
+                                                        except PlaywrightTimeoutError:
+                                                            logging.warning(f"Timeout trying to select country option for '{config.LINKEDIN_LOCATION}'.")
+                                                        except Exception as select_err:
+                                                            logging.warning(f"Could not select country option for '{config.LINKEDIN_LOCATION}'. Error: {select_err}")
+                                                    else:
+                                                        logging.warning(f"Country code select dropdown (Label: '{element_label}') found but is not visible.")
                                                 else:
-                                                    logging.info("Phone number field already filled correctly.")
-                                                    element_handled = True
-                                            elif not config.USER_PHONE_NUMBER:
-                                                logging.warning(f"Phone number field found (Label: '{element_label}'), but USER_PHONE_NUMBER not set in config.")
-                                            continue 
+                                                    logging.warning(f"Country code select dropdown found, but LINKEDIN_LOCATION not set in config.")
+                                                continue # Move to the next element
 
-                                        # Email (usually pre-filled, but check)
-                                        elif element_tag == 'select' and ('email' in norm_label):
-                                            if config.LINKEDIN_EMAIL:
-                                                if is_visible: # Ensure the select element itself is visible
-                                                    logging.info(f"Found email select dropdown (Label: '{element_label}'). Attempting to select '{config.LINKEDIN_EMAIL}'.")
-                                                    try:
-                                                        # Use select_option matching the visible text (label) of the <option>
-                                                        # This assumes the visible text IS the email address.
-                                                        await element.select_option(label=config.LINKEDIN_EMAIL, timeout=7000) # Increased timeout slightly
-                                                        await asyncio.sleep(0.5) # Short pause after selection
-                                                        logging.info(f"Successfully selected email: {config.LINKEDIN_EMAIL}")
+                                            # Phone Number
+                                            if element_tag == 'input' and ('phone' in norm_label or 'phone' in norm_name or 'mobile' in norm_label):
+                                                if config.USER_PHONE_NUMBER and is_editable:
+                                                    current_value = await element.input_value()
+                                                    if current_value != config.USER_PHONE_NUMBER:
+                                                        logging.info(f"Filling phone number field (Label: '{element_label}')")
+                                                        await element.fill(config.USER_PHONE_NUMBER)
+                                                        await asyncio.sleep(0.5)
                                                         element_handled = True
-                                                    except PlaywrightTimeoutError:
-                                                         logging.warning(f"Timeout trying to select email option '{config.LINKEDIN_EMAIL}'. The option might not exist or the element is slow.")
-                                                    except Exception as select_err:
-                                                        # Playwright raises an error if the label/value doesn't match any option
-                                                        logging.warning(f"Could not select email option '{config.LINKEDIN_EMAIL}' by label. Check if the email in config exactly matches an option's text. Error: {select_err}")
-                                                else:
-                                                     logging.warning(f"Email select dropdown (Label: '{element_label}') found but is not visible.")
-                                            else:
-                                                logging.warning(f"Email select dropdown found (Label: '{element_label}'), but LINKEDIN_EMAIL not set in config.")
-                                            continue # Move to the next element in the loop
-
-                                        # --- Fallback: Handle Email if it appears as an Input (less likely now but safe) ---
-                                        elif element_tag == 'input' and (element_type == 'email' or 'email' in norm_label):
-                                            logging.warning(f"Found an unexpected INPUT field for email (Label: '{element_label}'). Attempting to fill.")
-                                            if config.LINKEDIN_EMAIL and is_editable:
-                                                current_value = await element.input_value()
-                                                if current_value != config.LINKEDIN_EMAIL:
-                                                    logging.info(f"Filling unexpected email input (Label: '{element_label}')")
-                                                    await element.fill(config.LINKEDIN_EMAIL)
-                                                    await asyncio.sleep(0.5)
-                                                    element_handled = True
-                                                else:
-                                                    logging.info("Unexpected email input already filled correctly.")
-                                            elif not config.LINKEDIN_EMAIL:
-                                                 logging.warning(f"Unexpected email input found (Label: '{element_label}'), but LINKEDIN_EMAIL not set in config.")
-                                            continue # Move to next element
-
-                                        # City
-                                        elif element_tag == 'input' and ('city' in norm_label or 'city' in element_id.lower()):
-                                            if config.LINKEDIN_CITY:
-                                                if is_editable and is_visible:
-                                                    logging.info(f"Found city input field (Label: '{element_label}', ID: '{element_id}'). Attempting autocomplete for: '{config.LINKEDIN_CITY}'.")
-                                                    try:
-                                                        # 1. Fill the input to trigger autocomplete
-                                                        base_city_name = config.LINKEDIN_CITY.split(',')[0]
-                                                        logging.debug(f"Filling city input with: '{base_city_name}' to trigger dropdown.")
-                                                        await element.fill(config.LINKEDIN_CITY, timeout=5000)
-                                                        await asyncio.sleep(1.5) # Short pause for dropdown JS to trigger
-
-                                                        # 2. Define selectors for the dropdown and the specific option
-                                                        dropdown_selector = "div.basic-typeahead__triggered-content[role='listbox']"
-                                                        # The option text we MUST match exactly, taken from config
-                                                        option_selector_text = config.LINKEDIN_CITY 
-
-                                                        logging.info(f"Waiting for city autocomplete dropdown ('{dropdown_selector}')")
-                                                        dropdown_locator = page.locator(dropdown_selector)
-                                                        await dropdown_locator.wait_for(state='visible', timeout=8000) # Wait longer for network/JS
-                                                        logging.info("Autocomplete dropdown appeared.")
-
-                                                        # 3. Locate and click the correct option
-                                                        # Use get_by_text with exact=True, matching the required text in config
-                                                        logging.info(f"Attempting to find exact option text: '{option_selector_text}'")
-                                                        option_element_locator = dropdown_locator.get_by_text(option_selector_text, exact=False)
-
-                                                        target_click_element = option_element_locator.first
-                                                        logging.info(f"Waiting for city option '{option_selector_text}' to be visible.")                                               
-                                                        await target_click_element.wait_for(state='visible', timeout=5000)
-
-                                                        logging.info(f"Clicking city option: '{option_selector_text}'")
-                                                        await target_click_element.click(timeout=5000)
-
-                                                        # 4. Wait for dropdown to disappear (confirms selection registered)
-                                                        await dropdown_locator.wait_for(state='hidden', timeout=5000)
-                                                        logging.info(f"City '{config.LINKEDIN_CITY}' selected successfully from autocomplete.")
-                                                        await asyncio.sleep(0.5) # Final short pause
+                                                    else:
+                                                        logging.info("Phone number field already filled correctly.")
                                                         element_handled = True
+                                                elif not config.USER_PHONE_NUMBER:
+                                                    logging.warning(f"Phone number field found (Label: '{element_label}'), but USER_PHONE_NUMBER not set in config.")
+                                                continue 
 
-                                                    except PlaywrightTimeoutError as auto_timeout:
-                                                        logging.warning(f"Timeout during city autocomplete for '{config.LINKEDIN_CITY}'. Dropdown or option might not have appeared/matched. Check selectors and config value. Error: {auto_timeout}")
-                                                    except Exception as auto_err:
-                                                        # Playwright might raise if get_by_text finds no match
-                                                        logging.error(f"Error during city autocomplete for '{config.LINKEDIN_CITY}'. Ensure config value exactly matches dropdown text. Error: {auto_err}", exc_info=True)
-
-                                                else:
-                                                    logging.warning(f"City input field found (Label: '{element_label}') but is not visible or editable.")
-                                            else:
-                                                logging.warning(f"City input field found (Label: '{element_label}'), but LINKEDIN_CITY not set in config or is empty.")
-                                            continue # Move to the next element
-
-
-                                        # --- LLM Fallback Handler ---
-                                        if not element_handled and element_label: # Only run if not handled and has a label
-                                            logging.info(f"Field '{element_label}' not handled by specific logic. Querying LLM placeholder...")
-                                            answer_data_from_llm = await get_llm_answer_for_field(element_label, element_tag, element_type)
-
-                                            if answer_data_from_llm:
-                                                logging.info(f"[LLM Placeholder] Provided answer data: {answer_data_from_llm}")
-                                                answer_value = answer_data_from_llm.get("answer")
-                                                option_text_to_select = answer_data_from_llm.get("option_text")
-                                                input_type_hint = answer_data_from_llm.get("type", element_tag) # Use element_tag as fallback type hint
-
-                                                if answer_value is not None:
-                                                    logging.info(f"Attempting to answer '{element_label}' using LLM response '{answer_value}' (Type Hint: {input_type_hint})")
-                                                    # --- Use filling logic similar to the dictionary approach ---
-                                                    # (Input Fields)
-                                                    if element_tag == 'input' and element_type in ['text', 'number', 'email', 'tel', 'url', 'search']: # Added 'search' type
-                                                         if is_editable:
-                                                            current_val = await element.input_value()
-                                                            if current_val != str(answer_value):
-                                                                await element.fill(str(answer_value))
-                                                                await asyncio.sleep(0.3)
-                                                                logging.info("[LLM Handler] Filled text/number input.")
-                                                                element_handled = True # Mark as handled by LLM
-                                                            else:
-                                                                logging.info("[LLM Handler] Input already has correct value.")
-                                                                element_handled = True
-                                                         else:
-                                                             logging.warning("[LLM Handler] Input field not editable.")
-
-                                                    # (Textarea)
-                                                    elif element_tag == 'textarea':
-                                                         if is_editable:
-                                                            current_val = await element.input_value()
-                                                            if current_val != str(answer_value):
-                                                                await element.fill(str(answer_value))
-                                                                await asyncio.sleep(0.3)
-                                                                logging.info("[LLM Handler] Filled textarea.")
-                                                                element_handled = True
-                                                            else:
-                                                                logging.info("[LLM Handler] Textarea already has correct value.")
-                                                                element_handled = True
-                                                         else:
-                                                             logging.warning("[LLM Handler] Textarea field not editable.")
-
-                                                    # (Select Dropdown)
-                                                    elif element_tag == 'select':
-                                                        text_to_find = option_text_to_select if option_text_to_select else str(answer_value)
-                                                        logging.info(f"[LLM Handler] Attempting to select option with text: '{text_to_find}'")
-                                                        current_selected_text = await element.input_value()
-                                                        if current_selected_text != text_to_find:
-                                                            await element.select_option(label=text_to_find, timeout=7000)
-                                                            await asyncio.sleep(0.3)
-                                                            logging.info(f"[LLM Handler] Selected option '{text_to_find}'.")
+                                            # Email (usually pre-filled, but check)
+                                            elif element_tag == 'select' and ('email' in norm_label):
+                                                if config.LINKEDIN_EMAIL:
+                                                    if is_visible: # Ensure the select element itself is visible
+                                                        logging.info(f"Found email select dropdown (Label: '{element_label}'). Attempting to select '{config.LINKEDIN_EMAIL}'.")
+                                                        try:
+                                                            # Use select_option matching the visible text (label) of the <option>
+                                                            # This assumes the visible text IS the email address.
+                                                            await element.select_option(label=config.LINKEDIN_EMAIL, timeout=7000) # Increased timeout slightly
+                                                            await asyncio.sleep(0.5) # Short pause after selection
+                                                            logging.info(f"Successfully selected email: {config.LINKEDIN_EMAIL}")
                                                             element_handled = True
-                                                        else:
-                                                            logging.info(f"[LLM Handler] Option '{text_to_find}' already selected.")
+                                                        except PlaywrightTimeoutError:
+                                                            logging.warning(f"Timeout trying to select email option '{config.LINKEDIN_EMAIL}'. The option might not exist or the element is slow.")
+                                                        except Exception as select_err:
+                                                            # Playwright raises an error if the label/value doesn't match any option
+                                                            logging.warning(f"Could not select email option '{config.LINKEDIN_EMAIL}' by label. Check if the email in config exactly matches an option's text. Error: {select_err}")
+                                                    else:
+                                                        logging.warning(f"Email select dropdown (Label: '{element_label}') found but is not visible.")
+                                                else:
+                                                    logging.warning(f"Email select dropdown found (Label: '{element_label}'), but LINKEDIN_EMAIL not set in config.")
+                                                continue # Move to the next element in the loop
+
+                                            # --- Fallback: Handle Email if it appears as an Input (less likely now but safe) ---
+                                            elif element_tag == 'input' and (element_type == 'email' or 'email' in norm_label):
+                                                logging.warning(f"Found an unexpected INPUT field for email (Label: '{element_label}'). Attempting to fill.")
+                                                if config.LINKEDIN_EMAIL and is_editable:
+                                                    current_value = await element.input_value()
+                                                    if current_value != config.LINKEDIN_EMAIL:
+                                                        logging.info(f"Filling unexpected email input (Label: '{element_label}')")
+                                                        await element.fill(config.LINKEDIN_EMAIL)
+                                                        await asyncio.sleep(0.5)
+                                                        element_handled = True
+                                                    else:
+                                                        logging.info("Unexpected email input already filled correctly.")
+                                                elif not config.LINKEDIN_EMAIL:
+                                                    logging.warning(f"Unexpected email input found (Label: '{element_label}'), but LINKEDIN_EMAIL not set in config.")
+                                                continue # Move to next element
+
+                                            # City
+                                            elif element_tag == 'input' and ('city' in norm_label or 'city' in element_id.lower()):
+                                                if config.LINKEDIN_CITY:
+                                                    if is_editable and is_visible:
+                                                        logging.info(f"Found city input field (Label: '{element_label}', ID: '{element_id}'). Attempting autocomplete for: '{config.LINKEDIN_CITY}'.")
+                                                        try:
+                                                            # 1. Fill the input to trigger autocomplete
+                                                            base_city_name = config.LINKEDIN_CITY.split(',')[0]
+                                                            logging.debug(f"Filling city input with: '{base_city_name}' to trigger dropdown.")
+                                                            await element.fill(config.LINKEDIN_CITY, timeout=5000)
+                                                            await asyncio.sleep(1.5) # Short pause for dropdown JS to trigger
+
+                                                            # 2. Define selectors for the dropdown and the specific option
+                                                            dropdown_selector = "div.basic-typeahead__triggered-content[role='listbox']"
+                                                            # The option text we MUST match exactly, taken from config
+                                                            option_selector_text = config.LINKEDIN_CITY 
+
+                                                            logging.info(f"Waiting for city autocomplete dropdown ('{dropdown_selector}')")
+                                                            dropdown_locator = page.locator(dropdown_selector)
+                                                            await dropdown_locator.wait_for(state='visible', timeout=8000) # Wait longer for network/JS
+                                                            logging.info("Autocomplete dropdown appeared.")
+
+                                                            # 3. Locate and click the correct option
+                                                            # Use get_by_text with exact=True, matching the required text in config
+                                                            logging.info(f"Attempting to find exact option text: '{option_selector_text}'")
+                                                            option_element_locator = dropdown_locator.get_by_text(option_selector_text, exact=False)
+
+                                                            target_click_element = option_element_locator.first
+                                                            logging.info(f"Waiting for city option '{option_selector_text}' to be visible.")                                               
+                                                            await target_click_element.wait_for(state='visible', timeout=5000)
+
+                                                            logging.info(f"Clicking city option: '{option_selector_text}'")
+                                                            await target_click_element.click(timeout=5000)
+
+                                                            # 4. Wait for dropdown to disappear (confirms selection registered)
+                                                            await dropdown_locator.wait_for(state='hidden', timeout=5000)
+                                                            logging.info(f"City '{config.LINKEDIN_CITY}' selected successfully from autocomplete.")
+                                                            await asyncio.sleep(0.5) # Final short pause
                                                             element_handled = True
 
-                                                    # (Radio Buttons) - Reuse previous logic, adapt slightly
-                                                    elif element_tag == 'input' and element_type == 'radio':
-                                                        radio_name = await element.get_attribute('name')
-                                                        if radio_name:
-                                                            radio_group_locator = page.locator(f"input[type='radio'][name='{radio_name}']")
-                                                            radio_buttons = await radio_group_locator.all()
-                                                            target_radio_button = None
-                                                            text_to_match = option_text_to_select if option_text_to_select else str(answer_value)
-
-                                                            for radio_btn in radio_buttons:
-                                                                radio_id = await radio_btn.get_attribute("id")
-                                                                radio_value = await radio_btn.get_attribute("value")
-                                                                radio_label_text = ""
-                                                                if radio_id:
-                                                                    label_for = page.locator(f"label[for='{radio_id}']")
-                                                                    if await label_for.count() > 0:
-                                                                         radio_label_text = (await label_for.first.text_content() or "").strip()
-                                                                # TODO: Add more robust label finding if needed
-
-                                                                if radio_label_text == text_to_match or radio_value == text_to_match:
-                                                                    target_radio_button = radio_btn
-                                                                    break
-
-                                                            if target_radio_button:
-                                                                 await target_radio_button.check(timeout=5000)
-                                                                 await asyncio.sleep(0.3)
-                                                                 logging.info("[LLM Handler] Clicked/Checked radio button.")
-                                                                 element_handled = True
-                                                            else:
-                                                                logging.warning(f"[LLM Handler] Could not find radio button option matching '{text_to_match}' for question '{element_label}'.")
-                                                        else:
-                                                            logging.warning("[LLM Handler] Radio button has no name attribute.")
-
-                                                    # (Checkboxes) - Reuse previous logic
-                                                    elif element_tag == 'input' and element_type == 'checkbox':
-                                                         # Assuming LLM returns True/False in 'answer'
-                                                         if isinstance(answer_value, bool):
-                                                             if answer_value: await element.check(timeout=5000)
-                                                             else: await element.uncheck(timeout=5000)
-                                                             logging.info(f"[LLM Handler] {'Checked' if answer_value else 'Unchecked'} checkbox.")
-                                                             element_handled = True
-                                                             await asyncio.sleep(0.3)
-                                                         else:
-                                                             logging.warning(f"[LLM Handler] LLM answer for checkbox '{element_label}' is not boolean. Skipping.")
+                                                        except PlaywrightTimeoutError as auto_timeout:
+                                                            logging.warning(f"Timeout during city autocomplete for '{config.LINKEDIN_CITY}'. Dropdown or option might not have appeared/matched. Check selectors and config value. Error: {auto_timeout}")
+                                                        except Exception as auto_err:
+                                                            # Playwright might raise if get_by_text finds no match
+                                                            logging.error(f"Error during city autocomplete for '{config.LINKEDIN_CITY}'. Ensure config value exactly matches dropdown text. Error: {auto_err}", exc_info=True)
 
                                                     else:
-                                                         logging.warning(f"[LLM Handler] Unhandled element type '{element_tag}/{element_type}' for LLM response.")
+                                                        logging.warning(f"City input field found (Label: '{element_label}') but is not visible or editable.")
                                                 else:
-                                                     logging.warning(f"[LLM Placeholder] Did not provide a valid answer value for '{element_label}'.")
-                                            else:
-                                                # LLM explicitly returned None (no match)
-                                                logging.info(f"[LLM Placeholder] Could not find answer for '{element_label}'.")
-                                                # element_handled remains False
+                                                    logging.warning(f"City input field found (Label: '{element_label}'), but LINKEDIN_CITY not set in config or is empty.")
+                                                continue # Move to the next element
 
-                                        # --- Final Check for Unhandled Elements ---
-                                        if not element_handled:
-                                            logging.warning(f"UNHANDLED Element: Label='{element_label}', ID='{element_id}', Type='{element_tag}/{element_type}'. No specific handler or LLM answer found. Skipping.")
 
-                                        
-                                        # --- Add more elif blocks for other common fields ---
-                                        # e.g., Address, City, Postal Code, Custom Questions (Textarea)
-                                        # For Textareas/Custom Questions: You might log a warning and skip,
-                                        # or provide default answers in config if they are predictable.
-                                        if element_tag == 'textarea':
-                                            logging.warning(f"Textarea field found (Label: '{element_label}'). Possible custom question. Skipping automatic fill.")
-                                            continue
+                                            # --- LLM Fallback Handler ---
+                                            if not element_handled and element_label: # Only run if not handled and has a label
+                                                logging.info(f"Field '{element_label}' not handled by specific logic. Querying LLM placeholder...")
+                                                answer_data_from_llm = await get_llm_answer_for_field(element_label, element_tag, element_type)
 
-                                        # --- Handle Select/Dropdowns ---
-                                        if element_tag == 'select':
-                                            logging.warning(f"Select/Dropdown field found (Label: '{element_label}'). Automatic handling not implemented. Skipping.")
-                                            # Future: Could try selecting first valid option or matching based on config
-                                            continue
+                                                # if answer_data_from_llm:
+                                                #     logging.info(f"[LLM Placeholder] Provided answer data: {answer_data_from_llm}")
+                                                #     answer_value = answer_data_from_llm.get("answer")
+                                                #     option_text_to_select = answer_data_from_llm.get("option_text")
+                                                #     input_type_hint = answer_data_from_llm.get("type", element_tag) # Use element_tag as fallback type hint
 
-                                        # --- Handle Radio Buttons / Checkboxes ---
-                                        if element_type in ['radio', 'checkbox']:
-                                            logging.warning(f"Radio/Checkbox field found (Label: '{element_label}', Name: '{element_name}'). Automatic handling not implemented. Skipping.")
-                                            # Future: Requires logic to select based on label text of options
-                                            continue
+                                                #     if answer_value is not None:
+                                                #         logging.info(f"Attempting to answer '{element_label}' using LLM response '{answer_value}' (Type Hint: {input_type_hint})")
+                                                #         # --- Use filling logic similar to the dictionary approach ---
+                                                #         # (Input Fields)
+                                                #         if element_tag == 'input' and element_type in ['text', 'number', 'email', 'tel', 'url', 'search']: # Added 'search' type
+                                                #              if is_editable:
+                                                #                 current_val = await element.input_value()
+                                                #                 if current_val != str(answer_value):
+                                                #                     await element.fill(str(answer_value))
+                                                #                     await asyncio.sleep(0.3)
+                                                #                     logging.info("[LLM Handler] Filled text/number input.")
+                                                #                     element_handled = True # Mark as handled by LLM
+                                                #                 else:
+                                                #                     logging.info("[LLM Handler] Input already has correct value.")
+                                                #                     element_handled = True
+                                                #              else:
+                                                #                  logging.warning("[LLM Handler] Input field not editable.")
 
-                                    except PlaywrightTimeoutError as field_timeout:
-                                        logging.warning(f"Timeout interacting with field (Label: '{element_label}'): {field_timeout}")
-                                    except Exception as field_err:
-                                        logging.error(f"Error processing field (Label: '{element_label}'): {field_err}", exc_info=True)
+                                                #         # (Textarea)
+                                                #         elif element_tag == 'textarea':
+                                                #              if is_editable:
+                                                #                 current_val = await element.input_value()
+                                                #                 if current_val != str(answer_value):
+                                                #                     await element.fill(str(answer_value))
+                                                #                     await asyncio.sleep(0.3)
+                                                #                     logging.info("[LLM Handler] Filled textarea.")
+                                                #                     element_handled = True
+                                                #                 else:
+                                                #                     logging.info("[LLM Handler] Textarea already has correct value.")
+                                                #                     element_handled = True
+                                                #              else:
+                                                #                  logging.warning("[LLM Handler] Textarea field not editable.")
 
-                                # --- Find Action Buttons (Submit, Review, Next) ---
-                                submit_button = modal_locator.locator("button:has-text('Submit application')")
-                                review_button = modal_locator.locator("button:has-text('Review application'), button:has-text('Review')")
+                                                #         # (Select Dropdown)
+                                                #         elif element_tag == 'select':
+                                                #             text_to_find = option_text_to_select if option_text_to_select else str(answer_value)
+                                                #             logging.info(f"[LLM Handler] Attempting to select option with text: '{text_to_find}'")
+                                                #             current_selected_text = await element.input_value()
+                                                #             if current_selected_text != text_to_find:
+                                                #                 await element.select_option(label=text_to_find, timeout=7000)
+                                                #                 await asyncio.sleep(0.3)
+                                                #                 logging.info(f"[LLM Handler] Selected option '{text_to_find}'.")
+                                                #                 element_handled = True
+                                                #             else:
+                                                #                 logging.info(f"[LLM Handler] Option '{text_to_find}' already selected.")
+                                                #                 element_handled = True
 
-                                next_button = modal_locator.locator("button:has-text('Next'), button:has-text('Continue')") 
+                                                #         # (Radio Buttons) - Reuse previous logic, adapt slightly
+                                                #         elif element_tag == 'input' and element_type == 'radio':
+                                                #             radio_name = await element.get_attribute('name')
+                                                #             if radio_name:
+                                                #                 radio_group_locator = page.locator(f"input[type='radio'][name='{radio_name}']")
+                                                #                 radio_buttons = await radio_group_locator.all()
+                                                #                 target_radio_button = None
+                                                #                 text_to_match = option_text_to_select if option_text_to_select else str(answer_value)
 
-                                # Add await for checks and clicks
-                                submit_visible = await submit_button.is_visible()
-                                submit_enabled = await submit_button.is_enabled() if submit_visible else False
+                                                #                 for radio_btn in radio_buttons:
+                                                #                     radio_id = await radio_btn.get_attribute("id")
+                                                #                     radio_value = await radio_btn.get_attribute("value")
+                                                #                     radio_label_text = ""
+                                                #                     if radio_id:
+                                                #                         label_for = page.locator(f"label[for='{radio_id}']")
+                                                #                         if await label_for.count() > 0:
+                                                #                              radio_label_text = (await label_for.first.text_content() or "").strip()
+                                                #                     # TODO: Add more robust label finding if needed
 
-                                review_visible = await review_button.is_visible()
-                                review_enabled = await review_button.is_enabled() if review_visible else False
+                                                #                     if radio_label_text == text_to_match or radio_value == text_to_match:
+                                                #                         target_radio_button = radio_btn
+                                                #                         break
 
-                                next_visible = await next_button.is_visible()
-                                next_enabled = await next_button.is_enabled() if next_visible else False
+                                                #                 if target_radio_button:
+                                                #                      await target_radio_button.check(timeout=5000)
+                                                #                      await asyncio.sleep(0.3)
+                                                #                      logging.info("[LLM Handler] Clicked/Checked radio button.")
+                                                #                      element_handled = True
+                                                #                 else:
+                                                #                     logging.warning(f"[LLM Handler] Could not find radio button option matching '{text_to_match}' for question '{element_label}'.")
+                                                #             else:
+                                                #                 logging.warning("[LLM Handler] Radio button has no name attribute.")
 
-                                # Prioritize Submit button
-                                if submit_visible and submit_enabled:
-                                    logging.info("Found 'Submit application' button. Clicking...")
-                                    await submit_button.click()
-                                    application_submitted = True 
-                                    final_status_message = "applied"
-                                    break 
+                                                #         # (Checkboxes) - Reuse previous logic
+                                                #         elif element_tag == 'input' and element_type == 'checkbox':
+                                                #              # Assuming LLM returns True/False in 'answer'
+                                                #              if isinstance(answer_value, bool):
+                                                #                  if answer_value: await element.check(timeout=5000)
+                                                #                  else: await element.uncheck(timeout=5000)
+                                                #                  logging.info(f"[LLM Handler] {'Checked' if answer_value else 'Unchecked'} checkbox.")
+                                                #                  element_handled = True
+                                                #                  await asyncio.sleep(0.3)
+                                                #              else:
+                                                #                  logging.warning(f"[LLM Handler] LLM answer for checkbox '{element_label}' is not boolean. Skipping.")
 
-                                # Then Review button
-                                elif review_visible and review_enabled:
-                                    logging.info("Found 'Review' button. Clicking to proceed...")
-                                    await review_button.click()
-                                    await asyncio.sleep(3) # Wait for the next step/review page to load
-                                    continue # Continue to the next iteration of the while loop
+                                                #         else:
+                                                #              logging.warning(f"[LLM Handler] Unhandled element type '{element_tag}/{element_type}' for LLM response.")
+                                                #     else:
+                                                #          logging.warning(f"[LLM Placeholder] Did not provide a valid answer value for '{element_label}'.")
+                                                # else:
+                                                #     # LLM explicitly returned None (no match)
+                                                #     logging.info(f"[LLM Placeholder] Could not find answer for '{element_label}'.")
+                                                #     # element_handled remains False
 
-                                # Then Next button
-                                elif next_visible and next_enabled:
-                                    logging.info("Found 'Next' button. Clicking to proceed...")
-                                    await next_button.click()
-                                    await asyncio.sleep(3)
-                                    continue # Continue to the next iteration of the while loop
+                                            # --- Final Check for Unhandled Elements ---
+                                            if not element_handled:
+                                                logging.warning(f"UNHANDLED Element: Label='{element_label}', ID='{element_id}', Type='{element_tag}/{element_type}'. No specific handler or LLM answer found. Skipping.")
 
-                                else:
-                                    logging.error(f"Could not find enabled 'Submit', 'Review', or 'Next' button on step {current_step}. Available buttons might be disabled or have different text.")
-                                    final_status_message = "failed_no_action_button"
-                                    break # Exit loop, application failed at this step
+                                            
+                                            # --- Add more elif blocks for other common fields ---
+                                            # e.g., Address, City, Postal Code, Custom Questions (Textarea)
+                                            # For Textareas/Custom Questions: You might log a warning and skip,
+                                            # or provide default answers in config if they are predictable.
+                                            if element_tag == 'textarea':
+                                                logging.warning(f"Textarea field found (Label: '{element_label}'). Possible custom question. Skipping automatic fill.")
+                                                continue
 
-                            # --- After the Loop ---
-                            if application_submitted:
-                                await asyncio.sleep(5) 
-                                if not await modal_locator.is_visible(timeout=5000):
-                                    logging.info("Application submitted successfully (modal closed after submit).")
-                                    await context.close()
-                                    return True, "applied"
-                                else:
-                                    confirmation_selector = "h2:has-text('Application submitted'), h3:has-text('submitted')" 
-                                    if await page.locator(confirmation_selector).first.is_visible(timeout=5000): # Check if *any* confirmation exists
-                                        logging.info("Application submitted successfully (confirmation text found).")
+                                            # --- Handle Select/Dropdowns ---
+                                            if element_tag == 'select':
+                                                logging.warning(f"Select/Dropdown field found (Label: '{element_label}'). Automatic handling not implemented. Skipping.")
+                                                # Future: Could try selecting first valid option or matching based on config
+                                                continue
+
+                                            # --- Handle Radio Buttons / Checkboxes ---
+                                            if element_type in ['radio', 'checkbox']:
+                                                logging.warning(f"Radio/Checkbox field found (Label: '{element_label}', Name: '{element_name}'). Automatic handling not implemented. Skipping.")
+                                                # Future: Requires logic to select based on label text of options
+                                                continue
+
+                                        except PlaywrightTimeoutError as field_timeout:
+                                            logging.warning(f"Timeout interacting with field (Label: '{element_label}'): {field_timeout}")
+                                        except Exception as field_err:
+                                            logging.error(f"Error processing field (Label: '{element_label}'): {field_err}", exc_info=True)
+
+                                    # --- Find Action Buttons (Submit, Review, Next) ---
+                                    submit_button = modal_locator.locator("button:has-text('Submit application')")
+                                    review_button = modal_locator.locator("button:has-text('Review application'), button:has-text('Review')")
+
+                                    next_button = modal_locator.locator("button:has-text('Next'), button:has-text('Continue')") 
+
+                                    # Add await for checks and clicks
+                                    submit_visible = await submit_button.is_visible()
+                                    submit_enabled = await submit_button.is_enabled() if submit_visible else False
+
+                                    review_visible = await review_button.is_visible()
+                                    review_enabled = await review_button.is_enabled() if review_visible else False
+
+                                    next_visible = await next_button.is_visible()
+                                    next_enabled = await next_button.is_enabled() if next_visible else False
+
+                                    # Prioritize Submit button
+                                    if submit_visible and submit_enabled:
+                                        logging.info("Found 'Submit application' button. Clicking...")
+                                        await submit_button.click()
+                                        application_submitted = True 
+                                        final_status_message = "applied"
+                                        break 
+
+                                    # Then Review button
+                                    elif review_visible and review_enabled:
+                                        logging.info("Found 'Review' button. Clicking to proceed...")
+                                        await review_button.click()
+                                        await asyncio.sleep(3) # Wait for the next step/review page to load
+                                        continue # Continue to the next iteration of the while loop
+
+                                    # Then Next button
+                                    elif next_visible and next_enabled:
+                                        logging.info("Found 'Next' button. Clicking to proceed...")
+                                        await next_button.click()
+                                        await asyncio.sleep(3)
+                                        continue # Continue to the next iteration of the while loop
+
+                                    else:
+                                        logging.error(f"Could not find enabled 'Submit', 'Review', or 'Next' button on step {current_step}. Available buttons might be disabled or have different text.")
+                                        final_status_message = "failed_no_action_button"
+                                        break # Exit loop, application failed at this step
+
+                                # --- After the Loop ---
+                                if application_submitted:
+                                    await asyncio.sleep(5) 
+                                    if not await modal_locator.is_visible(timeout=5000):
+                                        logging.info("Application submitted successfully (modal closed after submit).")
                                         await context.close()
                                         return True, "applied"
                                     else:
-                                        logging.warning("Clicked submit, but confirmation is unclear (modal still visible, no confirmation text found). Marking as potentially failed.")
-                                        await context.close()
-                                        return False, "failed_confirmation_unclear"
+                                        confirmation_selector = "h2:has-text('Application submitted'), h3:has-text('submitted')" 
+                                        if await page.locator(confirmation_selector).first.is_visible(timeout=5000): # Check if *any* confirmation exists
+                                            logging.info("Application submitted successfully (confirmation text found).")
+                                            await context.close()
+                                            return True, "applied"
+                                        else:
+                                            logging.warning("Clicked submit, but confirmation is unclear (modal still visible, no confirmation text found). Marking as potentially failed.")
+                                            await context.close()
+                                            return False, "failed_confirmation_unclear"
 
-                            elif current_step == max_steps:
-                                logging.error("Reached maximum steps without submitting. Failing application.")
+                                elif current_step == max_steps:
+                                    logging.error("Reached maximum steps without submitting. Failing application.")
+                                    await context.close()
+                                    return False, "failed_max_steps"
+                                else:
+                                    logging.error(f"Application failed during modal processing. Final status: {final_status_message}")
+                                    await context.close()
+                                    return False, final_status_message
+
+                            except PlaywrightTimeoutError:
+                                logging.error(f"Timed out waiting for the 'Easy Apply' modal ({modal_selector}) to appear or during step processing.")
+                                await context.close() # Let finally block handle closing
+                                return False, "failed_modal_timeout"
+                            except Exception as modal_err:
+                                logging.error(f"Error processing 'Easy Apply' modal: {modal_err}", exc_info=True)
                                 await context.close()
-                                return False, "failed_max_steps"
-                            else:
-                                logging.error(f"Application failed during modal processing. Final status: {final_status_message}")
-                                await context.close()
-                                return False, final_status_message
+                                return False, "failed_modal_error"
 
                         except PlaywrightTimeoutError:
-                            logging.error(f"Timed out waiting for the 'Easy Apply' modal ({modal_selector}) to appear or during step processing.")
-                            await context.close() # Let finally block handle closing
-                            return False, "failed_modal_timeout"
-                        except Exception as modal_err:
-                            logging.error(f"Error processing 'Easy Apply' modal: {modal_err}", exc_info=True)
+                            logging.error(f"Timeout occurred while trying to click the Easy Apply button.")
                             await context.close()
-                            return False, "failed_modal_error"
+                            return False, "failed_button_click_timeout"
+                        except Exception as click_err:
+                            logging.error(f"Error clicking Easy Apply button: {click_err}", exc_info=True)
+                            await context.close()
+                            return False, "failed_button_click_error"
 
-                    except PlaywrightTimeoutError:
-                        logging.error(f"Timeout occurred while trying to click the Easy Apply button.")
-                        await context.close()
-                        return False, "failed_button_click_timeout"
-                    except Exception as click_err:
-                        logging.error(f"Error clicking Easy Apply button: {click_err}", exc_info=True)
-                        await context.close()
-                        return False, "failed_button_click_error"
+                    elif "apply" in apply_button_text.strip().lower():
+                        logging.info("Apply button found and clickable.")
+                        try:
+                            await asyncio.sleep(0.5)
+
+                            async with context.expect_page() as new_page_info:
+                                # await page.wait_for_load_state("networkidle")
+                                await target_button.click(timeout=10000) 
+                                logging.info("Clicked 'Apply' button.")
+
+                            new_page  = await new_page_info.value
+                            logging.info(f"New page opened after clicking 'Apply': {await new_page.title()}")
+                            interactive_elements = await new_page.locator("input, textarea, select").all()
+                            if interactive_elements:
+                                logging.info(f"Found {len(interactive_elements)} potential input elements on new page.")
+                            else :
+                                buttons_and_links = new_page.locator("button, a")
+                                apply_elements_filtered = buttons_and_links.filter(has_text=re.compile("apply", re.IGNORECASE))
+
+                                print(f"\n--- Found using locator('button, a').filter() ---")
+                                print(f"Count: {await apply_elements_filtered.count()}")
+
+                                await apply_elements_filtered.first.wait_for(state='visible', timeout=15000) # Add await, wait for first
+                                logging.info("Apply button locator found.")
+
+                                new_page_target_button = apply_elements_filtered.first
+
+                                 # Check if it's enabled before clicking
+                                if not await new_page_target_button.is_enabled():
+                                    logging.error("Apply button found but is disabled.")
+                                    await context.close()
+                                    return False, "failed_button_disabled"
+
+                                for i in range(await apply_elements_filtered.count()):
+                                    element = apply_elements_filtered.nth(i)
+                                    print(f"Element {i+1} text: '{await element.text_content()}' Tag: {await element.evaluate('el => el.tagName')}")                     
+
+                        except PlaywrightTimeoutError:
+                            logging.error(f"Timeout occurred while trying to click the Easy Apply button.")
+                            await context.close()
+                            return False, "failed_button_click_timeout"
+                        except Exception as click_err:
+                            logging.error(f"Error clicking Easy Apply button: {click_err}", exc_info=True)
+                            await context.close()
+                            return False, "failed_button_click_error"                            
 
                 except PlaywrightTimeoutError:
                     logging.info("Easy Apply button not found within timeout.")
-                    # Handle case where button truly doesn't exist after waiting
-                    apply_button = page.locator(apply_button_selector)
-                    if await apply_button.is_visible(): # Add await
-                        logging.info("'Easy Apply' not found, but 'Apply' button exists. Likely redirects externally. Skipping.")
-                        await context.close() # Add await
-                        return False, "external"
-                    else:
-                        logging.warning(f"Neither 'Easy Apply' nor 'Apply' button found for job ID: {job_id}.")
-                        await context.close() # Add await
-                        return False, "no_apply_button"
+                    logging.warning(f"Neither 'Easy Apply' nor 'Apply' button found for job ID: {job_id}.")
+                    await context.close() # Add await
+                    return False, "no_apply_button"
 
             except PlaywrightTimeoutError:
                 logging.error(f"Timed out waiting for apply buttons on job page: {linkedin_job_url}")
