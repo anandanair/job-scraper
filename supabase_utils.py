@@ -11,32 +11,53 @@ if not config.SUPABASE_URL or not config.SUPABASE_KEY:
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
 # --- Supabase Functions ---
-def get_existing_job_ids_from_supabase() -> set:
+def get_existing_jobs_from_supabase(batch_size: int = 1000) -> tuple[set, set]:
     """
-    Fetches existing active job IDs from the Supabase 'jobs' table.
-    Returns a set of job IDs for efficient lookup.
+    Fetches all existing job IDs and company-title pairs from the Supabase 'jobs' table.
+    Returns:
+        - A set of job_ids
+        - A set of 'company|job_title' keys (both lowercased for consistency)
     """
     existing_ids = set()
-    try:
-        # Use table name from config
-        response = supabase.table(config.SUPABASE_TABLE_NAME).select("job_id").execute()
+    existing_company_title_keys = set()
+    offset = 0
 
-        if response.data:
-            for item in response.data:
-                if 'job_id' in item:
-                    existing_ids.add(item['job_id'])
-            print(f"Successfully fetched {len(existing_ids)} existing job IDs from Supabase.")
-        else:
-            # Handle cases where response.data might be None or empty list explicitly
-            if response.data is None:
-                 print("Error fetching from Supabase or no data returned.")
-            else:
-                 print("No existing active job IDs found in Supabase.")
+    try:
+        while True:
+            response = (
+                supabase.table(config.SUPABASE_TABLE_NAME)
+                .select("job_id, company, job_title")
+                .range(offset, offset + batch_size - 1)
+                .execute()
+            )
+
+            data = response.data
+
+            if not data:
+                break  # No more data to fetch
+
+            for item in data:
+                job_id = item.get("job_id")
+                company = item.get("company")
+                job_title = item.get("job_title")
+
+                if job_id:
+                    existing_ids.add(str(job_id))
+
+                if company and job_title:
+                    normalized_company = company.strip().lower()
+                    normalized_title = job_title.strip().lower()
+                    existing_company_title_keys.add((normalized_company, normalized_title))
+
+            offset += batch_size
+
+        print(f"Fetched {len(existing_ids)} job IDs and {len(existing_company_title_keys)} company-title pairs.")
 
     except Exception as e:
-        print(f"Error fetching existing job IDs from Supabase: {e}")
+        print(f"Error fetching existing jobs from Supabase: {e}")
 
-    return existing_ids
+    return existing_ids, existing_company_title_keys
+
 
 
 def save_jobs_to_supabase(jobs_data: list):
