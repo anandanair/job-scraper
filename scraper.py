@@ -260,7 +260,6 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
             if not job_details.get("company"):
                  job_details["company"] = None
                  print(f"Warning: Could not extract company for job ID {job_id}")
-
         except Exception as e:
             print(f"Error extracting company for job ID {job_id}: {e}")
             job_details["company"] = None
@@ -273,7 +272,6 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
                  title_h1 = soup.find("h1", {"class": "top-card-layout__title"}) # Fallback selector
                  if title_h1:
                       job_details["job_title"] = title_h1.text.strip()
-
         except Exception as e: # Catch broader exceptions during extraction
             print(f"Error extracting job title for job ID {job_id}: {e}")
             job_details["job_title"] = None
@@ -311,8 +309,6 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
             if not job_details.get("location"): # Check if still None
                  job_details["location"] = None
                  print(f"Warning: Could not extract location for job ID {job_id}")
-
-
         except Exception as e:
             print(f"Error extracting location for job ID {job_id}: {e}")
             job_details["location"] = None
@@ -332,10 +328,10 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
                 print(f"Warning: Could not parse description for job ID {job_id}: {e}")
                 job_details["description"] = None
 
-        return job_details
-
         # --- Set Provider ---
         job_details["provider"] = "linkedin"
+        
+        return job_details
 
     except Exception as e:
          # Catch errors during BeautifulSoup parsing or data extraction
