@@ -265,26 +265,28 @@ def get_jobs_to_rescore(limit: int) -> list:
 
     try:
         logging.info(f"Fetching up to {limit} jobs for re-scoring...")
-        response = supabase.table(config.SUPABASE_TABLE_NAME)\
-                            .select("job_id, job_title, company, description, level, resume_score, resume_link")\
-                            .eq("is_active", True)\
-                            .eq("status", "new")\
-                            .eq("job_state", "new")\
-                            .not_.is_("customized_resume_id", None)\
-                            .eq("resume_score_stage", "initial")\
-                            .order("resume_score", desc=True)\
-                            .limit(limit)\
-                            .execute()
+        response = supabase.rpc(
+            "get_jobs_for_rescore", 
+            {"p_limit_val": limit}   
+        ).execute()
 
-        if response.data:
-            logging.info(f"Successfully fetched {len(response.data)} jobs for re-scoring.")
-            return response.data
-        else:
-            logging.info("No jobs found meeting re-scoring criteria at this time.")
+        if hasattr(response, 'data') and response.data is not None:
+            if response.data: # Check if list is not empty
+                logging.info(f"Successfully fetched {len(response.data)} jobs for re-scoring via RPC.")
+                return response.data
+            else:
+                logging.info("No jobs found meeting re-scoring criteria via RPC at this time (empty list returned).")
+                return []
+        elif hasattr(response, 'error') and response.error: # Handle explicit error attribute
+             logging.error(f"Error calling RPC get_jobs_for_rescore: {response.error}")
+             return []
+        else: # Fallback for unexpected response structure
+            logging.warning(f"Unexpected response structure from RPC call: {response}")
             return []
 
+
     except Exception as e:
-        logging.error(f"Error fetching jobs to rescore from Supabase: {e}")
+        logging.error(f"Exception calling RPC get_jobs_for_rescore: {e}", exc_info=True)
         return []
 
 
