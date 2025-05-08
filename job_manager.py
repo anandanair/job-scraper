@@ -140,7 +140,7 @@ async def mark_expired_jobs():
     logging.info("--- Finished Task: Mark Expired Jobs ---")
 
 
-async def check_job_activity():
+async def check_linkedin_job_activity():
     """Checks if active jobs are still available on LinkedIn."""
     logging.info("--- Starting Task: Check Job Activity ---")
     check_older_than_date = get_past_date(config.JOB_CHECK_DAYS)
@@ -156,6 +156,7 @@ async def check_job_activity():
         query = supabase.table(config.SUPABASE_TABLE_NAME)\
             .select("job_id, last_checked")\
             .eq("is_active", True)\
+            .eq("provider", "linkedin")\
             .not_.in_("status", excluded_statuses)\
             .lt("last_checked", check_older_than_date_str)\
             .order("last_checked", desc=False)\
@@ -270,7 +271,7 @@ async def main():
     start_time = time.time()
 
     await mark_expired_jobs()
-    await check_job_activity()
+    await check_linkedin_job_activity()
     await delete_old_inactive_jobs()
 
     end_time = time.time()
