@@ -37,6 +37,12 @@ LINKEDIN_JOB_TYPE = "F" # Full-time
 # LINKEDIN_JOB_POSTING_DATE = "" # anytime
 LINKEDIN_JOB_POSTING_DATE = "r86400" # Past 24 hours
 
+#  --- Careers Future Configuration ---
+CAREERS_FUTURE_SEARCH_QUERIES = ["IT Support", "Full Stack Web Developer", "Application Support", "Cybersecurity Analyst", "Artifical Intelligence"]
+CAREERS_FUTURE_SEARCH_CATEGORIES = ["Information Technology"]
+CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = ["Full Time"]
+
+
 # --- Scraping Parameters ---
 LINKEDIN_MAX_START = 30 # Reduced for 40 Jobs ids
 # LINKEDIN_MAX_START = 990 # Maximum start value for full scrape
