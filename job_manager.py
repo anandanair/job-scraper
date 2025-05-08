@@ -152,9 +152,11 @@ async def check_job_activity():
         # Query for jobs needing a check: active AND older than N days
         # Order by last_checked ASC to prioritize oldest checks
         # Limit the number of checks per run
+        excluded_statuses = ['applied', 'offer', 'interviewing'] # Add any status that means "don't expire"
         query = supabase.table(config.SUPABASE_TABLE_NAME)\
             .select("job_id, last_checked")\
             .eq("is_active", True)\
+            .not_.in_("status", excluded_statuses)\
             .lt("last_checked", check_older_than_date_str)\
             .order("last_checked", desc=False)\
             .limit(config.JOB_CHECK_LIMIT)
