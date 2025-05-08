@@ -54,20 +54,3 @@ ACTIVE_CHECK_TIMEOUT = 20 # Timeout for checking if a job is active
 ACTIVE_CHECK_MAX_RETRIES = 2
 ACTIVE_CHECK_RETRY_DELAY = 10 # Base delay for retrying active check
 
-raw_proxies = [
-    "38.154.227.167:5868:fbjewpss:9nwozqnmpvqq",
-    "45.127.248.127:5128:fbjewpss:9nwozqnmpvqq",
-    "198.23.239.134:6540:fbjewpss:9nwozqnmpvqq",
-    "38.153.152.244:9594:fbjewpss:9nwozqnmpvqq",
-    "86.38.234.176:6630:fbjewpss:9nwozqnmpvqq",
-    "173.211.0.148:6641:fbjewpss:9nwozqnmpvqq",
-    "216.10.27.159:6837:fbjewpss:9nwozqnmpvqq",
-    "154.36.110.199:6853:fbjewpss:9nwozqnmpvqq",
-    "45.151.162.198:6600:fbjewpss:9nwozqnmpvqq",
-    "188.74.210.21:6100:fbjewpss:9nwozqnmpvqq"
-]
-
-proxy_list = [
-    f"http://{user}:{password}@{ip}:{port}"
-    for ip, port, user, password in (proxy.split(":") for proxy in raw_proxies)
-]
