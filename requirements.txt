@@ -8,3 +8,4 @@ google-genai
 pydantic
 groq
 playwright
+html2text
