@@ -30,12 +30,12 @@ USER_PHONE_NUMBER= os.environ.get("PHONE_NUMBER")
 LINKEDIN_CITY = "Singapore, Singapore"
 
 # --- LinkedIn Configuration ---
-LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "next js", "application support", "cybersecurity analyst"]
+LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "application support", "cybersecurity analyst, AI "]
 LINKEDIN_LOCATION = "Singapore"
 LINKEDIN_GEO_ID = 102454443 # Singapore
 LINKEDIN_JOB_TYPE = "F" # Full-time
-LINKEDIN_JOB_POSTING_DATE = "" # anytime
-# LINKEDIN_JOB_POSTING_DATE = "r86400" # Past 24 hours
+# LINKEDIN_JOB_POSTING_DATE = "" # anytime
+LINKEDIN_JOB_POSTING_DATE = "r86400" # Past 24 hours
 
 # --- Scraping Parameters ---
 # LINKEDIN_MAX_START = 0 # Testing with a smaller number (0 means 1 page)
