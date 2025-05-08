@@ -7,6 +7,7 @@ import logging
 
 # Import shared modules
 import config
+import user_agents
 from supabase_utils import supabase # Use the initialized Supabase client
 
 # --- Setup Logging ---
@@ -37,7 +38,7 @@ async def _check_single_job_active(job_id: str, client: httpx.AsyncClient) -> bo
     while retries <= config.ACTIVE_CHECK_MAX_RETRIES:
         try:
             # Rotate user agent and proxy for each attempt
-            user_agent = random.choice(config.USER_AGENTS)
+            user_agent = random.choice(user_agents.USER_AGENTS)
             headers = {'User-Agent': user_agent}
             proxy_url = random.choice(config.proxy_list)
             proxies = {"http://": proxy_url, "https://": proxy_url}
