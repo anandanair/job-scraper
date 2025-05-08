@@ -7,6 +7,7 @@ from groq import Groq, RateLimitError
 
 
 import config
+import user_agents
 import supabase_utils
 
 groq_client = Groq(api_key=config.GROQ_API_KEY)
@@ -82,12 +83,12 @@ def _fetch_job_ids(search_query: str, location: str) -> list:
 
         # --- Humanization: Delay and User Agent ---
         # 1. Random Delay before *each* attempt (including retries)
-        sleep_time = random.uniform(2.5, 6.0)
+        sleep_time = random.uniform(5.0, 15.0)
         print(f"Waiting for {sleep_time:.2f} seconds before next request...")
         time.sleep(sleep_time)
 
         # 2. Random User Agent
-        user_agent = random.choice(config.USER_AGENTS)
+        user_agent = random.choice(user_agents.USER_AGENTS)
         headers = {'User-Agent': user_agent}
         print(f"Using User-Agent: {user_agent}")
 
@@ -114,7 +115,7 @@ def _fetch_job_ids(search_query: str, location: str) -> list:
                     print(f"Error 429: Too Many Requests. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
                     time.sleep(wait_time)
                     # Rotate proxy/user-agent again on retry
-                    user_agent = random.choice(config.USER_AGENTS)
+                    user_agent = random.choice(user_agents.USER_AGENTS)
                     headers = {'User-Agent': user_agent}
                     proxy_url_selected = random.choice(config.proxy_list)
                     proxies_dict = {"http": proxy_url_selected, "https": proxy_url_selected}
@@ -187,12 +188,12 @@ def _fetch_job_details(job_id: str) -> dict | None:
 
     # --- Humanization: Delay and User Agent ---
     # 1. Random Delay before *each* attempt
-    sleep_time = random.uniform(2.0, 5.5)
+    sleep_time = random.uniform(3.0, 10.0)
     print(f"Waiting for {sleep_time:.2f} seconds before fetching details...")
     time.sleep(sleep_time)
 
     # 2. Random User Agent
-    user_agent = random.choice(config.USER_AGENTS)
+    user_agent = random.choice(user_agents.USER_AGENTS)
     headers = {'User-Agent': user_agent}
     print(f"Using User-Agent for details: {user_agent}")
 
@@ -220,7 +221,7 @@ def _fetch_job_details(job_id: str) -> dict | None:
                 print(f"Error 429 for job ID {job_id}. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
                 time.sleep(wait_time)
                 # Rotate proxy/user-agent again on retry
-                user_agent = random.choice(config.USER_AGENTS)
+                user_agent = random.choice(user_agents.USER_AGENTS)
                 headers = {'User-Agent': user_agent}
                 proxy_url_selected = random.choice(config.proxy_list)
                 proxies_dict = {"http": proxy_url_selected, "https": proxy_url_selected}
