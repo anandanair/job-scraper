@@ -40,15 +40,12 @@ async def _check_single_job_active(job_id: str, client: httpx.AsyncClient) -> bo
             # Rotate user agent and proxy for each attempt
             user_agent = random.choice(user_agents.USER_AGENTS)
             headers = {'User-Agent': user_agent}
-            proxy_url = random.choice(config.proxy_list)
-            proxies = {"http://": proxy_url, "https://": proxy_url}
 
-            logging.debug(f"Checking job {job_id} (Attempt {retries+1}/{config.ACTIVE_CHECK_MAX_RETRIES+1}) URL: {job_detail_url} with UA: {user_agent} Proxy: {proxy_url}")
+            logging.debug(f"Checking job {job_id} (Attempt {retries+1}/{config.ACTIVE_CHECK_MAX_RETRIES+1}) URL: {job_detail_url} with UA: {user_agent}")
 
             response = await client.get(
                 job_detail_url,
                 headers=headers,
-                proxies=proxies,
                 timeout=config.ACTIVE_CHECK_TIMEOUT,
                 follow_redirects=True # Allow redirects to check final destination
             )
