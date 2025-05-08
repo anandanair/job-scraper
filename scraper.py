@@ -685,29 +685,27 @@ def process_careers_future_query(search_query: str) -> list:
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    print("Starting job scraping script...")
-    print(f"Using Supabase table: {config.SUPABASE_TABLE_NAME}")
-    print(f"LinkedIn Location: {config.LINKEDIN_LOCATION}")
-    # print(f"Detail Fetch Limit per Query: {config.LINKEDIN_DETAIL_FETCH_LIMIT}")
 
     total_new_jobs_saved = 0
 
-    # for query in config.LINKEDIN_SEARCH_QUERIES:
-    #     print(f"\n{'='*20} Processing Search Query: '{query}' {'='*20}")
+    # Get jobs from LinkedIn
+    logging.info("\n--- Starting LinkedIn Job Scraping ---")
+    for query in config.LINKEDIN_SEARCH_QUERIES:
+        print(f"\n{'='*20} Processing Search Query: '{query}' {'='*20}")
 
-    #     # 1. Process the query: Scrape IDs, filter, fetch new details
-    #     new_linkedin_job_details = process_linkedin_query(query, config.LINKEDIN_LOCATION)
+        # 1. Process the query: Scrape IDs, filter, fetch new details
+        new_linkedin_job_details = process_linkedin_query(query, config.LINKEDIN_LOCATION)
 
-    #     # 2. Save the NEW scraped data to Supabase
-    #     if new_linkedin_job_details:
-    #         print(f"\n--- Saving {len(new_linkedin_job_details)} new job(s) for query '{query}' ---")
-    #         supabase_utils.save_jobs_to_supabase(new_linkedin_job_details)
-    #         total_new_jobs_saved += len(new_linkedin_job_details)
-    #     else:
-    #         print(f"\nNo new job details were fetched or processed for query '{query}'.")
+        # 2. Save the NEW scraped data to Supabase
+        if new_linkedin_job_details:
+            print(f"\n--- Saving {len(new_linkedin_job_details)} new job(s) for query '{query}' ---")
+            supabase_utils.save_jobs_to_supabase(new_linkedin_job_details)
+            total_new_jobs_saved += len(new_linkedin_job_details)
+        else:
+            print(f"\nNo new job details were fetched or processed for query '{query}'.")
 
     # Get jobs from Careers Future
-    print(f"\n--- Starting Careers Future Job Scraping ---")
+    logging.info(f"\n--- Starting Careers Future Job Scraping ---")
     for query in config.CAREERS_FUTURE_SEARCH_QUERIES:
         logging.info(f"\n{'='*20} Processing Careers Future Search Query: '{query}' {'='*20}")
 
@@ -722,7 +720,6 @@ if __name__ == "__main__":
         else:
             logging.info(f"\nNo new job details were fetched or processed for query '{query}'.")
 
-        
-
+    # --- End of Script ---      
     logging.info(f"\n{'='*20} Job scraping script finished {'='*20}")
     logging.info(f"Total new jobs saved across all queries: {total_new_jobs_saved}")
