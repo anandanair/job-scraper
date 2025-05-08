@@ -35,8 +35,13 @@ async def _check_single_linkedin_job_active(job_id: str, client: httpx.AsyncClie
     retries = 0
     inactive_keywords = ["this job is no longer available", "job is closed", "No longer accepting applications"] # Add more if needed
 
+
     while retries <= config.ACTIVE_CHECK_MAX_RETRIES:
         try:
+            sleep_time = random.uniform(5.0, 15.0)
+            logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
+            time.sleep(sleep_time)
+
             # Rotate user agent and proxy for each attempt
             user_agent = random.choice(user_agents.USER_AGENTS)
             headers = {'User-Agent': user_agent}
@@ -217,7 +222,7 @@ async def check_linkedin_job_activity():
                 .in_("job_id", active_checked_job_ids)\
                 .execute()
             # Add logging for update_active response count/data
-            logging.info(f"Updated last_checked for {len(active_checked_job_ids)} active jobs. Response: {update_active}")
+            logging.info(f"Updated last_checked for {len(active_checked_job_ids)} active jobs.")
 
     except Exception as e:
         logging.error(f"Error updating job statuses after activity check: {e}")
