@@ -323,6 +323,9 @@ def _fetch_job_details(job_id: str) -> dict | None:
 
         return job_details
 
+        # --- Set Provider ---
+        job_details["provider"] = "linkedin"
+
     except Exception as e:
          # Catch errors during BeautifulSoup parsing or data extraction
          print(f"General Error processing details for job ID {job_id} after successful fetch: {e}")
