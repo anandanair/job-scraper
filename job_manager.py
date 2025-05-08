@@ -23,7 +23,7 @@ def get_past_date(days: int) -> datetime:
     """Returns the datetime object for a specific number of days ago in UTC."""
     return get_utc_now() - timedelta(days=days)
 
-async def _check_single_job_active(job_id: str, client: httpx.AsyncClient) -> bool | None:
+async def _check_single_linkedin_job_active(job_id: str, client: httpx.AsyncClient) -> bool | None:
     """
     Checks if a single LinkedIn job is still active.
     Returns:
@@ -176,7 +176,10 @@ async def check_job_activity():
 
     # Use httpx.AsyncClient for connection pooling and efficiency
     async with httpx.AsyncClient() as client:
-        tasks = [_check_single_job_active(job['job_id'], client) for job in jobs_to_check]
+        tasks = []
+        for job in jobs_to_check:
+            if(job['provider'] == 'linkedin'):
+                tasks.append(_check_single_linkedin_job_active(job['job_id'], client))
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
     inactive_job_ids = []
