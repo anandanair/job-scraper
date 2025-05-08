@@ -91,12 +91,6 @@ def _fetch_job_ids(search_query: str, location: str) -> list:
         user_agent = random.choice(user_agents.USER_AGENTS)
         headers = {'User-Agent': user_agent}
         print(f"Using User-Agent: {user_agent}")
-
-        # 3. Random Proxy
-        proxies_dict = None
-        proxy_url_selected = None
-        proxy_url_selected = random.choice(config.proxy_list)
-        proxies_dict = {"http": proxy_url_selected, "https": proxy_url_selected}
         # --- End Humanization ---
 
         print(f"Scraping URL: {target_url}")
@@ -105,7 +99,7 @@ def _fetch_job_ids(search_query: str, location: str) -> list:
         while retries <= config.MAX_RETRIES:
             try:
                 # Pass headers to the request
-                res = requests.get(target_url, headers=headers, proxies=proxies_dict, timeout=config.REQUEST_TIMEOUT)
+                res = requests.get(target_url, headers=headers, timeout=config.REQUEST_TIMEOUT)
                 res.raise_for_status()
                 break
             except requests.exceptions.HTTPError as e:
@@ -114,12 +108,11 @@ def _fetch_job_ids(search_query: str, location: str) -> list:
                     wait_time = config.RETRY_DELAY_SECONDS + random.uniform(0, 5) 
                     print(f"Error 429: Too Many Requests. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
                     time.sleep(wait_time)
-                    # Rotate proxy/user-agent again on retry
+
+                    # Rotate user-agent again on retry
                     user_agent = random.choice(user_agents.USER_AGENTS)
                     headers = {'User-Agent': user_agent}
-                    proxy_url_selected = random.choice(config.proxy_list)
-                    proxies_dict = {"http": proxy_url_selected, "https": proxy_url_selected}
-                    print(f"Retrying with new User-Agent: {user_agent} and Proxy: {proxy_url_selected}")
+                    print(f"Retrying with new User-Agent: {user_agent}")
                     continue # Go to the next retry iteration
                 else:
                     # For non-429 HTTP errors or if max retries reached for 429
@@ -196,12 +189,6 @@ def _fetch_job_details(job_id: str) -> dict | None:
     user_agent = random.choice(user_agents.USER_AGENTS)
     headers = {'User-Agent': user_agent}
     print(f"Using User-Agent for details: {user_agent}")
-
-    # 3. Random Proxy
-    proxies_dict = None
-    proxy_url_selected = None
-    proxy_url_selected = random.choice(config.proxy_list)
-    proxies_dict = {"http": proxy_url_selected, "https": proxy_url_selected}
     # --- End Humanization ---
 
     print(f"Fetching details from: {job_detail_url}")
@@ -210,7 +197,7 @@ def _fetch_job_details(job_id: str) -> dict | None:
     resp = None # Initialize resp to None
     while retries <= config.MAX_RETRIES:
         try:
-            resp = requests.get(job_detail_url, headers=headers, proxies=proxies_dict, timeout=config.REQUEST_TIMEOUT)
+            resp = requests.get(job_detail_url, headers=headers, timeout=config.REQUEST_TIMEOUT)
             resp.raise_for_status()
             # Success
             break
@@ -220,12 +207,10 @@ def _fetch_job_details(job_id: str) -> dict | None:
                 wait_time = config.RETRY_DELAY_SECONDS + random.uniform(0, 5) 
                 print(f"Error 429 for job ID {job_id}. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
                 time.sleep(wait_time)
-                # Rotate proxy/user-agent again on retry
+                # Rotate user-agent again on retry
                 user_agent = random.choice(user_agents.USER_AGENTS)
                 headers = {'User-Agent': user_agent}
-                proxy_url_selected = random.choice(config.proxy_list)
-                proxies_dict = {"http": proxy_url_selected, "https": proxy_url_selected}
-                print(f"Retrying job {job_id} with new User-Agent: {user_agent} and Proxy: {proxy_url_selected}")
+                print(f"Retrying job {job_id} with new User-Agent: {user_agent}")
                 continue
             else:
                 # Non-429 HTTP error or max retries reached for 429
