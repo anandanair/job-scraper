@@ -38,8 +38,8 @@ LINKEDIN_JOB_TYPE = "F" # Full-time
 LINKEDIN_JOB_POSTING_DATE = "r86400" # Past 24 hours
 
 # --- Scraping Parameters ---
-# LINKEDIN_MAX_START = 0 # Testing with a smaller number (0 means 1 page)
-LINKEDIN_MAX_START = 990 # Maximum start value for full scrape
+LINKEDIN_MAX_START = 30 # Reduced for 40 Jobs ids
+# LINKEDIN_MAX_START = 990 # Maximum start value for full scrape
 # LINKEDIN_DETAIL_FETCH_LIMIT = 2 # Max new jobs to fetch details for per query (for testing)
 REQUEST_TIMEOUT = 30 # Timeout for HTTP requests in seconds
 MAX_RETRIES = 3
@@ -53,17 +53,6 @@ JOB_CHECK_LIMIT = 50 # Max number of jobs to check for activity per run
 ACTIVE_CHECK_TIMEOUT = 20 # Timeout for checking if a job is active
 ACTIVE_CHECK_MAX_RETRIES = 2
 ACTIVE_CHECK_RETRY_DELAY = 10 # Base delay for retrying active check
-
-USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/110.0',
-]
 
 raw_proxies = [
     "38.154.227.167:5868:fbjewpss:9nwozqnmpvqq",
