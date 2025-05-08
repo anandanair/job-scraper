@@ -3,74 +3,67 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import time # Import time for sleep
 import random # Import random for delays and user-agent selection
-from groq import Groq, RateLimitError
 import logging
 import config
 import user_agents
 import supabase_utils
 import html2text
+from google import genai
+from google.genai import types
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-groq_client = Groq(api_key=config.GROQ_API_KEY)
-GROQ_MODEL = "llama3-70b-8192"
-GROQ_REQUEST_DELAY_SECONDS = random.uniform(2.5, 6.0)
+# --- Initialize Gemini Client ---
+client = genai.Client(api_key=config.GEMINI_API_KEY)
 
 # Convert description to Markdown
-def convert_to_markdown_with_groq(text: str) -> str | None:
+def convert_plain_text_to_markdown_with_ai(text: str) -> str | None:
     """
-    Uses Groq API (Llama3) to convert plain text job description to Markdown.
+    Convert plain text to Markdown using Gemini Flash Lite model.
     """
     if not text:
         print("Received empty text for Markdown conversion.")
         return "" # Return empty string if input is empty
 
-    print("Converting description text to Markdown using Groq...")
-    prompt = f"""You are a Markdown formatter.
-    Convert the job description below into **well-structured Markdown**.
-    - **Do not alter or paraphrase any part of the text**.
-    - **Preserve all original content exactly as is**.
-    - Only apply Markdown formatting such as:
+    print("Converting description text to Markdown using Gemini Lite...")
+
+    system_prompt = f"""
+    You are a Markdown formatter.
+    Your task is to convert plain text into well-structured Markdown.
+    You must not alter, paraphrase, or omit any part of the input text.
+    Only apply formatting using Markdown syntax such as:
     - Headings
     - Bold text
     - Bullet points
     - Paragraph breaks
-    - Do **not** add or remove any words, punctuation, or content.
-    - Do **not** include any explanation or commentary.
-    - Your output must be **only** the formatted Markdown.
 
-    Job Description:
-    ---
-    {text}
-    ---
-
-    Markdown Output:
+    Do not add or remove any words, punctuation, or content.
+    Do not include any explanation or commentary.
+    Only return the formatted Markdown.
     """
 
-    try:
-        completion = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
+    prompt = f"""You are a Markdown formatter.
+    Convert the following job description into Markdown format:
+
+    ---
+    {job_description_text}
+    ---
+    """
+    response = client.models.generate_content(
+        model=config.GEMINI_SECONDARY_MODEL_NAME,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
             temperature=0.2,
-            stream=False 
         )
+    )
 
-        markdown_content = completion.choices[0].message.content
-        print("Successfully converted text to Markdown.")
-        return markdown_content.strip()
+    markdown_content = response.text.strip()
+    print("Successfully converted text to Markdown.")
+    return markdown_content
 
-    except RateLimitError as e:
-        print(f"Groq Rate Limit Error: {e}. Consider increasing GROQ_REQUEST_DELAY_SECONDS.")
-        return None
-    except Exception as e:
-        print(f"Error calling Groq API for Markdown conversion: {e}")
-        return None
+
 
 def _get_careers_future_job_company_name(job_item: dict) -> str | None:
     """Helper to extract company name, preferring hiringCompany."""
@@ -331,7 +324,7 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
                 raw_description = description_div.get_text(separator='\n', strip=True)
                 lines = [line for line in raw_description.splitlines() if line.strip()]
                 raw_description = "\n".join(lines)
-                job_details["description"] = convert_to_markdown_with_groq(raw_description)
+                job_details["description"] = convert_plain_text_to_markdown_with_ai(raw_description)
             else:
                 print(f"Warning: Could not find description div for job ID {job_id}")
                 job_details["description"] = None
