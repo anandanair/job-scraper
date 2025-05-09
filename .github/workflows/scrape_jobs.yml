@@ -29,4 +29,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_FIRST_API_KEY: ${{ secrets.GEMINI_FIRST_API_KEY }} # Gemini API Key
         run: python scraper.py # Execute your script
