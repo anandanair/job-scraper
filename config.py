@@ -11,9 +11,6 @@ SUPABASE_RESUME_TABLE_NAME = "resumes"
 SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME = "customized_resumes"
 SUPABASE_STORAGE_BUCKET="resumes"
 
-# --- Groq Configuration ---
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-
 # --- Google Configuration ---
 GEMINI_FIRST_API_KEY = os.environ.get("GEMINI_FIRST_API_KEY")
 GEMINI_SECOND_API_KEY = os.environ.get("GEMINI_SECOND_API_KEY")
