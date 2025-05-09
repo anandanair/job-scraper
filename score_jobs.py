@@ -327,7 +327,7 @@ def main():
 if __name__ == "__main__":
     if not config.GEMINI_API_KEY:
         logging.error("GOOGLE_API_KEY environment variable not set.")
-    elif not config.SUPABASE_URL or not config.SUPABASE_KEY:
+    elif not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
         logging.error("Supabase URL or Key environment variable not set.")
     elif not config.LINKEDIN_EMAIL:
         logging.error("LINKEDIN_EMAIL not set in config.py")

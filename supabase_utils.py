@@ -7,10 +7,10 @@ import logging # Import logging
 
 # --- Initialize Supabase Client ---
 # Ensure URL and Key are provided
-if not config.SUPABASE_URL or not config.SUPABASE_KEY:
+if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
     raise ValueError("Supabase URL and Key must be set in environment variables or config.")
 
-supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY)
 
 # --- Supabase Functions ---
 def get_existing_jobs_from_supabase(batch_size: int = 1000) -> tuple[set, set]:

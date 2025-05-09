@@ -5,7 +5,7 @@ load_dotenv()
 
 # --- Supabase Configuration ---
 SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_SERVICE_ROLE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_TABLE_NAME: str = "jobs"
 SUPABASE_RESUME_TABLE_NAME = "resumes"
 SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME = "customized_resumes"
