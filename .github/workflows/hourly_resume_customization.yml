@@ -31,4 +31,5 @@ jobs:
           GEMINI_SECOND_API_KEY: ${{ secrets.GEMINI_SECOND_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
         run: python custom_resume_generator.py
