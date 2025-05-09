@@ -1,5 +1,7 @@
 from supabase import create_client, Client
 import config # Import configuration
+from typing import Optional, Any
+from models import Resume
 import datetime # Import datetime module
 import logging # Import logging
 
@@ -57,8 +59,6 @@ def get_existing_jobs_from_supabase(batch_size: int = 1000) -> tuple[set, set]:
         print(f"Error fetching existing jobs from Supabase: {e}")
 
     return existing_ids, existing_company_title_keys
-
-
 
 def save_jobs_to_supabase(jobs_data: list):
     """
@@ -174,7 +174,6 @@ def save_resume_to_supabase(resume_data: dict):
         # Consider logging the data that failed to upsert
         # print(f"Failed data: {resume_data}")
 
-
 def get_resume_by_email(email: str) -> dict | None:
     """
     Fetches a single resume record from the Supabase 'resumes' table based on email.
@@ -205,6 +204,35 @@ def get_resume_by_email(email: str) -> dict | None:
         logging.error(f"Error fetching resume data from Supabase for email {email}: {e}")
         return None
 
+def get_resume_custom_fields_by_email(email: str) -> dict | None:
+    """
+    Fetches a single resume record from the Supabase 'resumes' table based on email.
+    """
+    if not email:
+        logging.error("No email provided to fetch resume.")
+        return None
+    if not hasattr(config, 'SUPABASE_RESUME_TABLE_NAME') or not config.SUPABASE_RESUME_TABLE_NAME:
+        logging.error("SUPABASE_RESUME_TABLE_NAME is not defined in config.py")
+        return None
+
+    try:
+        logging.info(f"Fetching resume for email: {email} from table '{config.SUPABASE_RESUME_TABLE_NAME}'")
+        response = supabase.table(config.SUPABASE_RESUME_TABLE_NAME)\
+                           .select("name, email, phone, location, summary, skills, education, experience, projects, certifications, languages, links")\
+                           .eq("email", email)\
+                           .limit(1)\
+                           .execute()
+
+        if response.data:
+            logging.info(f"Successfully fetched resume data for {email}.")
+            return response.data[0] # Return the first matching resume
+        else:
+            logging.warning(f"No resume found for email: {email}")
+            return None
+
+    except Exception as e:
+        logging.error(f"Error fetching resume data from Supabase for email {email}: {e}")
+        return None
 
 def get_jobs_to_score(limit: int) -> list:
     """
@@ -239,7 +267,6 @@ def get_jobs_to_score(limit: int) -> list:
         logging.error(f"Error fetching jobs to score from Supabase: {e}")
         return []
 
-
 def get_top_scored_jobs_to_apply(limit: int) -> list:
     """
     Fetches the top-scored jobs from Supabase that are ready for application.
@@ -271,6 +298,38 @@ def get_top_scored_jobs_to_apply(limit: int) -> list:
 
     except Exception as e:
         logging.error(f"Error fetching top-scored jobs to apply for from Supabase: {e}")
+        return []
+
+def get_top_scored_jobs_for_resume_generation(limit: int) -> list:
+    """
+    Fetches the top-scored jobs from Supabase using the RPC 'get_top_scored_jobs_custom_sort'.
+    p_page_number is set to 1 and p_page_size is set to the limit.
+    Selects fields needed for the application process.
+    """
+    if limit <= 0:
+        logging.warning("Limit for jobs to apply must be positive.")
+        return []
+
+    try:
+        logging.info(f"Fetching up to {limit} top-scored jobs to apply for using RPC 'get_top_scored_jobs_custom_sort'...")
+        response = supabase.rpc(
+                "get_jobs_for_resume_generation_custom_sort",
+                {"p_page_number": 1, "p_page_size": limit}
+            ).execute()
+
+        if response.data:
+            logging.info(f"Successfully fetched {len(response.data)} top-scored jobs to apply for via RPC.")
+            return response.data
+        else:
+            # Check for RPC specific errors if any, or just log general empty data
+            if hasattr(response, 'error') and response.error:
+                logging.error(f"Error calling RPC 'get_top_scored_jobs_custom_sort': {response.error.message}")
+            else:
+                logging.info("No top-scored jobs found ready for application at this time via RPC.")
+            return []
+
+    except Exception as e:
+        logging.error(f"Error fetching top-scored jobs to apply for from Supabase RPC: {e}")
         return []
 
 def get_jobs_to_rescore(limit: int) -> list:
@@ -309,7 +368,6 @@ def get_jobs_to_rescore(limit: int) -> list:
     except Exception as e:
         logging.error(f"Exception calling RPC get_jobs_for_rescore: {e}", exc_info=True)
         return []
-
 
 def update_job_score(job_id: str, score: int, resume_score_stage: str = "initial") -> bool:
     """
@@ -355,3 +413,211 @@ def update_job_score(job_id: str, score: int, resume_score_stage: str = "initial
     except Exception as e:
         logging.error(f"Error updating score for job_id {job_id} in Supabase: {e}")
         return False
+
+def get_job_by_id(job_id: str) -> dict | None:
+    """
+    Fetches a single job record from the Supabase 'jobs' table based on job_id.
+    """
+    if not job_id:
+        logging.error("No job_id provided to fetch job details.")
+        return None
+    if not hasattr(config, 'SUPABASE_TABLE_NAME') or not config.SUPABASE_TABLE_NAME:
+        logging.error("SUPABASE_TABLE_NAME is not defined in config.py")
+        return None
+
+    try:
+        logging.info(f"Fetching job details for job_id: {job_id} from table '{config.SUPABASE_TABLE_NAME}'")
+        response = supabase.table(config.SUPABASE_TABLE_NAME)\
+                           .select("company, job_title, level, description")\
+                           .eq("job_id", job_id) \
+                           .limit(1)\
+                           .execute() # Assuming 'job_id' is the column name
+
+        if response.data:
+            logging.info(f"Successfully fetched job data for job_id: {job_id}.")
+            return response.data[0] # Return the first matching job
+        else:
+            logging.warning(f"No job found for job_id: {job_id}")
+            return None
+
+    except Exception as e:
+        logging.error(f"Error fetching job data from Supabase for job_id {job_id}: {e}")
+        return None
+
+def upload_customized_resume_to_storage(file_content: bytes, destination_path: str) -> Optional[str]:
+    """
+    Uploads the generated resume PDF (as bytes) to Supabase Storage.
+
+    Args:
+        file_content: The resume content in bytes.
+        destination_path: The desired path and filename within the bucket
+                          (e.g., "personalized_resumes/resume_job_12345.pdf").
+                          Ensure this path is unique per job/resume.
+
+    Returns:
+        The public URL of the uploaded file, or None if upload fails.
+    """
+    if not file_content:
+        logging.error("Cannot upload empty file content.")
+        return None
+    if not config.SUPABASE_STORAGE_BUCKET:
+        logging.error("Supabase storage bucket name not configured.")
+        return None
+
+    try:
+        logging.info(f"Uploading resume to Supabase Storage at path: {destination_path}")
+
+        # Use upsert=True if you want to overwrite if a file with the same name exists,
+        # otherwise False (or omit) to potentially get an error if it exists.
+        # Ensure your destination_path includes job_id or similar for uniqueness.
+        upload_response = supabase.storage.from_(config.SUPABASE_STORAGE_BUCKET)\
+            .upload(
+                path=destination_path,
+                file=file_content,
+                file_options={"content-type": "application/pdf", "upsert": "true"} # Set upsert based on desired behavior
+            )
+
+        # Retrieve the public URL after successful upload
+        public_url_response = supabase.storage.from_(config.SUPABASE_STORAGE_BUCKET)\
+            .get_public_url(destination_path)
+
+        logging.info(f"Successfully uploaded resume. Public URL: {public_url_response}")
+        return public_url_response
+
+    except Exception as e:
+        # Supabase client might raise specific exceptions, catch broadly for now
+        logging.error(f"Error uploading file to Supabase Storage: {e}")
+        # Attempt to remove partially uploaded file if possible/needed (more complex error handling)
+        # try:
+        #     supabase.storage.from_(config.SUPABASE_STORAGE_BUCKET).remove([destination_path])
+        # except:
+        #     logging.warning(f"Could not clean up potentially failed upload at {destination_path}")
+        return None
+
+def update_job_with_resume_link(job_id: str, customized_resume_id: str,  new_status: Optional[str] = "resume_generated") -> bool:
+    """
+    Updates the job record in the Supabase table with the resume link and optionally a new status.
+
+    Args:
+        job_id: The unique ID of the job to update.
+        customized_resume_id: The id the generated resume in Supabase customized_resumes table.
+        new_status: The status to set for the job after processing (e.g., 'resume_generated').
+                    Set to None to only update the link without changing status.
+
+    Returns:
+        True if the update was successful, False otherwise.
+    """
+    if not job_id or not customized_resume_id:
+        logging.error("Job ID and Customized Resume id are required for updating the job.")
+        return False
+
+    try:
+        update_data = {"customized_resume_id": customized_resume_id}
+        # if new_status:
+        #     update_data["job_state"] = new_status # Assuming 'status' is your column name
+
+        logging.info(f"Updating job {job_id} with resume link, resume id and status '{new_status or 'unchanged'}'...")
+
+        response = supabase.table(config.SUPABASE_TABLE_NAME)\
+                           .update(update_data)\
+                           .eq("job_id", job_id)\
+                           .execute()
+
+        # Check if the update affected any rows (response.data might contain updated rows)
+        if response.data:
+            logging.info(f"Successfully updated job {job_id}.")
+            return True
+        else:
+            # This might happen if the job_id didn't exist or matched 0 rows
+            logging.warning(f"Update query executed for job {job_id}, but no rows seemed to be affected.")
+            # Depending on strictness, you might return False here
+            return False # Treat as failure if no row was confirmed updated
+
+    except Exception as e:
+        logging.error(f"Error updating job {job_id} in Supabase: {e}")
+        return False
+
+def save_customized_resume(resume_data: 'Resume', resume_link: str) -> Optional[Any]: # Return type changed
+    """
+    Saves a customized resume to the Supabase 'customized_resumes' table.
+
+    Args:
+        resume_data: A Resume object (Pydantic model) containing the resume details.
+
+    Returns:
+        The ID (typically string UUID or integer) of the inserted resume if successful, None otherwise.
+    """
+
+    if not resume_link:
+        logging.error("Resume Link is required for saving the resume.")
+        return False
+
+    if not resume_data:
+        logging.error("No resume data provided to save.")
+        return None
+
+    if not hasattr(config, 'SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME') or \
+       not config.SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME:
+        logging.error("SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME is not defined in config.py")
+        return None
+
+    try:
+        # Convert Pydantic model to dict for Supabase
+        if hasattr(resume_data, 'model_dump'):
+            data_to_insert = resume_data.model_dump(exclude_none=True)
+        else:
+            data_to_insert = resume_data.dict(exclude_none=True)
+
+        data_to_insert['resume_link'] = resume_link
+
+        logging.info(
+            f"Saving customized resume for email: {getattr(resume_data, 'email', 'N/A')} "
+            f"with link '{resume_link}' to table '{config.SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME}'"
+        )
+
+        response = supabase.table(config.SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME)\
+                           .insert(data_to_insert)\
+                           .execute()
+
+        if response.data and len(response.data) > 0:
+            inserted_record = response.data[0]
+            if 'id' in inserted_record:
+                resume_id = inserted_record['id']
+                logging.info(
+                    f"Successfully saved customized resume for {getattr(resume_data, 'email', 'N/A')} "
+                    f"with ID: {resume_id}."
+                )
+                return resume_id
+            else:
+                logging.warning(
+                    f"Customized resume for {getattr(resume_data, 'email', 'N/A')} saved, "
+                    f"but 'id' key not found in the response data. Full record: {inserted_record}"
+                )
+                return None
+        else:
+            error_message = "Unknown error"
+            if hasattr(response, 'error') and response.error:
+                error_message = response.error
+                logging.error(
+                    f"Failed to save customized resume for {getattr(resume_data, 'email', 'N/A')}. "
+                    f"Supabase Error: {error_message}"
+                )
+            elif hasattr(response, 'message') and response.message:
+                error_message = response.message
+                logging.error(
+                    f"Failed to save customized resume for {getattr(resume_data, 'email', 'N/A')}. "
+                    f"Supabase API Error: {error_message}"
+                )
+            else:
+                logging.warning(
+                    f"Customized resume for {getattr(resume_data, 'email', 'N/A')} might not have been saved "
+                    f"or ID not returned. Response data is empty or missing. Response: {response}"
+                )
+            return None
+
+    except Exception as e:
+        logging.error(
+            f"Error saving customized resume for {getattr(resume_data, 'email', 'N/A')} to Supabase: {e}",
+            exc_info=True
+        )
+        return None
