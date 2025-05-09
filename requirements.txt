@@ -8,3 +8,4 @@ google-genai
 pydantic
 playwright
 html2text
+reportlab
