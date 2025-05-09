@@ -8,13 +8,15 @@ SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_TABLE_NAME: str = "jobs"
 SUPABASE_RESUME_TABLE_NAME = "resumes"
+SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME = "customized_resumes"
+SUPABASE_STORAGE_BUCKET="resumes"
 
 # --- Groq Configuration ---
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 # --- Google Configuration ---
 GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
-# Consider using a specific model version if needed, e.g., "gemini-1.5-flash"
+GEMINI_SECOND_API_KEY = os.environ.get("GEMINI_SECOND_API_KEY")
 GEMINI_MODEL_NAME = "gemini-2.0-flash"
 GEMINI_SECONDARY_MODEL_NAME = "gemini-2.0-flash-lite"
 
