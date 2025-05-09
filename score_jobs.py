@@ -14,7 +14,7 @@ import supabase_utils
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Initialize Gemini Client ---
-client = genai.Client(api_key=config.GEMINI_API_KEY)
+client = genai.Client(api_key=config.GEMINI_FIRST_API_KEY)
 
 # --- Helper Functions ---
 
@@ -325,8 +325,8 @@ def main():
 
 
 if __name__ == "__main__":
-    if not config.GEMINI_API_KEY:
-        logging.error("GOOGLE_API_KEY environment variable not set.")
+    if not config.GEMINI_FIRST_API_KEY:
+        logging.error("GEMINI_FIRST_API_KEY environment variable not set.")
     elif not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
         logging.error("Supabase URL or Key environment variable not set.")
     elif not config.LINKEDIN_EMAIL:

@@ -15,7 +15,7 @@ SUPABASE_STORAGE_BUCKET="resumes"
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 # --- Google Configuration ---
-GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
+GEMINI_FIRST_API_KEY = os.environ.get("GEMINI_FIRST_API_KEY")
 GEMINI_SECOND_API_KEY = os.environ.get("GEMINI_SECOND_API_KEY")
 GEMINI_MODEL_NAME = "gemini-2.0-flash"
 GEMINI_SECONDARY_MODEL_NAME = "gemini-2.0-flash-lite"

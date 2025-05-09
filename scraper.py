@@ -15,7 +15,7 @@ from google.genai import types
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Initialize Gemini Client ---
-client = genai.Client(api_key=config.GEMINI_API_KEY)
+client = genai.Client(api_key=config.GEMINI_FIRST_API_KEY)
 
 # Convert description to Markdown
 def convert_plain_text_to_markdown_with_ai(text: str) -> str | None:

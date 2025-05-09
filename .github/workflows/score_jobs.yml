@@ -31,6 +31,6 @@ jobs:
           # These should be set as Secrets in your GitHub repository settings
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }} # Gemini API Key
+          GEMINI_FIRST_API_KEY: ${{ secrets.GEMINI_FIRST_API_KEY }} # Gemini API Key
           LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
         run: python score_jobs.py # Execute the job scoring script
