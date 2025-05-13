@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# --- DO NOT MODIFY THE BELOW SECTION ---
+
 # --- Supabase Configuration ---
 SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -23,30 +25,10 @@ GEMINI_REQUEST_DELAY_SECONDS = 6 # Delay between Gemini API calls (10 requests/m
 
 # --- LinkedIn Configuration ---
 LINKEDIN_EMAIL = os.environ.get("LINKEDIN_EMAIL")
-LINKEDIN_PASSWORD = os.environ.get("LINKEDIN_PASSWORD")
-PERSISTENT_PROFILE_PATH = r"C:\Users\anand\AppData\Local\linkedin_job_applier_profile"
-RESUME_FILE_PATH="./resume_files/resume.pdf"
-USER_PHONE_NUMBER= os.environ.get("PHONE_NUMBER")
-LINKEDIN_CITY = "Singapore, Singapore"
-
-# --- LinkedIn Configuration ---
-LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "application support", "cybersecurity analyst", "AI"]
-LINKEDIN_LOCATION = "Singapore"
-LINKEDIN_GEO_ID = 102454443 # Singapore
-LINKEDIN_JOB_TYPE = "F" # Full-time
-# LINKEDIN_JOB_POSTING_DATE = "" # anytime
-LINKEDIN_JOB_POSTING_DATE = "r86400" # Past 24 hours
-
-#  --- Careers Future Configuration ---
-CAREERS_FUTURE_SEARCH_QUERIES = ["IT Support", "Full Stack Web Developer", "Application Support", "Cybersecurity Analyst", "Artifical Intelligence"]
-CAREERS_FUTURE_SEARCH_CATEGORIES = ["Information Technology"]
-CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = ["Full Time"]
 
 
 # --- Scraping Parameters ---
 LINKEDIN_MAX_START = 30 # Reduced for 40 Jobs ids
-# LINKEDIN_MAX_START = 990 # Maximum start value for full scrape
-# LINKEDIN_DETAIL_FETCH_LIMIT = 2 # Max new jobs to fetch details for per query (for testing)
 REQUEST_TIMEOUT = 30 # Timeout for HTTP requests in seconds
 MAX_RETRIES = 3
 RETRY_DELAY_SECONDS = 15
@@ -59,4 +41,18 @@ JOB_CHECK_LIMIT = 50 # Max number of jobs to check for activity per run
 ACTIVE_CHECK_TIMEOUT = 20 # Timeout for checking if a job is active
 ACTIVE_CHECK_MAX_RETRIES = 2
 ACTIVE_CHECK_RETRY_DELAY = 10 # Base delay for retrying active check
+
+# --- DO NOT MODITY THE ABOVE SECTION ---
+
+# --- LinkedIn Search Configuration ---
+LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "application support", "cybersecurity analyst", "AI"]
+LINKEDIN_LOCATION = "Singapore"
+LINKEDIN_GEO_ID = 102454443 # Singapore
+LINKEDIN_JOB_TYPE = "F" # Full-time
+LINKEDIN_JOB_POSTING_DATE = "r86400" # Past 24 hours
+
+#  --- Careers Future Search Configuration ---
+CAREERS_FUTURE_SEARCH_QUERIES = ["IT Support", "Full Stack Web Developer", "Application Support", "Cybersecurity Analyst", "Artifical Intelligence"]
+CAREERS_FUTURE_SEARCH_CATEGORIES = ["Information Technology"]
+CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = ["Full Time"]
 
