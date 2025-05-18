@@ -47,7 +47,7 @@ def convert_plain_text_to_markdown_with_ai(text: str) -> str | None:
     Convert the following job description into Markdown format:
 
     ---
-    {job_description_text}
+    {text}
     ---
     """
     response = client.models.generate_content(
