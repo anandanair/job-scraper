@@ -15,6 +15,7 @@ from models import (
     SummaryOutput, SkillsOutput, ExperienceListOutput, SingleExperienceOutput,
     ProjectListOutput, SingleProjectOutput, ValidationResponse
 )
+import time
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -429,12 +430,17 @@ async def process_job(job_details: Dict[str, Any], base_resume_details: Resume):
             "skills": base_resume_details.skills,
         }
 
+        sleep_time = 6
+
         for section_name, section_content in sections_to_personalize.items():
             if any_validation_failed: # If a previous section failed validation, skip further personalization
                 logging.warning(f"Skipping further personalization for job_id {job_id} due to prior validation failure.")
                 break # Exit the loop over sections
 
             if section_content:
+                logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
+                time.sleep(sleep_time)
+
                 logging.info(f"Personalizing section: {section_name} for job_id: {job_id}")
                 personalized_content = await personalize_section_with_llm(
                     section_name,
@@ -442,6 +448,9 @@ async def process_job(job_details: Dict[str, Any], base_resume_details: Resume):
                     base_resume_details, # Pass the original full resume for context
                     job_details # Pass the specific job details
                 )
+
+                logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
+                time.sleep(sleep_time)
 
                 # Validate the customization
                 logging.info(f"Validating customization for section: {section_name} for job_id: {job_id}")
