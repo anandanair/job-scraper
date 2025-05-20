@@ -4,20 +4,20 @@ This project is a comprehensive suite of tools designed to automate and enhance 
 
 ## Features
 
-- **LinkedIn Job Scraping**: Automatically scrapes job postings from LinkedIn. (Implemented in [scraper.py](scraper.py))
+- **LinkedIn Job Scraping**: Automatically scrapes job postings from LinkedIn. ([scraper.py](scraper.py))
 - **Resume Parsing**:
   - Extracts text from PDF resumes using `pdfplumber`. ([resume_parser.py](resume_parser.py))
   - Utilizes Google Gemini AI to parse resume text into structured data ([parse_resume_with_ai.py](parse_resume_with_ai.py))
-- **Job Scoring**: Scores job descriptions against a parsed resume using AI to determine suitability. (Implemented in <mcfile name="score_jobs.py" path="d:\dev\linkedin-jobs-scrapper\score_jobs.py"></mcfile>)
+- **Job Scoring**: Scores job descriptions against a parsed resume using AI to determine suitability. ([score_jobs.py](score_jobs.py))
 - **Job Management**:
   - Tracks the status of job applications.
   - Marks old or inactive jobs as expired.
   - Periodically checks if active jobs are still available on LinkedIn.
-    (Implemented in <mcfile name="job_manager.py" path="d:\dev\linkedin-jobs-scrapper\job_manager.py"></mcfile>)
-- **Data Storage**: Uses Supabase to store job data, resume details, and application statuses. (Utility functions in <mcfile name="supabase_utils.py" path="d:\dev\linkedin-jobs-scrapper\supabase_utils.py"></mcfile>)
-- **Custom PDF Resume Generation**: Generates ATS-friendly PDF resumes from structured resume data. (Implemented in <mcfile name="pdf_generator.py" path="d:\dev\linkedin-jobs-scrapper\pdf_generator.py"></mcfile>)
+    ([job_manager.py](job_manager.py))
+- **Data Storage**: Uses Supabase to store job data, resume details, and application statuses. (Utility functions in [supabase_utils.py](supabase_utils.py))
+- **Custom PDF Resume Generation**: Generates ATS-friendly PDF resumes from structured resume data. ([pdf_generator.py](pdf_generator.py))
 - **AI-Powered Text Processing**: Leverages Google Gemini for tasks like resume parsing and converting job descriptions to Markdown.
-- **Automated Workflows**: Includes GitHub Actions for running tasks like job scraping, scoring, and management on a schedule. (See <mcfolder name="workflows" path="d:\dev\linkedin-jobs-scrapper\.github\workflows"></mcfolder>)
+- **Automated Workflows**: Includes GitHub Actions for running tasks like job scraping, scoring, and management on a schedule. ([workflows](.github/workflows/))
 
 ## Tech Stack
 
