@@ -39,15 +39,86 @@ This project is a comprehensive suite of tools designed to automate and enhance 
 
 ## Setup and Installation
 
-1.  **Clone the repository:**
+This project is designed to run primarily through GitHub Actions. Follow these steps to set it up for your own use:
 
+1.  **Fork the Repository:**
+    *   Click the "Fork" button at the top right of this page to create a copy of this repository in your own GitHub account.
+
+2.  **Create a Supabase Project:**
+    *   Go to [Supabase](https://supabase.com/) and create a new project.
+    *   Once your project is created, navigate to the "SQL Editor" section.
+    *   Open the `supabase_setup/init.sql` file from this repository, copy its content, and run it in your Supabase SQL Editor. This will set up the necessary tables (`jobs` and `resumes`).
+
+3.  **Obtain Google Gemini API Keys:**
+    *   Go to [Google AI Studio](https://aistudio.google.com/app/apikey) (or the relevant Google Cloud project console where Gemini API is enabled).
+    *   Create two API keys. These will be used by the application to interact with the Gemini models for tasks like resume parsing and job scoring.
+
+4.  **Configure GitHub Repository Secrets:**
+    *   In your forked GitHub repository, go to "Settings".
+    *   In the left sidebar, navigate to "Secrets and variables" under the "Security" section, and then click on "Actions".
+    *   Click on "New repository secret" and add the following secrets:
+        *   `GEMINI_FIRST_API_KEY`: Your primary Google Gemini API key.
+        *   `GEMINI_SECOND_API_KEY`: Your secondary Google Gemini API key.
+        *   `LINKEDIN_EMAIL`: The email address associated with your LinkedIn account (used for certain scraping tasks if configured, and as an identifier).
+        *   `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase project's `service_role` key (found in your Supabase project settings under API > Project API keys).
+        *   `SUPABASE_URL`: Your Supabase project's URL (found in your Supabase project settings under API > Configuration > URL).
+
+5.  **Upload Your Resume:**
+    *   In your forked GitHub repository, create a new folder named `resume_files` in the root directory.
+    *   Upload your resume to this `resume_files` folder. **The resume file must be named `resume.pdf`**.
+
+6.  **Parse Your Resume:**
+    *   Go to the "Actions" tab in your forked GitHub repository.
+    *   Find the workflow named "Parse Resume Manually" in the list of workflows.
+    *   Click on it, and then click the "Run workflow" button. This will trigger the `resume_parser.py` script, which will extract information from your `resume.pdf`, parse it using AI, and store the structured data in your Supabase `resumes` table.
+
+7.  **Configure Job Search Parameters (Edit `config.py`):**
+    *   In your forked GitHub repository, navigate to the [config.py](config.py) file.
+    *   Edit the file to customize your job search preferences. The main variables you'll likely want to change are:
+
+        ```python
+        # --- LinkedIn Search Configuration ---
+        LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "application support", "cybersecurity analyst", "AI"] # Keywords for LinkedIn job search
+        LINKEDIN_LOCATION = "Singapore" # Target location for LinkedIn jobs
+        LINKEDIN_GEO_ID = 102454443 # Geographical ID for LinkedIn location (e.g., Singapore)
+        LINKEDIN_JOB_TYPE = "F" # Job type: "F" for Full-time, "C" for Contract, etc.
+        LINKEDIN_JOB_POSTING_DATE = "r86400" # Time filter: "r86400" for past 24 hours, "r604800" for past week, leave it empty for 'anytime'
+
+        # --- Careers Future Search Configuration ---
+        CAREERS_FUTURE_SEARCH_QUERIES = ["IT Support", "Full Stack Web Developer", "Application Support", "Cybersecurity Analyst", "Artifical Intelligence"] # Keywords for CareersFuture job search
+        CAREERS_FUTURE_SEARCH_CATEGORIES = ["Information Technology"] # Job categories for CareersFuture
+        CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = ["Full Time"] # Employment types for CareersFuture
+        ```
+    *   **IMPORTANT**: Do not modify other variables in `config.py` as they are carefully calibrated to prevent rate limiting and potential account bans. Only edit the search queries and location parameters shown above.
+    *   Commit the changes to your `config.py` file in your repository.
+
+## Automated Workflows
+
+Once the setup is complete, the GitHub Actions workflows defined in [workflows](.github/workflows/) are scheduled to run automatically:
+
+*   **`scrape_jobs.yml`**: Periodically scrapes new job postings from LinkedIn and CareersFuture based on your `config.py` settings and saves them to your Supabase database.
+*   **`score_jobs.yml`**: Periodically scores the newly scraped jobs and jobs with custom resumes against your parsed resume / custom resume and updates the scores in the database.
+*   **`job_manager.yml`**: Periodically manages job statuses (e.g., marks old jobs as expired, checks if active jobs are still available).
+*   **`hourly_resume_customization.yml`**: (If enabled and configured) May run tasks related to customizing resumes for specific jobs.
+
+You can monitor the execution of these actions in the "Actions" tab of your repository.
+
+## Usage
+
+After the initial setup and the "Parse Resume Manually" action has successfully run, the system will operate automatically through the scheduled GitHub Actions.
+
+You can interact with the data directly through your Supabase dashboard to view scraped jobs, your parsed resume, and job scores.
+
+The individual Python scripts can still be run locally for development or testing, but this requires setting up a local Python environment, installing dependencies from `requirements.txt`, and creating a local `.env` file with the necessary credentials (mirroring the GitHub secrets).
+
+**Local Development Setup (Optional):**
+
+1.  **Clone your forked repository locally:**
     ```bash
-    git clone https://github.com/anandanair/linkedin-jobs-scrapper
+    git clone https://github.com/YOUR_USERNAME/linkedin-jobs-scrapper.git
     cd linkedin-jobs-scrapper
     ```
-
 2.  **Create and activate a virtual environment:**
-
     ```bash
     python -m venv .venv
     # On Windows
@@ -55,19 +126,30 @@ This project is a comprehensive suite of tools designed to automate and enhance 
     # On macOS/Linux
     source .venv/bin/activate
     ```
-
 3.  **Install dependencies:**
-
     ```bash
     pip install -r requirements.txt
+    playwright install # Install browser drivers for Playwright
     ```
-
-    You might also need to install Playwright's browser drivers:
-
+4.  **Create a `.env` file:**
+    *   In the root of your local repository, create a `.env` file.
+    *   Add the same keys and values that you configured as GitHub secrets:
+        ```env
+        GEMINI_FIRST_API_KEY="YOUR_GEMINI_API_KEY_PRIMARY"
+        GEMINI_SECOND_API_KEY="YOUR_GEMINI_API_KEY_SECONDARY"
+        LINKEDIN_EMAIL="YOUR_LINKEDIN_EMAIL"
+        SUPABASE_SERVICE_ROLE_KEY="YOUR_SUPABASE_SERVICE_ROLE_KEY"
+        SUPABASE_URL="YOUR_SUPABASE_URL"
+        # Add any other variables from config.py that you might want to override locally
+        # For example, if resume_parser.py is run locally:
+        # RESUME_FILE_PATH="./resume_files/resume.pdf"
+        ```
+5.  **Run scripts locally (example):**
     ```bash
-    playwright install
+    python scraper.py
+    python resume_parser.py # Ensure RESUME_FILE_PATH is set if running this locally
+    python score_jobs.py YOUR_LINKEDIN_EMAIL
+    python job_manager.py
     ```
 
-4.  **Set up environment variables:**
-    - Create a `.env` file in the root directory by copying the `.env.example` (if one exists) or creating it from scratch.
-    - Populate it with your API keys and configuration details. See the **Configuration** section below and <mcfile name="config.py" path="d:\dev\linkedin-jobs-scrapper\config.py"></mcfile> for required variables.
+## Project Structure
