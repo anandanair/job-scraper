@@ -4,10 +4,10 @@ This project is a comprehensive suite of tools designed to automate and enhance 
 
 ## Features
 
-- **LinkedIn Job Scraping**: Automatically scrapes job postings from LinkedIn. (Implemented in [scraper.py](scraper.py) and [scrape_jobs.py](scrape_jobs.py)
+- **LinkedIn Job Scraping**: Automatically scrapes job postings from LinkedIn. (Implemented in [scraper.py](scraper.py))
 - **Resume Parsing**:
-  - Extracts text from PDF resumes using `pdfplumber`. (<mcsymbol name="extract_text_from_pdf" filename="resume_parser.py" path="d:\dev\linkedin-jobs-scrapper\resume_parser.py" startline="10" type="function"></mcsymbol> in <mcfile name="resume_parser.py" path="d:\dev\linkedin-jobs-scrapper\resume_parser.py"></mcfile>)
-  - Utilizes Google Gemini AI to parse resume text into structured data (<mcsymbol name="Resume" filename="models.py" path="d:\dev\linkedin-jobs-scrapper\models.py" startline="34" type="class"></mcsymbol>). (Implemented in <mcfile name="parse_resume_with_ai.py" path="d:\dev\linkedin-jobs-scrapper\parse_resume_with_ai.py"></mcfile>)
+  - Extracts text from PDF resumes using `pdfplumber`. ([resume_parser.py](resume_parser.py))
+  - Utilizes Google Gemini AI to parse resume text into structured data ([parse_resume_with_ai.py](parse_resume_with_ai.py))
 - **Job Scoring**: Scores job descriptions against a parsed resume using AI to determine suitability. (Implemented in <mcfile name="score_jobs.py" path="d:\dev\linkedin-jobs-scrapper\score_jobs.py"></mcfile>)
 - **Job Management**:
   - Tracks the status of job applications.
