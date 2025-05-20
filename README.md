@@ -115,7 +115,7 @@ The individual Python scripts can still be run locally for development or testin
 
 1.  **Clone your forked repository locally:**
     ```bash
-    git clone https://github.com/YOUR_USERNAME/linkedin-jobs-scrapper.git
+    git clone https://github.com/anandanair/linkedin-jobs-scrapper
     cd linkedin-jobs-scrapper
     ```
 2.  **Create and activate a virtual environment:**
@@ -140,16 +140,49 @@ The individual Python scripts can still be run locally for development or testin
         LINKEDIN_EMAIL="YOUR_LINKEDIN_EMAIL"
         SUPABASE_SERVICE_ROLE_KEY="YOUR_SUPABASE_SERVICE_ROLE_KEY"
         SUPABASE_URL="YOUR_SUPABASE_URL"
-        # Add any other variables from config.py that you might want to override locally
-        # For example, if resume_parser.py is run locally:
-        # RESUME_FILE_PATH="./resume_files/resume.pdf"
         ```
 5.  **Run scripts locally (example):**
     ```bash
     python scraper.py
-    python resume_parser.py # Ensure RESUME_FILE_PATH is set if running this locally
-    python score_jobs.py YOUR_LINKEDIN_EMAIL
+    python resume_parser.py 
+    python score_jobs.py 
     python job_manager.py
     ```
 
+
+
+
+          
+Apologies for that! Here is the "Project Structure" section again, formatted for your `README.md`:
+
 ## Project Structure
+
+```
+.
+├── .github/                    # GitHub Actions workflows
+│   └── workflows/
+│       ├── hourly_resume_customization.yml
+│       ├── job_manager.yml
+│       ├── parse_resume.yml
+│       ├── score_jobs.yml
+│       └── scrape_jobs.yml
+├── .gitignore                  # Specifies intentionally untracked files that Git should ignore
+├── README.md                   # This file
+├── config.py                   # Configuration settings (API keys, search parameters)
+├── custom_resume_generator.py  # Script to generate customized resumes (if applicable)
+├── job_manager.py              # Manages job statuses (e.g., checks for active jobs, expires old ones)
+├── models.py                   # Pydantic models for data validation
+├── parse_resume_with_ai.py     # AI-powered resume parsing logic
+├── pdf_generator.py            # Generates PDF resumes
+├── requirements.txt            # Python dependencies
+├── resume_files/               # Folder to store your resume.pdf
+├── resume_parser.py            # Main script to parse local resume PDF
+├── score_jobs.py               # Scores job suitability against resumes
+├── scraper.py                  # Core scraping logic for LinkedIn and CareersFuture
+├── supabase_setup/             # SQL scripts for Supabase database initialization
+│   └── init.sql
+├── supabase_utils.py           # Utility functions for interacting with Supabase
+└── user_agents.py              # List of user-agents for web scraping
+```
+
+        
