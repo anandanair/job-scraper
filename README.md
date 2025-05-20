@@ -113,7 +113,7 @@ You can interact with the data directly through your Supabase dashboard to view 
 
 A Next.js web application is available to view and manage the scraped jobs, your resume details, and job scores from the database.
 
-*   **Repository:** [jobs-scrapper-web](https://github.com/anandanair/jobs-scrapper-web)
+*   **Repository:** [jobs-scrapper-web](https://github.com/anandanair/jobs-scraper-web)
 *   **Setup:** To use the web interface, clone the `jobs-scrapper-web` repository and follow the setup instructions provided in its `README.md` file to run it locally. This will typically involve configuring it to connect to your Supabase instance.
 
 The individual Python scripts can still be run locally for development or testing, but this requires setting up a local Python environment, installing dependencies from `requirements.txt`, and creating a local `.env` file with the necessary credentials (mirroring the GitHub secrets).
