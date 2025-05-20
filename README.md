@@ -185,4 +185,38 @@ Apologies for that! Here is the "Project Structure" section again, formatted for
 └── user_agents.py              # List of user-agents for web scraping
 ```
 
+## Contributing
+
+Contributions are welcome! If you'd like to contribute, please follow these steps:
+
+1.  **Fork the Repository:** Create your own fork of the project on GitHub.
+2.  **Create a Branch:** Create a new branch in your fork for your feature or bug fix (e.g., `git checkout -b feature/your-awesome-feature` or `git checkout -b fix/issue-description`).
+3.  **Make Changes:** Implement your changes in your branch.
+4.  **Test Your Changes:** Ensure your changes work as expected and do not break existing functionality.
+5.  **Commit Your Changes:** Commit your changes with clear and descriptive commit messages (e.g., `git commit -m 'feat: Add awesome new feature'`).
+6.  **Push to Your Fork:** Push your changes to your forked repository (`git push origin feature/your-awesome-feature`).
+7.  **Open a Pull Request:** Go to the original repository and open a Pull Request from your forked branch to the main branch of the original repository. Provide a clear description of your changes in the Pull Request.
+
+Please ensure your code adheres to the existing style and that any new dependencies are added to `requirements.txt`.
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for more details.
+
+## Acknowledgements
+
+*   This project utilizes the powerful [Google Gemini API](https://ai.google.dev/models/gemini) for AI-driven text processing.
+*   Data storage is managed with [Supabase](https://supabase.com/), an excellent open-source Firebase alternative.
+*   Web scraping capabilities are enhanced by [Playwright](https://playwright.dev/) and [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/).
+*   PDF generation is handled by [ReportLab](https://www.reportlab.com/).
+*   PDF text extraction is performed using [pdfplumber](https://github.com/jsvine/pdfplumber).
+
+## Disclaimer
+
+This project is for educational and personal use only. Scraping websites like LinkedIn may be against their Terms of Service. Use this tool responsibly and at your own risk. The developers of this project are not responsible for any misuse or any action taken against your account by LinkedIn or other platforms.
+
+## Contact
+
+If you have any questions, suggestions, or issues, please open an issue on the GitHub repository.
+
         
