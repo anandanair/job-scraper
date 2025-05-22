@@ -1,10 +1,10 @@
-# LinkedIn Job Scraper & Application Assistant
+# Job Scraper & Application Assistant
 
 This project is a comprehensive suite of tools designed to automate and enhance the job searching process, primarily focusing on LinkedIn. It scrapes job postings, parses resumes, scores job suitability against a candidate's resume, manages job application statuses, and can even generate custom PDF resumes. The system leverages AI (Google Gemini) for advanced text processing and Supabase for data storage.
 
 ## Features
 
-- **LinkedIn Job Scraping**: Automatically scrapes job postings from LinkedIn. ([scraper.py](scraper.py))
+- **Job Scraping**: Automatically scrapes job postings. ([scraper.py](scraper.py))
 - **Resume Parsing**:
   - Extracts text from PDF resumes using `pdfplumber`. ([resume_parser.py](resume_parser.py))
   - Utilizes Google Gemini AI to parse resume text into structured data ([parse_resume_with_ai.py](parse_resume_with_ai.py))
@@ -12,7 +12,7 @@ This project is a comprehensive suite of tools designed to automate and enhance 
 - **Job Management**:
   - Tracks the status of job applications.
   - Marks old or inactive jobs as expired.
-  - Periodically checks if active jobs are still available on LinkedIn.
+  - Periodically checks if active jobs are still available.
     ([job_manager.py](job_manager.py))
 - **Data Storage**: Uses Supabase to store job data, resume details, and application statuses. (Utility functions in [supabase_utils.py](supabase_utils.py))
 - **Custom PDF Resume Generation**: Generates ATS-friendly PDF resumes from structured resume data. ([pdf_generator.py](pdf_generator.py))
@@ -59,7 +59,7 @@ This project is designed to run primarily through GitHub Actions. Follow these s
     *   Click on "New repository secret" and add the following secrets:
         *   `GEMINI_FIRST_API_KEY`: Your primary Google Gemini API key.
         *   `GEMINI_SECOND_API_KEY`: Your secondary Google Gemini API key.
-        *   `LINKEDIN_EMAIL`: The email address associated with your LinkedIn account (used for certain scraping tasks if configured, and as an identifier).
+        *   `LINKEDIN_EMAIL`: The email address associated with your resume (used for certain scraping tasks if configured, and as an identifier).
         *   `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase project's `service_role` key (found in your Supabase project settings under API > Project API keys).
         *   `SUPABASE_URL`: Your Supabase project's URL (found in your Supabase project settings under API > Configuration > URL).
 
@@ -113,7 +113,7 @@ You can interact with the data directly through your Supabase dashboard to view 
 
 A Next.js web application is available to view and manage the scraped jobs, your resume details, and job scores from the database.
 
-*   **Repository:** [jobs-scrapper-web](https://github.com/anandanair/jobs-scrapper-web)
+*   **Repository:** [jobs-scrapper-web](https://github.com/anandanair/jobs-scraper-web)
 *   **Setup:** To use the web interface, clone the `jobs-scrapper-web` repository and follow the setup instructions provided in its `README.md` file to run it locally. This will typically involve configuring it to connect to your Supabase instance.
 
 The individual Python scripts can still be run locally for development or testing, but this requires setting up a local Python environment, installing dependencies from `requirements.txt`, and creating a local `.env` file with the necessary credentials (mirroring the GitHub secrets).
