@@ -1,20 +1,20 @@
 name: Parse Resume Manually
 
 on:
-  workflow_dispatch: # Allows manual triggering from the Actions tab in GitHub
+  workflow_dispatch: 
 
 jobs:
   parse_resume_job:
-    runs-on: ubuntu-latest # Specifies the runner environment
+    runs-on: ubuntu-latest 
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4 # Checks out your code
+        uses: actions/checkout@v4 
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.9" # You can change this to your desired Python version
+          python-version: "3.11" 
 
       - name: Install dependencies
         run: |
@@ -30,5 +30,7 @@ jobs:
 
       - name: Run resume parser script
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # Uses a GitHub secret for the API key
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_FIRST_API_KEY: ${{ secrets.GEMINI_FIRST_API_KEY }} # Gemini API Key
         run: python resume_parser.py
