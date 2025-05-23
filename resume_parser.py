@@ -57,6 +57,6 @@ def main(pdf_file_path):
 
 
 if __name__ == "__main__":
-    pdf_path = "./resume_files/resume.pdf"
+    pdf_path = "./resume.pdf"
     print(f"Starting resume processing for: {pdf_path}")
     main(pdf_path)
