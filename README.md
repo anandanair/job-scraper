@@ -64,8 +64,7 @@ This project is designed to run primarily through GitHub Actions. Follow these s
         *   `SUPABASE_URL`: Your Supabase project's URL (found in your Supabase project settings under API > Configuration > URL).
 
 5.  **Upload Your Resume:**
-    *   In your forked GitHub repository, create a new folder named `resume_files` in the root directory.
-    *   Upload your resume to this `resume_files` folder. **The resume file must be named `resume.pdf`**.
+    *   In your forked GitHub repository, upload your resume to the root directory. **The resume file must be named `resume.pdf`**.
 
 6.  **Parse Your Resume:**
     *   Go to the "Actions" tab in your forked GitHub repository.
@@ -92,9 +91,14 @@ This project is designed to run primarily through GitHub Actions. Follow these s
     *   **IMPORTANT**: Do not modify other variables in `config.py` as they are carefully calibrated to prevent rate limiting and potential account bans. Only edit the search queries and location parameters shown above.
     *   Commit the changes to your `config.py` file in your repository.
 
+8.  **Enable GitHub Actions:**
+    *   Go to the "Actions" tab in your forked GitHub repository.
+    *   You will see a message saying "Workflows aren't running on this repository". Click the "Enable Actions on this repository" button (or a similar prompt) to allow the scheduled workflows to run automatically.
+    *   Ensure all workflows listed (e.g., `scrape_jobs.yml`, `score_jobs.yml`, `job_manager.yml`) are enabled. If any are disabled, you may need to enable them individually.
+
 ## Automated Workflows
 
-Once the setup is complete, the GitHub Actions workflows defined in [workflows](.github/workflows/) are scheduled to run automatically:
+Once the setup is complete and GitHub Actions are enabled, the workflows defined in [workflows](.github/workflows/) are scheduled to run automatically:
 
 *   **`scrape_jobs.yml`**: Periodically scrapes new job postings from LinkedIn and CareersFuture based on your `config.py` settings and saves them to your Supabase database.
 *   **`score_jobs.yml`**: Periodically scores the newly scraped jobs and jobs with custom resumes against your parsed resume / custom resume and updates the scores in the database.
