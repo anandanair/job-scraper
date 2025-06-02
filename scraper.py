@@ -1,8 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-import time # Import time for sleep
-import random # Import random for delays and user-agent selection
+import time 
+import random 
 import logging
 import config
 import user_agents
@@ -10,6 +10,7 @@ import supabase_utils
 import html2text
 from google import genai
 from google.genai import types
+import json
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,15 +19,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 client = genai.Client(api_key=config.GEMINI_FIRST_API_KEY)
 
 # Convert description to Markdown
+# Convert description to Markdown
 def convert_plain_text_to_markdown_with_ai(text: str) -> str | None:
     """
     Convert plain text to Markdown using Gemini Flash Lite model.
     """
     if not text:
-        print("Received empty text for Markdown conversion.")
+        # Changed: print to logging.info
+        logging.info("Received empty text for Markdown conversion, returning empty string.")
         return "" # Return empty string if input is empty
 
-    print("Converting description text to Markdown using Gemini Lite...")
+    # Changed: print to logging.info
+    logging.info("Converting description text to Markdown using Gemini Lite...")
 
     system_prompt = f"""
     You are a Markdown formatter.
@@ -50,19 +54,26 @@ def convert_plain_text_to_markdown_with_ai(text: str) -> str | None:
     {text}
     ---
     """
-    response = client.models.generate_content(
-        model=config.GEMINI_SECONDARY_MODEL_NAME,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            temperature=0.2,
+
+    try: # <--- ADD try block
+        response = client.models.generate_content(
+            model=config.GEMINI_SECONDARY_MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.2,
+            )
         )
-    )
-
-    markdown_content = response.text.strip()
-    print("Successfully converted text to Markdown.")
-    return markdown_content
-
+        markdown_content = response.text.strip()
+        # Changed: print to logging.info
+        logging.info("Successfully converted text to Markdown.")
+        if not markdown_content: # <--- ADD this check
+            logging.warning("Gemini returned empty markdown content for a non-empty input.") # <--- ADD this log
+            return "" # <--- ADD this return
+        return markdown_content
+    except Exception as e: # <--- ADD except block
+        logging.error(f"Error during Gemini Markdown conversion: {e}") # <--- ADD this log
+        return None # <--- ADD this return for error case
 
 
 def _get_careers_future_job_company_name(job_item: dict) -> str | None:
@@ -88,28 +99,28 @@ def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
     start = 0
     max_start = config.LINKEDIN_MAX_START
 
-    print(f"--- Starting Phase 1: Scraping Job IDs (Max Start: {max_start}) ---")
+    # Changed: print to logging.info
+    logging.info(f"--- Starting Phase 1: Scraping Job IDs (Max Start: {max_start}) ---")
     while start <= max_start:
         target_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={search_query.replace(' ', '%2B')}&location={location}&geoId={config.LINKEDIN_GEO_ID}&f_TPR={config.LINKEDIN_JOB_POSTING_DATE}&f_JT={config.LINKEDIN_JOB_TYPE}&f_WT={config.LINKEDIN_F_WT}&start={start}"
 
-        # --- Humanization: Delay and User Agent ---
-        # 1. Random Delay before *each* attempt (including retries)
         sleep_time = random.uniform(5.0, 15.0)
-        print(f"Waiting for {sleep_time:.2f} seconds before next request...")
+        # Changed: print to logging.info
+        logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
         time.sleep(sleep_time)
 
-        # 2. Random User Agent
         user_agent = random.choice(user_agents.USER_AGENTS)
         headers = {'User-Agent': user_agent}
-        print(f"Using User-Agent: {user_agent}")
-        # --- End Humanization ---
+        # Changed: print to logging.info
+        logging.info(f"Using User-Agent: {user_agent}")
 
-        print(f"Scraping URL: {target_url}")
+        # Changed: print to logging.info
+        logging.info(f"Scraping URL: {target_url}")
 
+        res = None # <--- ADD this initialization
         retries = 0
         while retries <= config.MAX_RETRIES:
             try:
-                # Pass headers to the request
                 res = requests.get(target_url, headers=headers, timeout=config.REQUEST_TIMEOUT)
                 res.raise_for_status()
                 break
@@ -117,51 +128,50 @@ def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
                 if e.response.status_code == 429 and retries < config.MAX_RETRIES:
                     retries += 1
                     wait_time = config.RETRY_DELAY_SECONDS + random.uniform(0, 5) 
-                    print(f"Error 429: Too Many Requests. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
+                    # Changed: print to logging.warning
+                    logging.warning(f"Error 429: Too Many Requests. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
                     time.sleep(wait_time)
 
-                    # Rotate user-agent again on retry
                     user_agent = random.choice(user_agents.USER_AGENTS)
                     headers = {'User-Agent': user_agent}
-                    print(f"Retrying with new User-Agent: {user_agent}")
-                    continue # Go to the next retry iteration
+                    # Changed: print to logging.info
+                    logging.info(f"Retrying with new User-Agent: {user_agent}")
+                    continue
                 else:
-                    # For non-429 HTTP errors or if max retries reached for 429
-                    print(f"HTTP Error fetching search results page: {e}")
+                    # Changed: print to logging.error
+                    logging.error(f"HTTP Error fetching search results page: {e}")
                     res = None # Ensure res is None to signal failure
-                    break # Break the retry loop, proceed to outer loop break
+                    break
             except requests.exceptions.RequestException as e:
-                # For other connection errors, timeouts, etc.
-                print(f"Request Exception fetching search results page: {e}")
-                res = None # Ensure res is None to signal failure
-                # Consider a longer pause or breaking immediately for persistent connection issues
-                # time.sleep(30)
-                break # Break the retry loop, proceed to outer loop break
+                # Changed: print to logging.error
+                logging.error(f"Request Exception fetching search results page: {e}")
+                res = None
+                break
 
-        # Check if the request ultimately failed after retries
+        # Changed: print to logging.error
         if res is None:
-            print(f"Failed to fetch {target_url} after {retries} retries. Stopping pagination for this query.")
-            break # Break the outer while loop (pagination)
+            logging.error(f"Failed to fetch {target_url} after {retries} retries. Stopping pagination for this query.")
+            break 
 
-        # Check for empty response *after* successful request
         if not res.text:
-             print(f"Received empty response text at start={start}, stopping.")
+             # Changed: print to logging.info
+             logging.info(f"Received empty response text at start={start}, stopping.")
              break
 
         soup = BeautifulSoup(res.text, 'html.parser')
         all_jobs_on_this_page = soup.find_all('li')
 
-        # This check correctly identifies when no job listings are returned
         if not all_jobs_on_this_page:
-             print(f"No job listings ('li' elements) found on page at start={start}, stopping.")
+             # Changed: print to logging.info
+             logging.info(f"No job listings ('li' elements) found on page at start={start}, stopping.")
              break
 
-        print(f"Found {len(all_jobs_on_this_page)} potential job elements on this page.")
+        # Changed: print to logging.info
+        logging.info(f"Found {len(all_jobs_on_this_page)} potential job elements on this page.")
 
         jobs_found_this_iteration = 0
         for job_element in all_jobs_on_this_page:
             base_card = job_element.find("div", {"class": "base-card"})
-            # Check if it has the job ID attribute and is likely a job posting
             job_urn = base_card.get('data-entity-urn') if base_card else None
             if job_urn and 'jobPosting:' in job_urn:
                 try:
@@ -170,75 +180,77 @@ def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
                          job_ids_list.append(jobid)
                          jobs_found_this_iteration += 1
                 except IndexError:
-                    print(f"Warning: Could not parse job ID from URN: {job_urn}")
+                    # Changed: print to logging.warning
+                    logging.warning(f"Could not parse job ID from URN: {job_urn}")
                     pass
 
-        print(f"Added {jobs_found_this_iteration} unique job IDs from this page.")
+        # Changed: print to logging.info
+        logging.info(f"Added {jobs_found_this_iteration} unique job IDs from this page.")
 
         if jobs_found_this_iteration == 0 and len(all_jobs_on_this_page) > 0:
-            print("Found list items but no new job IDs extracted, potentially end of relevant results or parsing issue.")
+            # Changed: print to logging.info
+            logging.info("Found list items but no new job IDs extracted, potentially end of relevant results or parsing issue.")
             break
 
         start += 10
 
-    print(f"--- Finished Phase 1: Found {len(job_ids_list)} unique job IDs during scraping ---")
+    # Changed: print to logging.info
+    logging.info(f"--- Finished Phase 1: Found {len(job_ids_list)} unique job IDs during scraping ---")
     return job_ids_list
 
 def _fetch_linkedin_job_details(job_id: str) -> dict | None:
     """Fetches detailed information for a single job ID with delays, rotating user agents, and retries."""
 
     job_detail_url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
-    print(f"Preparing to fetch details for job ID: {job_id}")
+    # Changed: print to logging.info
+    logging.info(f"Preparing to fetch details for job ID: {job_id}")
 
-    # --- Humanization: Delay and User Agent ---
-    # 1. Random Delay before *each* attempt
     sleep_time = random.uniform(3.0, 10.0)
-    print(f"Waiting for {sleep_time:.2f} seconds before fetching details...")
+    # Changed: print to logging.info
+    logging.info(f"Waiting for {sleep_time:.2f} seconds before fetching details...")
     time.sleep(sleep_time)
 
-    # 2. Random User Agent
     user_agent = random.choice(user_agents.USER_AGENTS)
     headers = {'User-Agent': user_agent}
-    print(f"Using User-Agent for details: {user_agent}")
-    # --- End Humanization ---
+    # Changed: print to logging.info
+    logging.info(f"Using User-Agent for details: {user_agent}")
 
-    print(f"Fetching details from: {job_detail_url}")
+    # Changed: print to logging.info
+    logging.info(f"Fetching details from: {job_detail_url}")
 
+    resp = None # <--- ADD this initialization
     retries = 0
-    resp = None # Initialize resp to None
     while retries <= config.MAX_RETRIES:
         try:
             resp = requests.get(job_detail_url, headers=headers, timeout=config.REQUEST_TIMEOUT)
             resp.raise_for_status()
-            # Success
             break
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429 and retries < config.MAX_RETRIES:
                 retries += 1
                 wait_time = config.RETRY_DELAY_SECONDS + random.uniform(0, 5) 
-                print(f"Error 429 for job ID {job_id}. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
+                # Changed: print to logging.warning
+                logging.warning(f"Error 429 for job ID {job_id}. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
                 time.sleep(wait_time)
-                # Rotate user-agent again on retry
                 user_agent = random.choice(user_agents.USER_AGENTS)
                 headers = {'User-Agent': user_agent}
-                print(f"Retrying job {job_id} with new User-Agent: {user_agent}")
+                # Changed: print to logging.info
+                logging.info(f"Retrying job {job_id} with new User-Agent: {user_agent}")
                 continue
             else:
-                # Non-429 HTTP error or max retries reached for 429
-                print(f"HTTP Error fetching details for job ID {job_id}: {e}")
-                return None # Return None on HTTP failure after retries
+                # Changed: print to logging.error
+                logging.error(f"HTTP Error fetching details for job ID {job_id}: {e}")
+                return None
         except requests.exceptions.RequestException as e:
-            # Other connection errors, timeouts, etc.
-            print(f"Request Exception fetching details for job ID {job_id}: {e}")
+            # Changed: print to logging.error
+            logging.error(f"Request Exception fetching details for job ID {job_id}: {e}")
             return None 
 
-    # If the loop finished because retries were exhausted for a non-HTTP error (though current logic returns early)
-    # or if the request somehow failed without raising an exception handled above.
+    # Changed: print to logging.error
     if resp is None:
-         print(f"Failed to fetch details for job ID {job_id} after {retries} retries (unexpected state).")
+         logging.error(f"Failed to fetch details for job ID {job_id} after {retries} retries (unexpected state).")
          return None
 
-    # --- Process successful response ---
     try:
         soup = BeautifulSoup(resp.text, 'html.parser')
         job_details = {"job_id": job_id}
@@ -314,19 +326,28 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
             job_details["location"] = None
 
         # --- Extract Description ---
+        raw_description_text = "" # <--- ADD initialization
         try:
             description_div = soup.find("div", {"class": "show-more-less-html__markup"})
             if description_div:
-                raw_description = description_div.get_text(separator='\n', strip=True)
-                lines = [line for line in raw_description.splitlines() if line.strip()]
-                raw_description = "\n".join(lines)
-                job_details["description"] = convert_plain_text_to_markdown_with_ai(raw_description)
+                raw_description_text = description_div.get_text(separator='\n', strip=True)
+                lines = [line for line in raw_description_text.splitlines() if line.strip()]
+                raw_description_text = "\n".join(lines)
             else:
-                print(f"Warning: Could not find description div for job ID {job_id}")
-                job_details["description"] = None
+                # Changed: print to logging.warning
+                logging.warning(f"Could not find description div for job ID {job_id}")
+                # No longer need to set job_details["description"] here, handled by explicit None below
         except Exception as e:
-                print(f"Warning: Could not parse description for job ID {job_id}: {e}")
-                job_details["description"] = None
+                # Changed: print to logging.error
+                logging.error(f"Error extracting raw description for job ID {job_id}: {e}")
+                raw_description_text = "" # Ensure it's an empty string if extraction fails
+
+        # Changed: Call AI for conversion only if raw_description_text is not empty
+        if raw_description_text.strip(): # <--- NEW CHECK
+            job_details["description"] = convert_plain_text_to_markdown_with_ai(raw_description_text)
+        else:
+            job_details["description"] = None # <--- Explicitly set to None if raw text is empty
+            logging.warning(f"Raw description was empty for job ID {job_id}. Skipping AI conversion.") # <--- New log
 
         # --- Set Provider ---
         job_details["provider"] = "linkedin"
@@ -334,9 +355,9 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
         return job_details
 
     except Exception as e:
-         # Catch errors during BeautifulSoup parsing or data extraction
-         print(f"General Error processing details for job ID {job_id} after successful fetch: {e}")
-         return None # Return None on processing errors
+         # Changed: print to logging.error
+         logging.error(f"General Error processing details for job ID {job_id} after successful fetch: {e}")
+         return None
 
 def process_linkedin_query(search_query: str, location: str) -> list:
     """
@@ -345,56 +366,65 @@ def process_linkedin_query(search_query: str, location: str) -> list:
     Returns a list of new job details found.
     """
 
-    # 1. Fetch all potential job IDs from LinkedIn search
     scraped_job_ids = _fetch_linkedin_job_ids(search_query, location)
     if not scraped_job_ids:
-        print("No job IDs found in Phase 1. Skipping detail fetching.")
+        # Changed: print to logging.info
+        logging.info("No job IDs found in Phase 1. Skipping detail fetching.")
         return []
 
-    # Make the list unique *before* checking against Supabase
     unique_linkedin_job_ids = list(set(scraped_job_ids))
-    print(f"Found {len(scraped_job_ids)} raw job IDs, {len(unique_linkedin_job_ids)} unique IDs after scraping.")
+    # Changed: print to logging.info
+    logging.info(f"Found {len(scraped_job_ids)} raw job IDs, {len(unique_linkedin_job_ids)} unique IDs after scraping.")
 
-    # 2. Fetch existing job IDs from Supabase (ensure this function fetches ALL IDs as strings)
-    print("\n--- Starting Filtering Step: Checking against Supabase ---")
+    # Changed: print to logging.info
+    logging.info("\n--- Starting Filtering Step: Checking against Supabase ---")
     job_ids_set, company_title_set = supabase_utils.get_existing_jobs_from_supabase()
 
-    # 3. Identify new job IDs by filtering unique scraped IDs against existing ones
     new_job_ids_to_process = [
         str(job_id) for job_id in unique_linkedin_job_ids 
         if str(job_id) not in job_ids_set
     ]
 
-    # Corrected print statement placement and content
-    print(f"Found {len(unique_linkedin_job_ids)} unique scraped IDs.")
-    print(f"Found {len(job_ids_set)} existing IDs in Supabase.")
-    print(f"Identified {len(new_job_ids_to_process)} new job IDs to fetch details for.")
+    # Changed: print to logging.info
+    logging.info(f"Found {len(unique_linkedin_job_ids)} unique scraped IDs.")
+    # Changed: print to logging.info
+    logging.info(f"Found {len(job_ids_set)} existing IDs in Supabase.")
+    # Changed: print to logging.info
+    logging.info(f"Identified {len(new_job_ids_to_process)} new job IDs to fetch details for.")
 
     if not new_job_ids_to_process:
-        print("No new job IDs to process after filtering.")
+        # Changed: print to logging.info
+        logging.info("No new job IDs to process after filtering.")
         return []
 
-    # 4. Fetch details ONLY for the genuinely new job IDs
-    print(f"\n--- Starting Phase 2: Fetching Job Details for {len(new_job_ids_to_process)} New IDs ---")
+    # Changed: print to logging.info
+    logging.info(f"\n--- Starting Phase 2: Fetching Job Details for {len(new_job_ids_to_process)} New IDs ---")
     detailed_new_jobs = []
     processed_count = 0
 
-    # No limit applied here unless specifically desired via config
     ids_to_fetch = new_job_ids_to_process
-    # print(f"Processing {len(ids_to_fetch)} new job(s)...") # Optional: less verbose
 
     for job_id in ids_to_fetch:
         details = _fetch_linkedin_job_details(job_id)
         if details:
-            # Ensure the job_id key exists in details before adding
-            if 'job_id' in details and details['job_id'] is not None:
-                 detailed_new_jobs.append(details)
-                 processed_count += 1
+            # --- NEW: Check for description before adding ---
+            description = details.get('description')
+            if description and description.strip(): # Ensure it's not None or an empty/whitespace string
+                if 'job_id' in details and details['job_id'] is not None:
+                    detailed_new_jobs.append(details)
+                    processed_count += 1
+                else:
+                    # Changed: print to logging.warning
+                    logging.warning(f"Fetched details for {job_id} but missing 'job_id' key. Skipping.")
             else:
-                 print(f"Warning: Fetched details for {job_id} but missing 'job_id' key. Skipping.")
+                # Changed: print to logging.warning
+                logging.warning(f"Skipping job ID {job_id} due to missing or empty description.") # <--- NEW LOG
+        else:
+            # Changed: print to logging.warning
+            logging.warning(f"Skipping job ID {job_id} as detail fetching failed or returned no data.") # <--- NEW LOG
 
-
-    print(f"--- Finished Phase 2: Successfully fetched details for {processed_count} new job(s) ---")
+    # Changed: print to logging.info
+    logging.info(f"--- Finished Phase 2: Successfully fetched details for {processed_count} new job(s) ---")
     return detailed_new_jobs
 
 def _fetch_careers_future_jobs(search_query: str) -> list:
@@ -428,6 +458,7 @@ def _fetch_careers_future_jobs(search_query: str) -> list:
         skills_suggestions_response = requests.post(
             careers_future_suggestions_api_url, 
             data=skills_suggestions_payload,
+            timeout=config.REQUEST_TIMEOUT
             )
 
         skills_suggestions_response.raise_for_status()
@@ -541,14 +572,21 @@ def _fetch_careers_future_job_details(job_id: str) -> dict | None:
     logging.info(f"Attempting to fetch job details for ID: {job_id} from URL: {api_url}")
 
     try:
-        response = requests.get(api_url, timeout=10) # Added a timeout
+        response = requests.get(api_url, timeout=config.REQUEST_TIMEOUT) # <--- Changed: Added timeout
 
-        # Raise an HTTPError for bad responses (4xx or 5xx client/server errors)
         response.raise_for_status()
 
-        # If the request was successful, parse the JSON response
         job_data = response.json()
         logging.info(f"Successfully fetched and parsed job details for ID: {job_id}")
+
+        raw_description_html = job_data.get('description', '')
+        # Convert HTML description to plain text then Markdown
+        plain_text_description = html2text.html2text(raw_description_html)
+        markdown_description = None # <--- Initialize to None
+        if plain_text_description.strip(): # <--- NEW CHECK: Only convert if plain text is not empty
+            markdown_description = convert_plain_text_to_markdown_with_ai(plain_text_description)
+        else:
+            logging.warning(f"Raw description was empty for Careers Future job ID {job_id}. Skipping AI conversion.") # <--- NEW LOG
 
         job_details = {
             'job_id': job_data.get('uuid'),
@@ -557,7 +595,7 @@ def _fetch_careers_future_job_details(job_id: str) -> dict | None:
             'location': 'Singapore',
             'level': job_data.get('positionLevels', [{'position': 'Not applicable'}])[0].get('position', 'Not applicable'),
             'provider': 'careers_future',
-            'description': html2text.html2text(job_data.get('description', '')),
+            'description': markdown_description, # <--- Use the potentially converted Markdown
             'posted_at': job_data.get('metadata', {}).get('createdAt', ''),
         }
 
@@ -658,18 +696,30 @@ def process_careers_future_query(search_query: str) -> list:
     # 4. Fetch details ONLY for the genuinely new job IDs
     print(f"\n--- Phase 4: Fetching Job Details for {len(new_job_ids_to_process)} New Jobs ---")
     detailed_new_jobs = []
+    processed_count = 0
 
     for job_id in new_job_ids_to_process:
         details = _fetch_careers_future_job_details(job_id)
         if details:
-            # Ensure the job_id key exists in details before adding
-            if 'job_id' in details and details['job_id'] is not None:
-                 detailed_new_jobs.append(details)
+            # --- NEW: Check for description before adding ---
+            description = details.get('description')
+            if description and description.strip(): # Ensure it's not None or an empty/whitespace string
+                if 'job_id' in details and details['job_id'] is not None:
+                    detailed_new_jobs.append(details)
+                    processed_count += 1
+                else:
+                    # Changed: print to logging.warning
+                    logging.warning(f"Fetched details for {job_id} but missing 'job_id' key. Skipping.")
             else:
-                 print(f"Warning: Fetched details for {job_id} but missing 'job_id' key. Skipping.")
+                # Changed: print to logging.warning
+                logging.warning(f"Skipping job ID {job_id} due to missing or empty description.") # <--- NEW LOG
+        else:
+            # Changed: print to logging.warning
+            logging.warning(f"Skipping job ID {job_id} as detail fetching failed or returned no data.") # <--- NEW LOG
 
 
-    print(f"--- Finished Phase 2: Successfully fetched details for {len(detailed_new_jobs)} new job(s) ---")
+    # Changed: print to logging.info
+    logging.info(f"--- Finished Phase 4: Successfully fetched details for {processed_count} new job(s) ---")
     return detailed_new_jobs
 
 # --- Main Execution ---
