@@ -88,10 +88,10 @@ def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
     while start <= max_start:
         target_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={search_query.replace(' ', '%20')}&location={location}&geoId={config.LINKEDIN_GEO_ID}&f_TPR={config.LINKEDIN_JOB_POSTING_DATE}&f_JT={config.LINKEDIN_JOB_TYPE}&f_WT={config.LINKEDIN_F_WT}&start={start}"
 
-        sleep_time = random.uniform(5.0, 15.0)
-    
-        logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
-        time.sleep(sleep_time)
+        if start > 0:
+            sleep_time = random.uniform(5.0, 15.0)
+            logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
+            time.sleep(sleep_time)
 
         user_agent = random.choice(user_agents.USER_AGENTS)
         headers = {'User-Agent': user_agent}
