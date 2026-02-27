@@ -704,24 +704,17 @@ if __name__ == "__main__":
     # Get jobs from LinkedIn
     if "linkedin" in config.SCRAPING_SOURCES:
         logging.info("\n--- Starting LinkedIn Job Scraping ---")
-        source_jobs_saved = 0
-        max_jobs = config.MAX_JOBS_PER_SOURCE.get("linkedin", getattr(config, 'DEFAULT_MAX_JOBS_PER_SOURCE', 50))
+        max_jobs_per_search = config.MAX_JOBS_PER_SEARCH.get("linkedin", getattr(config, 'DEFAULT_MAX_JOBS_PER_SEARCH', 10))
         for query in config.LINKEDIN_SEARCH_QUERIES:
-            remaining_limit = max_jobs - source_jobs_saved
-            if remaining_limit <= 0:
-                logging.info(f"Reached max limit of {max_jobs} jobs for LinkedIn.")
-                break
-
             print(f"\n{'='*20} Processing Search Query: '{query}' {'='*20}")
 
             # 1. Process the query: Scrape IDs, filter, fetch new details
-            new_linkedin_job_details = process_linkedin_query(query, config.LINKEDIN_LOCATION, limit=remaining_limit)
+            new_linkedin_job_details = process_linkedin_query(query, config.LINKEDIN_LOCATION, limit=max_jobs_per_search)
 
             # 2. Save the NEW scraped data to Supabase
             if new_linkedin_job_details:
                 print(f"\n--- Saving {len(new_linkedin_job_details)} new job(s) for query '{query}' ---")
                 supabase_utils.save_jobs_to_supabase(new_linkedin_job_details)
-                source_jobs_saved += len(new_linkedin_job_details)
                 total_new_jobs_saved += len(new_linkedin_job_details)
             else:
                 print(f"\nNo new job details were fetched or processed for query '{query}'.")
@@ -731,24 +724,17 @@ if __name__ == "__main__":
     # Get jobs from Careers Future
     if "careers_future" in config.SCRAPING_SOURCES:
         logging.info(f"\n--- Starting Careers Future Job Scraping ---")
-        source_jobs_saved = 0
-        max_jobs = config.MAX_JOBS_PER_SOURCE.get("careers_future", getattr(config, 'DEFAULT_MAX_JOBS_PER_SOURCE', 50))
+        max_jobs_per_search = config.MAX_JOBS_PER_SEARCH.get("careers_future", getattr(config, 'DEFAULT_MAX_JOBS_PER_SEARCH', 10))
         for query in config.CAREERS_FUTURE_SEARCH_QUERIES:
-            remaining_limit = max_jobs - source_jobs_saved
-            if remaining_limit <= 0:
-                logging.info(f"Reached max limit of {max_jobs} jobs for Careers Future.")
-                break
-
             logging.info(f"\n{'='*20} Processing Careers Future Search Query: '{query}' {'='*20}")
 
             # 1. Process the query: Scrape IDs, filter, fetch new details
-            new_careers_future_job_details = process_careers_future_query(query, limit=remaining_limit)
+            new_careers_future_job_details = process_careers_future_query(query, limit=max_jobs_per_search)
 
             # 2. Save the NEW scraped data to Supabase
             if new_careers_future_job_details:
                 logging.info(f"\n--- Saving {len(new_careers_future_job_details)} new job(s) for query '{query}' ---")
                 supabase_utils.save_jobs_to_supabase(new_careers_future_job_details)
-                source_jobs_saved += len(new_careers_future_job_details)
                 total_new_jobs_saved += len(new_careers_future_job_details)
             else:
                 logging.info(f"\nNo new job details were fetched or processed for query '{query}'.")
