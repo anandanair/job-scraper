@@ -7,70 +7,58 @@ import logging
 import config
 import user_agents
 import supabase_utils
-import html2text
-from google import genai
-from google.genai import types
+from markdownify import markdownify as md
 import json
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- Initialize Gemini Client ---
-client = genai.Client(api_key=config.GEMINI_FIRST_API_KEY)
-
-# Convert description to Markdown
-def convert_plain_text_to_markdown_with_ai(text: str) -> str | None:
+# Convert HTML description to Markdown
+def convert_html_to_markdown(html: str) -> str | None:
     """
-    Convert plain text to Markdown using Gemini Flash Lite model.
+    Convert HTML to clean Markdown using BeautifulSoup (to strip unwanted tags)
+    and markdownify (to convert the cleaned HTML to Markdown).
+    No LLM API calls are made — this is entirely local.
     """
-    if not text:
-        logging.info("Received empty text for Markdown conversion, returning empty string.")
-        return "" 
+    if not html or not html.strip():
+        logging.info("Received empty HTML for Markdown conversion, returning empty string.")
+        return ""
 
-    logging.info("Converting description text to Markdown using Gemini Lite...")
+    try:
+        # Clean the HTML: remove scripts, styles, nav, and other non-content tags
+        soup = BeautifulSoup(html, 'html.parser')
+        for tag in soup.find_all(['script', 'style', 'nav', 'footer', 'header', 'iframe', 'noscript']):
+            tag.decompose()
 
-    system_prompt = f"""
-    You are a Markdown formatter.
-    Your task is to convert plain text into well-structured Markdown.
-    You must not alter, paraphrase, or omit any part of the input text.
-    Only apply formatting using Markdown syntax such as:
-    - Headings
-    - Bold text
-    - Bullet points
-    - Paragraph breaks
+        cleaned_html = str(soup)
 
-    Do not add or remove any words, punctuation, or content.
-    Do not include any explanation or commentary.
-    Only return the formatted Markdown.
-    """
-
-    prompt = f"""You are a Markdown formatter.
-    Convert the following job description into Markdown format:
-
-    ---
-    {text}
-    ---
-    """
-
-    try: 
-        response = client.models.generate_content(
-            model=config.GEMINI_SECONDARY_MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.2,
-            )
+        # Convert cleaned HTML to Markdown
+        markdown_text = md(
+            cleaned_html,
+            heading_style="ATX",
+            bullets="-",
+            strip=['img'],
         )
-        markdown_content = response.text.strip()
-        
-        logging.info("Successfully converted text to Markdown.")
-        if not markdown_content:
-            logging.warning("Gemini returned empty markdown content for a non-empty input.") 
-            return ""
-        return markdown_content
-    except Exception as e: 
-        logging.error(f"Error during Gemini Markdown conversion: {e}") 
-        return None 
+
+        # Clean up excessive blank lines
+        lines = markdown_text.splitlines()
+        cleaned_lines = []
+        prev_blank = False
+        for line in lines:
+            if not line.strip():
+                if not prev_blank:
+                    cleaned_lines.append('')
+                prev_blank = True
+            else:
+                cleaned_lines.append(line)
+                prev_blank = False
+        markdown_text = '\n'.join(cleaned_lines).strip()
+
+        logging.info("Successfully converted HTML to Markdown.")
+        return markdown_text if markdown_text else ""
+    except Exception as e:
+        logging.error(f"Error during HTML to Markdown conversion: {e}")
+        return None
 
 def _get_careers_future_job_company_name(job_item: dict) -> str | None:
     """Helper to extract company name, preferring hiringCompany."""
@@ -322,28 +310,22 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
             job_details["location"] = None
 
         # --- Extract Description ---
-        raw_description_text = "" 
+        description_html = "" 
         try:
             description_div = soup.find("div", {"class": "show-more-less-html__markup"})
             if description_div:
-                raw_description_text = description_div.get_text(separator='\n', strip=True)
-                lines = [line for line in raw_description_text.splitlines() if line.strip()]
-                raw_description_text = "\n".join(lines)
+                description_html = str(description_div)
             else:
-                
                 logging.warning(f"Could not find description div for job ID {job_id}")
-                
         except Exception as e:
-                
-                logging.error(f"Error extracting raw description for job ID {job_id}: {e}")
-                raw_description_text = "" 
+                logging.error(f"Error extracting description HTML for job ID {job_id}: {e}")
+                description_html = ""
 
-        
-        if raw_description_text.strip():
-            job_details["description"] = convert_plain_text_to_markdown_with_ai(raw_description_text)
+        if description_html.strip():
+            job_details["description"] = convert_html_to_markdown(description_html)
         else:
             job_details["description"] = None 
-            logging.warning(f"Raw description was empty for job ID {job_id}. Skipping AI conversion.") 
+            logging.warning(f"Description HTML was empty for job ID {job_id}. Skipping conversion.") 
 
         # --- Set Provider ---
         job_details["provider"] = "linkedin"
@@ -572,13 +554,12 @@ def _fetch_careers_future_job_details(job_id: str) -> dict | None:
         logging.info(f"Successfully fetched and parsed job details for ID: {job_id}")
 
         raw_description_html = job_data.get('description', '')
-        # Convert HTML description to plain text then Markdown
-        plain_text_description = html2text.html2text(raw_description_html)
+        # Convert HTML description directly to Markdown (no LLM needed)
         markdown_description = None 
-        if plain_text_description.strip(): 
-            markdown_description = convert_plain_text_to_markdown_with_ai(plain_text_description)
+        if raw_description_html.strip(): 
+            markdown_description = convert_html_to_markdown(raw_description_html)
         else:
-            logging.warning(f"Raw description was empty for Careers Future job ID {job_id}. Skipping AI conversion.") 
+            logging.warning(f"Raw description was empty for Careers Future job ID {job_id}. Skipping conversion.") 
 
         job_details = {
             'job_id': job_data.get('uuid'),
@@ -714,36 +695,42 @@ if __name__ == "__main__":
     total_new_jobs_saved = 0
 
     # Get jobs from LinkedIn
-    logging.info("\n--- Starting LinkedIn Job Scraping ---")
-    for query in config.LINKEDIN_SEARCH_QUERIES:
-        print(f"\n{'='*20} Processing Search Query: '{query}' {'='*20}")
+    if "linkedin" in config.SCRAPING_SOURCES:
+        logging.info("\n--- Starting LinkedIn Job Scraping ---")
+        for query in config.LINKEDIN_SEARCH_QUERIES:
+            print(f"\n{'='*20} Processing Search Query: '{query}' {'='*20}")
 
-        # 1. Process the query: Scrape IDs, filter, fetch new details
-        new_linkedin_job_details = process_linkedin_query(query, config.LINKEDIN_LOCATION)
+            # 1. Process the query: Scrape IDs, filter, fetch new details
+            new_linkedin_job_details = process_linkedin_query(query, config.LINKEDIN_LOCATION)
 
-        # 2. Save the NEW scraped data to Supabase
-        if new_linkedin_job_details:
-            print(f"\n--- Saving {len(new_linkedin_job_details)} new job(s) for query '{query}' ---")
-            supabase_utils.save_jobs_to_supabase(new_linkedin_job_details)
-            total_new_jobs_saved += len(new_linkedin_job_details)
-        else:
-            print(f"\nNo new job details were fetched or processed for query '{query}'.")
+            # 2. Save the NEW scraped data to Supabase
+            if new_linkedin_job_details:
+                print(f"\n--- Saving {len(new_linkedin_job_details)} new job(s) for query '{query}' ---")
+                supabase_utils.save_jobs_to_supabase(new_linkedin_job_details)
+                total_new_jobs_saved += len(new_linkedin_job_details)
+            else:
+                print(f"\nNo new job details were fetched or processed for query '{query}'.")
+    else:
+        logging.info("\n--- Skipping LinkedIn Job Scraping per config ---")
 
     # Get jobs from Careers Future
-    logging.info(f"\n--- Starting Careers Future Job Scraping ---")
-    for query in config.CAREERS_FUTURE_SEARCH_QUERIES:
-        logging.info(f"\n{'='*20} Processing Careers Future Search Query: '{query}' {'='*20}")
+    if "careers_future" in config.SCRAPING_SOURCES:
+        logging.info(f"\n--- Starting Careers Future Job Scraping ---")
+        for query in config.CAREERS_FUTURE_SEARCH_QUERIES:
+            logging.info(f"\n{'='*20} Processing Careers Future Search Query: '{query}' {'='*20}")
 
-        # 1. Process the query: Scrape IDs, filter, fetch new details
-        new_careers_future_job_details = process_careers_future_query(query)
+            # 1. Process the query: Scrape IDs, filter, fetch new details
+            new_careers_future_job_details = process_careers_future_query(query)
 
-        # 2. Save the NEW scraped data to Supabase
-        if new_careers_future_job_details:
-            logging.info(f"\n--- Saving {len(new_careers_future_job_details)} new job(s) for query '{query}' ---")
-            supabase_utils.save_jobs_to_supabase(new_careers_future_job_details)
-            total_new_jobs_saved += len(new_careers_future_job_details)
-        else:
-            logging.info(f"\nNo new job details were fetched or processed for query '{query}'.")
+            # 2. Save the NEW scraped data to Supabase
+            if new_careers_future_job_details:
+                logging.info(f"\n--- Saving {len(new_careers_future_job_details)} new job(s) for query '{query}' ---")
+                supabase_utils.save_jobs_to_supabase(new_careers_future_job_details)
+                total_new_jobs_saved += len(new_careers_future_job_details)
+            else:
+                logging.info(f"\nNo new job details were fetched or processed for query '{query}'.")
+    else:
+        logging.info("\n--- Skipping Careers Future Job Scraping per config ---")
 
     # --- End of Script ---      
     logging.info(f"\n{'='*20} Job scraping script finished {'='*20}")
