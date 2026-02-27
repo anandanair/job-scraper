@@ -304,7 +304,7 @@ $$;
 ALTER FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text", "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_jobs_for_rescore"("p_limit_val" integer) RETURNS TABLE("job_id" "text", "job_title" "text", "company" "text", "description" "text", "level" "text", "resume_score" smallint, "resume_link" "text")
+CREATE OR REPLACE FUNCTION "public"."get_jobs_for_rescore"("p_limit_val" integer) RETURNS TABLE("job_id" "text", "job_title" "text", "company" "text", "description" "text", "level" "text", "resume_score" smallint, "resume_link" "text", "customized_resume_id" "uuid")
     LANGUAGE "plpgsql"
     AS $$
 BEGIN
@@ -316,7 +316,8 @@ BEGIN
         j.description,
         j.level,
         j.resume_score,
-        cr.resume_link
+        cr.resume_link,
+        j.customized_resume_id
     FROM
         jobs j
     INNER JOIN
@@ -809,3 +810,9 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 
 RESET ALL;
+
+-- --- Storage Setup ---
+-- Create the personalized_resumes storage bucket if it doesn't exist
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('personalized_resumes', 'personalized_resumes', false)
+ON CONFLICT (id) DO NOTHING;
