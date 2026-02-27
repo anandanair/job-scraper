@@ -5,7 +5,8 @@ supabase
 httpx
 pdfplumber
 google-genai
+litellm
 pydantic
 playwright
-html2text
+markdownify
 reportlab
