@@ -86,7 +86,7 @@ def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
 
     logging.info(f"--- Starting Phase 1: Scraping Job IDs (Max Start: {max_start}) ---")
     while start <= max_start:
-        target_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={search_query.replace(' ', '%2B')}&location={location}&geoId={config.LINKEDIN_GEO_ID}&f_TPR={config.LINKEDIN_JOB_POSTING_DATE}&f_JT={config.LINKEDIN_JOB_TYPE}&f_WT={config.LINKEDIN_F_WT}&start={start}"
+        target_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={search_query.replace(' ', '%20')}&location={location}&geoId={config.LINKEDIN_GEO_ID}&f_TPR={config.LINKEDIN_JOB_POSTING_DATE}&f_JT={config.LINKEDIN_JOB_TYPE}&f_WT={config.LINKEDIN_F_WT}&start={start}"
 
         sleep_time = random.uniform(5.0, 15.0)
     
