@@ -31,7 +31,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
           # LLM Configuration (set via Repository Variables / Secrets)
           LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.GEMINI_FIRST_API_KEY }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
