@@ -127,7 +127,7 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
         spaceAfter=8,
     )
     
-    story = []
+    story =[]
 
     # --- Header ---
     if resume_data.name:
@@ -135,24 +135,37 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
 
     
     # --- Contact Information ---
-    contact_info = []
-    if resume_data.email: contact_info.append(resume_data.email)
-    if resume_data.phone: contact_info.append(resume_data.phone)
-    if resume_data.location: contact_info.append(resume_data.location)
+    contact_info =[]
+    if resume_data.email and resume_data.email != "NA": contact_info.append(resume_data.email)
+    if resume_data.phone and resume_data.phone != "NA": contact_info.append(resume_data.phone)
+    if resume_data.location and resume_data.location != "NA": contact_info.append(resume_data.location)
     if contact_info:
         story.append(Paragraph(" | ".join(contact_info), style_contact))
     
     # --- Links ---
-    links = []
+    links =[]
     if resume_data.links:
-        if resume_data.links.linkedin: links.append(f"LinkedIn: {resume_data.links.linkedin}")
-        if resume_data.links.github: links.append(f"GitHub: {resume_data.links.github}")
-        if resume_data.links.portfolio: links.append(f"Portfolio: {resume_data.links.portfolio}")
+        # Helper function to format links
+        def format_link(url, label):
+            # Ensure URL has protocol to be clickable in PDF
+            clean_url = url if url.startswith('http') else f"https://{url}"
+            # Escape ampersands for ReportLab's XML parser
+            clean_url = clean_url.replace('&', '&amp;')
+            # Return formatted HTML-like string with primary color and underline
+            return f'<u><a href="{clean_url}"><font color="#1976D2">{label}</font></a></u>'
+
+        if resume_data.links.linkedin and resume_data.links.linkedin != "NA": 
+            links.append(format_link(resume_data.links.linkedin, "LinkedIn"))
+        if resume_data.links.github and resume_data.links.github != "NA": 
+            links.append(format_link(resume_data.links.github, "GitHub"))
+        if resume_data.links.portfolio and resume_data.links.portfolio != "NA": 
+            links.append(format_link(resume_data.links.portfolio, "Portfolio"))
+            
     if links:
         story.append(Paragraph(" | ".join(links), style_contact))
     
     # --- Summary ---
-    if resume_data.summary:
+    if resume_data.summary and resume_data.summary != "NA":
         story.append(Paragraph("PROFESSIONAL SUMMARY", style_section_heading))
         story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=8))
         
@@ -164,22 +177,24 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
         story.append(Paragraph(cleaned_summary, style_normal))
     
     # --- Skills ---
-    if resume_data.skills:
-        story.append(Paragraph("SKILLS", style_section_heading))
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=8))
+    if resume_data.skills and resume_data.skills != ["NA"]:
+        # Filter out any "NA" skills just in case
+        skills_list = [s for s in resume_data.skills if s != "NA"]
         
-        skills_list = resume_data.skills
-        if skills_list: # Ensure there are skills to process
+        if skills_list:
+            story.append(Paragraph("SKILLS", style_section_heading))
+            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=8))
+            
             num_columns = 3  # We'll use a 3-column layout
             
             # Prepare data for the table
-            table_data = []
+            table_data =[]
             num_skills = len(skills_list)
             # Calculate number of rows needed (ceiling division)
             rows = (num_skills + num_columns - 1) // num_columns
 
             for i in range(rows):
-                row_items = []
+                row_items =[]
                 for j in range(num_columns):
                     skill_index = i * num_columns + j # This fills row by row
                     if skill_index < num_skills:
@@ -203,7 +218,6 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                     ('LEFTPADDING', (0,0), (0,-1), 10),         # No left padding for cells
                     ('RIGHTPADDING', (0,0), (-1,-1), 6),        # Padding between columns (applied to right of each cell)
                     ('BOTTOMPADDING', (0,0), (-1,-1), 3),       # Padding below each row
-                    # ('GRID', (0,0), (-1,-1), 0.5, colors.red) # Uncomment for debugging table layout
                 ]))
                 story.append(skills_table)
                 story.append(Spacer(1, 0.1*inch)) # Add some space after the skills section
@@ -215,18 +229,17 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
         
         for exp in resume_data.experience:
             # Create a table for job header to align job title and dates
-            job_title = f"{exp.job_title}"
-            if exp.company and exp.location:
-                company_location = f"{exp.company} | {exp.location}"
-            elif exp.company:
-                company_location = exp.company
-            else:
-                company_location = ""
+            job_title = f"{exp.job_title}" if exp.job_title != "NA" else ""
+            
+            company_parts =[]
+            if exp.company and exp.company != "NA": company_parts.append(exp.company)
+            if exp.location and exp.location != "NA": company_parts.append(exp.location)
+            company_location = " | ".join(company_parts)
             
             dates = ""
-            if exp.start_date and exp.end_date: 
+            if exp.start_date and exp.start_date != "NA" and exp.end_date and exp.end_date != "NA": 
                 dates = f"{exp.start_date} - {exp.end_date}"
-            elif exp.start_date: 
+            elif exp.start_date and exp.start_date != "NA": 
                 dates = f"{exp.start_date} - Present"
             
             # Create two-column layout for position details
@@ -242,7 +255,7 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
             story.append(Paragraph(company_location, style_company))
             story.append(Spacer(1, 0.1*inch))
             
-            if exp.description:
+            if exp.description and exp.description != "NA":
                 # First check if the description is already in bullets format by looking for newlines
                 if '\n' in exp.description:
                     # Handle existing bullet points for responsibilities/achievements
@@ -259,11 +272,8 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                             story.append(Paragraph(bullet_text, style_bullet))
                 else:
                     # Split a paragraph into sentences and make each sentence a bullet point
-                    # This handles periods followed by a space as sentence delimiters
-                    # Also handles common abbreviations like "e.g.", "i.e.", "etc."
                     text = exp.description.strip()
                     
-                    # Replace common abbreviations temporarily to avoid splitting at their periods
                     text = text.replace("e.g.", "TEMP_EG")
                     text = text.replace("i.e.", "TEMP_IE")
                     text = text.replace("etc.", "TEMP_ETC")
@@ -312,17 +322,17 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
         
         for edu in resume_data.education:
             # Degree info
-            degree_info = f"<b>{edu.degree}</b>"
-            if edu.field_of_study: 
+            degree_info = f"<b>{edu.degree}</b>" if edu.degree != "NA" else ""
+            if edu.field_of_study and edu.field_of_study != "NA": 
                 degree_info += f", {edu.field_of_study}"
             
             # Year info
             years = ""
-            if edu.start_year and edu.end_year: 
+            if edu.start_year and edu.start_year != "NA" and edu.end_year and edu.end_year != "NA": 
                 years = f"{edu.start_year} - {edu.end_year}"
-            elif edu.start_year: 
+            elif edu.start_year and edu.start_year != "NA": 
                 years = f"Started {edu.start_year}"
-            elif edu.end_year: 
+            elif edu.end_year and edu.end_year != "NA": 
                 years = f"Graduated {edu.end_year}"
             
             # Create two-column layout
@@ -334,7 +344,8 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
             ]))
             story.append(tbl)
             
-            story.append(Paragraph(edu.institution, style_normal))
+            if edu.institution and edu.institution != "NA":
+                story.append(Paragraph(edu.institution, style_normal))
             story.append(Spacer(1, 0.15*inch))
     
     # --- Projects ---
@@ -343,10 +354,10 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
         story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=8))
         
         for proj in resume_data.projects:
-            story.append(Paragraph(f"<b>{proj.name}</b>", style_job_title))
+            if proj.name and proj.name != "NA":
+                story.append(Paragraph(f"<b>{proj.name}</b>", style_job_title))
             
-            if proj.description:
-                # Check if the description is already in bullets format by looking for newlines
+            if proj.description and proj.description != "NA":
                 if '\n' in proj.description:
                     bullets = proj.description.split('\n')
                     for bullet in bullets:
@@ -358,10 +369,8 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                                 bullet_text = f"• {bullet_text[1:].strip()}"
                             story.append(Paragraph(bullet_text, style_bullet))
                 else:
-                    # Split a paragraph into sentences and make each sentence a bullet point
                     text = proj.description.strip()
                     
-                    # Replace common abbreviations temporarily to avoid splitting at their periods
                     text = text.replace("e.g.", "TEMP_EG")
                     text = text.replace("i.e.", "TEMP_IE")
                     text = text.replace("etc.", "TEMP_ETC")
@@ -375,32 +384,25 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                     text = text.replace("U.S.", "TEMP_US")
                     text = text.replace("U.K.", "TEMP_UK")
                     
-                    # Split by periods followed by a space, or just periods if it's the end of the string
-                    sentences = []
+                    sentences =[]
                     current_sentence = ""
                     for char in text:
                         current_sentence += char
                         if char == '.':
-                            # Check if the next char is a space or end of string
-                            # This is a simplified approach; more robust sentence tokenization might be needed for complex cases
                             if text.index(current_sentence) + len(current_sentence) == len(text) or \
                                (text.index(current_sentence) + len(current_sentence) < len(text) and \
                                 text[text.index(current_sentence) + len(current_sentence)] == ' '):
                                 sentences.append(current_sentence.strip())
                                 current_sentence = ""
-                    if current_sentence.strip(): # Add any remaining part
+                    if current_sentence.strip():
                         sentences.append(current_sentence.strip())
 
-                    # If splitting by ". " resulted in no sentences (e.g. single sentence without trailing space after period)
-                    # or if the original text didn't contain ". "
                     if not sentences or (len(sentences) == 1 and sentences[0] == text):
-                        # Fallback to splitting by just "." if ". " fails or if it's a single block
-                        sentences = [s.strip() for s in text.split('.') if s.strip()]
-                        # Add back periods if they were removed, except for the last sentence if it was already punctuated
+                        sentences =[s.strip() for s in text.split('.') if s.strip()]
                         for i in range(len(sentences)):
-                            if i < len(sentences) -1: # Add period to all but the last
+                            if i < len(sentences) -1: 
                                 sentences[i] = sentences[i] + "."
-                            elif not sentences[i].endswith(('.', '!', '?')): # Add to last if no punctuation
+                            elif not sentences[i].endswith(('.', '!', '?')):
                                  sentences[i] = sentences[i] + "."
 
 
@@ -420,16 +422,16 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                             sentence = sentence.replace("TEMP_US", "U.S.")
                             sentence = sentence.replace("TEMP_UK", "U.K.")
                             
-                            # Ensure sentence ends with a period if it was split by ". " and it's not the last part
-                            # or if it doesn't have terminal punctuation
                             if not sentence.endswith(('.', '!', '?')):
                                 sentence += '.'
                                 
                             story.append(Paragraph(f"• {sentence.strip()}", style_bullet))
             
-            if proj.technologies:
-                tech_text = f"<i>Technologies:</i> {', '.join(proj.technologies)}"
-                story.append(Paragraph(tech_text, style_tech))
+            if proj.technologies and proj.technologies != ["NA"]:
+                tech_list =[t for t in proj.technologies if t != "NA"]
+                if tech_list:
+                    tech_text = f"<i>Technologies:</i> {', '.join(tech_list)}"
+                    story.append(Paragraph(tech_text, style_tech))
             
             story.append(Spacer(1, 0.15*inch))
     
@@ -439,31 +441,36 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
         story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=8))
         
         for cert in resume_data.certifications:
-            cert_info = f"<b>{cert.name}</b>"
+            if cert.name == "NA" and cert.issuer == "NA":
+                continue
+
+            cert_name = f"<b>{cert.name}</b>" if cert.name != "NA" else ""
             
             # Right aligned year if available
             year_text = ""
-            if cert.year:
+            if cert.year and cert.year != "NA":
                 year_text = cert.year
             
             # Create a table for certification info
-            data = [[Paragraph(cert_info, style_normal), Paragraph(year_text, style_dates)]]
+            data = [[Paragraph(cert_name, style_normal), Paragraph(year_text, style_dates)]]
             tbl = Table(data, colWidths=[5.3*inch, 2*inch])
             tbl.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ]))
             story.append(tbl)
             
-            if cert.issuer:
+            if cert.issuer and cert.issuer != "NA":
                 story.append(Paragraph(cert.issuer, style_normal))
             
             story.append(Spacer(1, 0.1*inch))
     
     # --- Languages ---
-    if resume_data.languages:
-        story.append(Paragraph("LANGUAGES", style_section_heading))
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=8))
-        story.append(Paragraph(", ".join(resume_data.languages), style_normal))
+    if resume_data.languages and resume_data.languages != ["NA"]:
+        lang_list =[l for l in resume_data.languages if l != "NA"]
+        if lang_list:
+            story.append(Paragraph("LANGUAGES", style_section_heading))
+            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=8))
+            story.append(Paragraph(", ".join(lang_list), style_normal))
     
     try:
         doc.build(story)
