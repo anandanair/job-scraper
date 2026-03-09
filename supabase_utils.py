@@ -528,3 +528,111 @@ def get_customized_resume(resume_id: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logging.error(f"Error fetching customized resume {resume_id}: {e}")
         return None
+
+
+# --- Base Resume Functions ---
+# These functions handle storing and retrieving the user's base resume
+# securely via Supabase, instead of committing sensitive files to the repo.
+
+def download_resume_from_storage(file_name: str = "resume.pdf") -> Optional[bytes]:
+    """
+    Downloads the user's resume PDF from the 'resumes' Supabase Storage bucket.
+
+    Args:
+        file_name: The name of the resume file in the storage bucket.
+
+    Returns:
+        The file content as bytes, or None if download fails.
+    """
+    bucket_name = config.SUPABASE_RESUME_STORAGE_BUCKET
+    if not bucket_name:
+        logging.error("Resume storage bucket name not configured (SUPABASE_RESUME_STORAGE_BUCKET).")
+        return None
+
+    try:
+        logging.info(f"Downloading '{file_name}' from Supabase Storage bucket '{bucket_name}'...")
+        file_bytes = supabase.storage.from_(bucket_name).download(file_name)
+
+        if file_bytes:
+            logging.info(f"Successfully downloaded '{file_name}' ({len(file_bytes)} bytes).")
+            return file_bytes
+        else:
+            logging.warning(f"Downloaded empty content for '{file_name}' from bucket '{bucket_name}'.")
+            return None
+
+    except Exception as e:
+        logging.error(f"Error downloading '{file_name}' from Supabase Storage: {e}")
+        return None
+
+
+def save_base_resume(resume_data: dict) -> bool:
+    """
+    Saves (upserts) the parsed base resume JSON to the 'base_resume' table.
+    Deletes any existing rows first to ensure only one base resume exists.
+
+    Args:
+        resume_data: The parsed resume data as a dictionary.
+
+    Returns:
+        True if saved successfully, False otherwise.
+    """
+    if not resume_data:
+        logging.error("No resume data provided to save.")
+        return False
+
+    table_name = config.SUPABASE_BASE_RESUME_TABLE_NAME
+    try:
+        # Delete any existing base resume rows (there should only be one)
+        logging.info(f"Clearing existing base resume data from '{table_name}'...")
+        supabase.table(table_name).delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+
+        # Insert the new base resume
+        logging.info(f"Saving parsed base resume to '{table_name}'...")
+        response = supabase.table(table_name).insert({
+            "resume_data": resume_data
+        }).execute()
+
+        if response.data and len(response.data) > 0:
+            logging.info(f"Successfully saved base resume to '{table_name}'.")
+            return True
+        else:
+            logging.warning(f"Base resume insert returned no data. Response: {response}")
+            return False
+
+    except Exception as e:
+        logging.error(f"Error saving base resume to Supabase: {e}", exc_info=True)
+        return False
+
+
+def get_base_resume() -> Optional[dict]:
+    """
+    Fetches the base resume JSON data from the 'base_resume' table.
+
+    Returns:
+        The resume data as a dictionary, or None if not found or on error.
+    """
+    table_name = config.SUPABASE_BASE_RESUME_TABLE_NAME
+    try:
+        logging.info(f"Fetching base resume from '{table_name}'...")
+        response = supabase.table(table_name)\
+            .select("resume_data")\
+            .order("created_at", desc=True)\
+            .limit(1)\
+            .execute()
+
+        if response.data and len(response.data) > 0:
+            resume_data = response.data[0].get("resume_data")
+            if resume_data:
+                logging.info("Successfully fetched base resume data from Supabase.")
+                return resume_data
+            else:
+                logging.warning("Base resume row found but 'resume_data' is empty.")
+                return None
+        else:
+            logging.warning("No base resume found in Supabase. Please run the 'Parse Resume' workflow first.")
+            return None
+
+    except Exception as e:
+        logging.error(f"Error fetching base resume from Supabase: {e}", exc_info=True)
+        return None
+

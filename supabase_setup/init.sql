@@ -754,7 +754,38 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 RESET ALL;
 
+-- --- Base Resume Table ---
+-- Stores the parsed resume JSON data securely in the database.
+-- This avoids committing sensitive resume files to the public repository.
+CREATE TABLE IF NOT EXISTS "public"."base_resume" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "resume_data" "jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+ALTER TABLE "public"."base_resume" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."base_resume"
+    ADD CONSTRAINT "base_resume_pkey" PRIMARY KEY ("id");
+
+-- Auto-update the updated_at column on changes
+CREATE OR REPLACE TRIGGER "update_base_resume_updated_at"
+    BEFORE UPDATE ON "public"."base_resume"
+    FOR EACH ROW EXECUTE FUNCTION "public"."update_last_updated_column"();
+
+ALTER TABLE "public"."base_resume" ENABLE ROW LEVEL SECURITY;
+
+GRANT ALL ON TABLE "public"."base_resume" TO "anon";
+GRANT ALL ON TABLE "public"."base_resume" TO "authenticated";
+GRANT ALL ON TABLE "public"."base_resume" TO "service_role";
+
 -- --- Storage Setup ---
+-- Create the resumes storage bucket for uploading the original resume PDF
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('resumes', 'resumes', false)
+ON CONFLICT (id) DO NOTHING;
+
 -- Create the personalized_resumes storage bucket if it doesn't exist
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('personalized_resumes', 'personalized_resumes', false)
