@@ -1,3 +1,7 @@
 __pycache__/
 .env
 .venv
+resume.json
+resume.pdf
+verify_pdf.py
+test_resume.pdf
