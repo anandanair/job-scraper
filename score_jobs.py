@@ -1,4 +1,3 @@
-from google import genai
 import time
 import json
 import logging
@@ -6,15 +5,14 @@ from typing import List, Optional, Dict, Any
 import requests
 import io
 import pdfplumber
+import os
 
 import config
 import supabase_utils
+from llm_client import primary_client
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# --- Initialize Gemini Client ---
-client = genai.Client(api_key=config.GEMINI_FIRST_API_KEY)
 
 # --- Helper Functions ---
 
@@ -141,14 +139,12 @@ def get_resume_score_from_ai(resume_text: str, job_details: Dict[str, Any]) -> O
 
     try:
         logging.info(f"Requesting score for job_id: {job_details.get('job_id')}")
-        response = client.models.generate_content(
-            model=config.GEMINI_MODEL_NAME, 
-            contents=prompt
-            )
+        score_text = primary_client.generate_content(
+            prompt=prompt,
+        )
 
         # Attempt to parse the score
-        score_text = response.text.strip()
-        score = int(score_text)
+        score = int(score_text.strip())
         if 0 <= score <= 100:
             logging.info(f"Received score {score} for job_id: {job_details.get('job_id')}")
             return score
@@ -156,12 +152,10 @@ def get_resume_score_from_ai(resume_text: str, job_details: Dict[str, Any]) -> O
             logging.warning(f"Received score out of range ({score}) for job_id: {job_details.get('job_id')}. Raw response: '{score_text}'")
             return None
     except ValueError:
-        logging.error(f"Could not parse integer score from Gemini response for job_id: {job_details.get('job_id')}. Raw response: '{response.text.strip()}'")
+        logging.error(f"Could not parse integer score from LLM response for job_id: {job_details.get('job_id')}. Raw response: '{score_text}'")
         return None
     except Exception as e:
-        # Catch potential API errors (rate limits, etc.)
-        logging.error(f"Error calling Gemini API for job_id {job_details.get('job_id')}: {e}")
-        # Consider specific error handling for rate limits if needed
+        logging.error(f"Error calling LLM API for job_id {job_details.get('job_id')}: {e}")
         return None
 
 
@@ -221,22 +215,38 @@ def rescore_jobs_with_custom_resume():
     for i, job in enumerate(jobs_to_rescore):
         job_id = job.get('job_id')
         resume_link = job.get('resume_link')
+        customized_resume_id = job.get('customized_resume_id')
 
-        if not job_id or not resume_link:
-            logging.warning(f"Skipping re-scoring for job due to missing job_id or resume_link: {job}")
+        if not job_id:
+            logging.warning(f"Skipping re-scoring for job due to missing job_id: {job}")
             failed_rescores += 1
             continue
 
-        logging.info(f"--- Re-scoring Job {i+1}/{len(jobs_to_rescore)} (ID: {job_id}) using custom resume from {resume_link[:70]}... ---")
+        logging.info(f"--- Re-scoring Job {i+1}/{len(jobs_to_rescore)} (ID: {job_id}) ---")
 
-        custom_resume_text = extract_text_from_pdf_url(resume_link)
+        custom_resume_text = None
+
+        # Try to get resume data from database first
+        if customized_resume_id:
+            logging.info(f"Targeting customized_resume_id: {customized_resume_id}")
+            db_resume_data = supabase_utils.get_customized_resume(customized_resume_id)
+            if db_resume_data:
+                logging.info(f"Successfully retrieved customized resume data from DB for job {job_id}")
+                custom_resume_text = format_resume_to_text(db_resume_data)
+            else:
+                logging.warning(f"Could not find customized resume data in DB for ID {customized_resume_id}. Falling back to PDF.")
+
+        # Fallback to PDF extraction if DB retrieval failed or ID was missing
+        if not custom_resume_text and resume_link:
+            logging.info(f"Attempting to extract text from custom resume PDF from {resume_link[:70]}...")
+            custom_resume_text = extract_text_from_pdf_url(resume_link)
 
         if not custom_resume_text:
-            logging.error(f"Failed to extract text from custom resume PDF for job_id {job_id}. Skipping re-score.")
+            logging.error(f"Failed to obtain custom resume text for job_id {job_id} from both DB and PDF. Skipping.")
             failed_rescores += 1
             if i < len(jobs_to_rescore) - 1:
-                logging.debug(f"Waiting {config.GEMINI_REQUEST_DELAY_SECONDS} seconds before next job...")
-                time.sleep(config.GEMINI_REQUEST_DELAY_SECONDS)
+                logging.debug(f"Waiting {config.LLM_REQUEST_DELAY_SECONDS} seconds before next job...")
+                time.sleep(config.LLM_REQUEST_DELAY_SECONDS)
             continue
         
         logging.debug(f"Custom resume text for job {job_id} (first 200 chars): {custom_resume_text[:200]}")
@@ -251,8 +261,8 @@ def rescore_jobs_with_custom_resume():
             failed_rescores += 1 
 
         if i < len(jobs_to_rescore) - 1: 
-            logging.debug(f"Waiting {config.GEMINI_REQUEST_DELAY_SECONDS} seconds before next API call...")
-            time.sleep(config.GEMINI_REQUEST_DELAY_SECONDS)
+            logging.debug(f"Waiting {config.LLM_REQUEST_DELAY_SECONDS} seconds before next API call...")
+            time.sleep(config.LLM_REQUEST_DELAY_SECONDS)
 
     rescore_end_time = time.time()
     logging.info("--- Job Re-scoring Finished ---")
@@ -270,51 +280,60 @@ def main():
     # --- Phase 1: Initial Scoring with Default Resume ---
     logging.info("--- Phase 1: Initial Scoring with Default Resume ---")
     initial_score_start_time = time.time()
-    default_resume_data = supabase_utils.get_resume_by_email(config.LINKEDIN_EMAIL)
-    if not default_resume_data:
-        logging.error(f"Could not retrieve resume for {config.LINKEDIN_EMAIL}. Skipping initial scoring phase.")
+    
+    resume_path = getattr(config, 'BASE_RESUME_PATH', 'resume.json')
+    if not os.path.exists(resume_path):
+        logging.error(f"Base resume not found at '{resume_path}'. Please run resume_parser.py first. Skipping initial scoring phase.")
     else:
-        # 2. Format Resume to Text
-        default_resume_text = format_resume_to_text(default_resume_data)
-        logging.info("Default resume data formatted to text.")
+        try:
+            with open(resume_path, 'r', encoding='utf-8') as f:
+                default_resume_data = json.load(f)
+        except Exception as e:
+            logging.error(f"Failed to read or decode {resume_path}: {e}")
+            default_resume_data = None
 
-        # 3. Fetch Jobs to Score
-        jobs_to_score_initially = supabase_utils.get_jobs_to_score(config.JOBS_TO_SCORE_PER_RUN)
-        if not jobs_to_score_initially:
-            logging.info("No jobs require initial scoring at this time.")
-        else:
-            logging.info(f"Processing {len(jobs_to_score_initially)} jobs for initial scoring...")
-            successful_initial_scores = 0
-            failed_initial_scores = 0
+        if default_resume_data:
+            # 2. Format Resume to Text
+            default_resume_text = format_resume_to_text(default_resume_data)
+            logging.info("Default resume data formatted to text.")
 
-            # 4. Loop Through Jobs and Score Them
-            for i, job in enumerate(jobs_to_score_initially):
-                job_id = job.get('job_id')
-                if not job_id:
-                    logging.warning("Found job data without job_id during initial scoring. Skipping.")
-                    failed_initial_scores +=1
-                    continue
+            # 3. Fetch Jobs to Score
+            jobs_to_score_initially = supabase_utils.get_jobs_to_score(config.JOBS_TO_SCORE_PER_RUN)
+            if not jobs_to_score_initially:
+                logging.info("No jobs require initial scoring at this time.")
+            else:
+                logging.info(f"Processing {len(jobs_to_score_initially)} jobs for initial scoring...")
+                successful_initial_scores = 0
+                failed_initial_scores = 0
 
-                logging.info(f"--- Initial Scoring Job {i+1}/{len(jobs_to_score_initially)} (ID: {job_id}) ---")
-                score = get_resume_score_from_ai(default_resume_text, job)
+                # 4. Loop Through Jobs and Score Them
+                for i, job in enumerate(jobs_to_score_initially):
+                    job_id = job.get('job_id')
+                    if not job_id:
+                        logging.warning("Found job data without job_id during initial scoring. Skipping.")
+                        failed_initial_scores +=1
+                        continue
 
-                if score is not None:
-                    if supabase_utils.update_job_score(job_id, score, resume_score_stage="initial"):
-                        successful_initial_scores += 1
+                    logging.info(f"--- Initial Scoring Job {i+1}/{len(jobs_to_score_initially)} (ID: {job_id}) ---")
+                    score = get_resume_score_from_ai(default_resume_text, job)
+
+                    if score is not None:
+                        if supabase_utils.update_job_score(job_id, score, resume_score_stage="initial"):
+                            successful_initial_scores += 1
+                        else:
+                            failed_initial_scores += 1
                     else:
                         failed_initial_scores += 1
-                else:
-                    failed_initial_scores += 1
 
-                if i < len(jobs_to_score_initially) - 1:
-                    logging.debug(f"Waiting {config.GEMINI_REQUEST_DELAY_SECONDS} seconds before next API call...")
-                    time.sleep(config.GEMINI_REQUEST_DELAY_SECONDS)
-            
-            initial_score_end_time = time.time()
-            logging.info("--- Initial Scoring Phase Finished ---")
-            logging.info(f"Successfully initially scored: {successful_initial_scores}")
-            logging.info(f"Failed/Skipped initial scores: {failed_initial_scores}")
-            logging.info(f"Total initial scoring time: {initial_score_end_time - initial_score_start_time:.2f} seconds")
+                    if i < len(jobs_to_score_initially) - 1:
+                        logging.debug(f"Waiting {config.LLM_REQUEST_DELAY_SECONDS} seconds before next API call...")
+                        time.sleep(config.LLM_REQUEST_DELAY_SECONDS)
+                
+                initial_score_end_time = time.time()
+                logging.info("--- Initial Scoring Phase Finished ---")
+                logging.info(f"Successfully initially scored: {successful_initial_scores}")
+                logging.info(f"Failed/Skipped initial scores: {failed_initial_scores}")
+                logging.info(f"Total initial scoring time: {initial_score_end_time - initial_score_start_time:.2f} seconds")
 
     # # --- Phase 2: Re-scoring with Custom Resumes ---
     rescore_jobs_with_custom_resume() 
@@ -325,11 +344,9 @@ def main():
 
 
 if __name__ == "__main__":
-    if not config.GEMINI_FIRST_API_KEY:
-        logging.error("GEMINI_FIRST_API_KEY environment variable not set.")
+    if not config.LLM_API_KEY:
+        logging.error("LLM_API_KEY environment variable not set. (Also accepts GEMINI_API_KEY / GEMINI_FIRST_API_KEY)")
     elif not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
         logging.error("Supabase URL or Key environment variable not set.")
-    elif not config.LINKEDIN_EMAIL:
-        logging.error("LINKEDIN_EMAIL not set in config.py")
     else:
         main()
