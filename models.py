@@ -2,48 +2,48 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
 class Education(BaseModel):
-    degree: str
-    field_of_study: Optional[str]
-    institution: str
-    start_year: Optional[str]
-    end_year: Optional[str]
+    degree: str = ""
+    field_of_study: str = ""
+    institution: str = ""
+    start_year: str = ""
+    end_year: str = ""
 
 class Experience(BaseModel):
-    job_title: str
-    company: str
-    location: Optional[str]
-    start_date: Optional[str]
-    end_date: Optional[str]
-    description: Optional[str]
+    job_title: str = ""
+    company: str = ""
+    location: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    description: str = ""
 
 class Project(BaseModel):
-    name: str
-    description: Optional[str]
-    technologies: Optional[List[str]]
+    name: str = ""
+    description: str = ""
+    technologies: List[str] = Field(default_factory=list)
 
 class Certification(BaseModel):
-    name: str
-    issuer: Optional[str]
-    year: Optional[str]
+    name: str = ""
+    issuer: str = ""
+    year: str = ""
 
 class Links(BaseModel):
-    linkedin: Optional[str]
-    github: Optional[str]
-    portfolio: Optional[str]
+    linkedin: str = ""
+    github: str = ""
+    portfolio: str = ""
 
 class Resume(BaseModel):
-    name: str
-    email: str
-    phone: Optional[str]
-    location: Optional[str]
-    summary: Optional[str]
-    skills: Optional[List[str]]
-    education: Optional[List[Education]]
-    experience: Optional[List[Experience]]
-    projects: Optional[List[Project]]
-    certifications: Optional[List[Certification]]
-    languages: Optional[List[str]]
-    links: Optional[Links]
+    name: str = ""
+    email: str = ""
+    phone: str = ""
+    location: str = ""
+    summary: str = ""
+    skills: List[str] = Field(default_factory=list)
+    education: List[Education] = Field(default_factory=list)
+    experience: List[Experience] = Field(default_factory=list)
+    projects: List[Project] = Field(default_factory=list)
+    certifications: List[Certification] = Field(default_factory=list)
+    languages: List[str] = Field(default_factory=list)
+    links: Links = Field(default_factory=Links)
 
 # --- Pydantic models for LLM structured output ---
 class SummaryOutput(BaseModel):
