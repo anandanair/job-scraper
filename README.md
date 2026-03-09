@@ -49,7 +49,7 @@ This project is designed to run primarily through GitHub Actions. Follow these s
 2.  **Create a Supabase Project:**
     - Go to [Supabase](https://supabase.com/) and create a new project.
     - Once your project is created, navigate to the "SQL Editor" section.
-    - Open the `supabase_setup/init.sql` file from this repository, copy its content, and run it in your Supabase SQL Editor. This will set up the necessary tables (like `jobs` and `customized_resumes`).
+    - Open the `supabase_setup/init.sql` file from this repository, copy its content, and run it in your Supabase SQL Editor. This will set up the necessary tables (like `jobs`, `customized_resumes`, and `base_resume`) and storage buckets (`resumes`, `personalized_resumes`).
 
 3.  **Obtain API Keys for Your LLM Provider:**
     - Get API key(s) from your chosen provider (e.g., [Google AI Studio](https://aistudio.google.com/app/apikey), [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), etc.).
@@ -62,7 +62,6 @@ This project is designed to run primarily through GitHub Actions. Follow these s
       - `OPENAI_API_KEY`: (Optional) Your OpenAI API key if using GPT models.
       - `ANTHROPIC_API_KEY`: (Optional) Your Anthropic API key if using Claude models.
       - `GROQ_API_KEY`: (Optional) Your Groq API key if using Groq models.
-      - `LINKEDIN_EMAIL`: The email address associated with your resume.
       - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase project's `service_role` key.
       - `SUPABASE_URL`: Your Supabase project's URL.
     - **Add Repository Variables** (Click the "Variables" tab, then "New repository variable"):
@@ -71,13 +70,16 @@ This project is designed to run primarily through GitHub Actions. Follow these s
       - `LLM_REQUEST_DELAY_SECONDS`: (Optional) Delay between API calls in seconds. Default is `8`.
       - `JOBS_TO_SCORE_PER_RUN`: (Optional) Number of jobs to score per workflow run. Default is `1`.
 
-5.  **Upload Your Resume:**
-    - In your forked GitHub repository, upload your resume to the root directory. **The resume file must be named `resume.pdf`**.
+5.  **Upload Your Resume to Supabase Storage:**
+    - In your Supabase project dashboard, navigate to **Storage** in the left sidebar.
+    - Find the **`resumes`** bucket (created by the `init.sql` script in step 2).
+    - Click on the bucket, then click **"Upload files"** and upload your resume. **The file must be named `resume.pdf`**.
+    - > **⚠️ Security Note:** Your resume is stored securely in your private Supabase Storage bucket — it is **never committed to the public GitHub repository**. This protects your personal information (name, email, phone, address, etc.) from being publicly visible.
 
 6.  **Parse Your Resume:**
     - Go to the "Actions" tab in your forked GitHub repository.
     - Find the workflow named "Parse Resume Manually" in the list of workflows.
-    - Click on it, and then click the "Run workflow" button. This will trigger the `resume_parser.py` script, which will extract information from your `resume.pdf`, parse it using AI, and store the structured data locally to `resume.json`.
+    - Click on it, and then click the "Run workflow" button. This will trigger the `resume_parser.py` script, which will download your `resume.pdf` from Supabase Storage, parse it using AI, and store the structured data securely in the `base_resume` table in your Supabase database.
 
 7.  **Configure Job Search Parameters (Edit `config.py`):**
     - In your forked GitHub repository, navigate to the [config.py](config.py) file.
@@ -178,10 +180,9 @@ The individual Python scripts can still be run locally for development or testin
       # OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
       # GROQ_API_KEY="YOUR_GROQ_API_KEY"
 
-      # Supabase & LinkedIn
+      # Supabase
       SUPABASE_URL="YOUR_SUPABASE_URL"
       SUPABASE_SERVICE_ROLE_KEY="YOUR_SUPABASE_SERVICE_ROLE_KEY"
-      LINKEDIN_EMAIL="YOUR_LINKEDIN_EMAIL"
       ```
 
 5.  **Run scripts locally (example):**
@@ -212,8 +213,7 @@ The individual Python scripts can still be run locally for development or testin
 ├── models.py                   # Pydantic models for data validation
 ├── pdf_generator.py            # Generates PDF resumes
 ├── requirements.txt            # Python dependencies
-├── resume_files/               # Folder to store your resume.pdf
-├── resume_parser.py            # Main script to parse local resume PDF
+├── resume_parser.py            # Parses resume PDF from Supabase Storage and saves to DB
 ├── score_jobs.py               # Scores job suitability against resumes
 ├── scraper.py                  # Core scraping logic for LinkedIn and CareersFuture
 ├── supabase_setup/             # SQL scripts for Supabase database initialization
