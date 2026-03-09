@@ -282,58 +282,65 @@ def main():
     initial_score_start_time = time.time()
     
     resume_path = getattr(config, 'BASE_RESUME_PATH', 'resume.json')
-    if not os.path.exists(resume_path):
-        logging.error(f"Base resume not found at '{resume_path}'. Please run resume_parser.py first. Skipping initial scoring phase.")
-    else:
+    
+    # Try fetching resume from Supabase first, fall back to local file
+    default_resume_data = supabase_utils.get_base_resume()
+    
+    if default_resume_data:
+        logging.info("Successfully loaded base resume from Supabase database.")
+    elif os.path.exists(resume_path):
+        logging.info(f"Supabase fetch failed. Falling back to local file: {resume_path}")
         try:
             with open(resume_path, 'r', encoding='utf-8') as f:
                 default_resume_data = json.load(f)
         except Exception as e:
             logging.error(f"Failed to read or decode {resume_path}: {e}")
             default_resume_data = None
+    else:
+        logging.error(f"Base resume not found in Supabase or at '{resume_path}'. Please run the 'Parse Resume' workflow first.")
 
-        if default_resume_data:
-            # 2. Format Resume to Text
-            default_resume_text = format_resume_to_text(default_resume_data)
-            logging.info("Default resume data formatted to text.")
+    if default_resume_data:
+        # 2. Format Resume to Text
+        default_resume_text = format_resume_to_text(default_resume_data)
+        logging.info("Default resume data formatted to text.")
 
-            # 3. Fetch Jobs to Score
-            jobs_to_score_initially = supabase_utils.get_jobs_to_score(config.JOBS_TO_SCORE_PER_RUN)
-            if not jobs_to_score_initially:
-                logging.info("No jobs require initial scoring at this time.")
-            else:
-                logging.info(f"Processing {len(jobs_to_score_initially)} jobs for initial scoring...")
-                successful_initial_scores = 0
-                failed_initial_scores = 0
+        # 3. Fetch Jobs to Score
+        jobs_to_score_initially = supabase_utils.get_jobs_to_score(config.JOBS_TO_SCORE_PER_RUN)
+        if not jobs_to_score_initially:
+            logging.info("No jobs require initial scoring at this time.")
+        else:
+            logging.info(f"Processing {len(jobs_to_score_initially)} jobs for initial scoring...")
+            successful_initial_scores = 0
+            failed_initial_scores = 0
 
-                # 4. Loop Through Jobs and Score Them
-                for i, job in enumerate(jobs_to_score_initially):
-                    job_id = job.get('job_id')
-                    if not job_id:
-                        logging.warning("Found job data without job_id during initial scoring. Skipping.")
-                        failed_initial_scores +=1
-                        continue
+            # 4. Loop Through Jobs and Score Them
+            for i, job in enumerate(jobs_to_score_initially):
+                job_id = job.get('job_id')
+                if not job_id:
+                    logging.warning("Found job data without job_id during initial scoring. Skipping.")
+                    failed_initial_scores +=1
+                    continue
 
-                    logging.info(f"--- Initial Scoring Job {i+1}/{len(jobs_to_score_initially)} (ID: {job_id}) ---")
-                    score = get_resume_score_from_ai(default_resume_text, job)
+                logging.info(f"--- Initial Scoring Job {i+1}/{len(jobs_to_score_initially)} (ID: {job_id}) ---")
+                score = get_resume_score_from_ai(default_resume_text, job)
 
-                    if score is not None:
-                        if supabase_utils.update_job_score(job_id, score, resume_score_stage="initial"):
-                            successful_initial_scores += 1
-                        else:
-                            failed_initial_scores += 1
+                if score is not None:
+                    if supabase_utils.update_job_score(job_id, score, resume_score_stage="initial"):
+                        successful_initial_scores += 1
                     else:
                         failed_initial_scores += 1
+                else:
+                    failed_initial_scores += 1
 
-                    if i < len(jobs_to_score_initially) - 1:
-                        logging.debug(f"Waiting {config.LLM_REQUEST_DELAY_SECONDS} seconds before next API call...")
-                        time.sleep(config.LLM_REQUEST_DELAY_SECONDS)
-                
-                initial_score_end_time = time.time()
-                logging.info("--- Initial Scoring Phase Finished ---")
-                logging.info(f"Successfully initially scored: {successful_initial_scores}")
-                logging.info(f"Failed/Skipped initial scores: {failed_initial_scores}")
-                logging.info(f"Total initial scoring time: {initial_score_end_time - initial_score_start_time:.2f} seconds")
+                if i < len(jobs_to_score_initially) - 1:
+                    logging.debug(f"Waiting {config.LLM_REQUEST_DELAY_SECONDS} seconds before next API call...")
+                    time.sleep(config.LLM_REQUEST_DELAY_SECONDS)
+            
+            initial_score_end_time = time.time()
+            logging.info("--- Initial Scoring Phase Finished ---")
+            logging.info(f"Successfully initially scored: {successful_initial_scores}")
+            logging.info(f"Failed/Skipped initial scores: {failed_initial_scores}")
+            logging.info(f"Total initial scoring time: {initial_score_end_time - initial_score_start_time:.2f} seconds")
 
     # # --- Phase 2: Re-scoring with Custom Resumes ---
     rescore_jobs_with_custom_resume() 

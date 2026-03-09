@@ -60,17 +60,40 @@ def parse_resume_with_ai(resume_text):
     )
     return response_text
 
-def main(pdf_file_path):
+def main():
     """
     Main function to orchestrate the resume parsing process.
+    Downloads the resume PDF from Supabase Storage, parses it with AI, 
+    and saves the structured data to both local file and Supabase DB.
     """
-    # 1. Extract text from PDF
+    import io
+    import os
+    import supabase_utils
+
+    pdf_file_path = "./resume.pdf"
+
+    # 1. Try to download resume PDF from Supabase Storage
+    pdf_bytes = supabase_utils.download_resume_from_storage("resume.pdf")
+
+    if pdf_bytes:
+        print("Successfully downloaded resume.pdf from Supabase Storage.")
+        # Write to a temporary local file for pdfplumber
+        with open(pdf_file_path, 'wb') as f:
+            f.write(pdf_bytes)
+    elif os.path.exists(pdf_file_path):
+        print(f"Supabase Storage download failed. Using local file: {pdf_file_path}")
+    else:
+        print("ERROR: Could not find resume.pdf in Supabase Storage or locally.")
+        print("Please upload your resume.pdf to the 'resumes' bucket in your Supabase Storage dashboard.")
+        return
+
+    # 2. Extract text from PDF
     resume_text = extract_text_from_pdf(pdf_file_path)
     if not resume_text:
         print("Failed to extract text. Exiting.")
         return
 
-    # 2. Parse resume text with AI
+    # 3. Parse resume text with AI
     parsed_resume_details_str = parse_resume_with_ai(resume_text)
     if not parsed_resume_details_str:
         print("Failed to parse resume. Exiting.")
@@ -97,19 +120,33 @@ def main(pdf_file_path):
         print(f"Raw response: {parsed_resume_details_str}")
         return
 
-    # 3. Save parsed data to local JSON file
+    # 4. Save parsed data to Supabase base_resume table
+    save_success = supabase_utils.save_base_resume(resume_data_dict)
+    if save_success:
+        print("Successfully saved parsed resume to Supabase database.")
+    else:
+        print("WARNING: Failed to save parsed resume to Supabase database.")
+
+    # 5. Also save to local JSON file (for development/fallback)
     output_path = config.BASE_RESUME_PATH
     try:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(resume_data_dict, f, indent=4)
-        print(f"Successfully saved parsed resume to {output_path}")
+        print(f"Successfully saved parsed resume to local file: {output_path}")
     except Exception as e:
         print(f"Error saving resume to {output_path}: {e}")
+
+    # 6. Clean up the temporary PDF file (don't leave sensitive data on disk in CI)
+    if pdf_bytes and os.path.exists(pdf_file_path):
+        try:
+            os.remove(pdf_file_path)
+            print(f"Cleaned up temporary file: {pdf_file_path}")
+        except Exception as e:
+            print(f"Warning: Could not clean up {pdf_file_path}: {e}")
 
     print("\nResume processing finished.")
 
 
 if __name__ == "__main__":
-    pdf_path = "./resume.pdf"
-    print(f"Starting resume processing for: {pdf_path}")
-    main(pdf_path)
+    print("Starting resume processing...")
+    main()

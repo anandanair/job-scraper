@@ -459,19 +459,24 @@ async def run_job_processing_cycle():
     """
     logging.info("Starting new job processing cycle...")
 
-    # 1. Retrieve Base Resume Details from local file
+    # 1. Retrieve Base Resume Details from Supabase (with local file fallback)
     resume_path = getattr(config, 'BASE_RESUME_PATH', 'resume.json')
-    if not os.path.exists(resume_path):
-        logging.error(f"Base resume not found at '{resume_path}'. Please run resume_parser.py first.")
-        return
-
-    logging.info(f"Loading local base resume from: {resume_path}")
-    raw_resume_details = None
-    try:
-        with open(resume_path, 'r', encoding='utf-8') as f:
-            raw_resume_details = json.load(f)
-    except Exception as e:
-        logging.error(f"Failed to read or decode {resume_path}: {e}")
+    
+    # Try fetching resume from Supabase first
+    raw_resume_details = supabase_utils.get_base_resume()
+    
+    if raw_resume_details:
+        logging.info("Successfully loaded base resume from Supabase database.")
+    elif os.path.exists(resume_path):
+        logging.info(f"Supabase fetch failed. Falling back to local file: {resume_path}")
+        try:
+            with open(resume_path, 'r', encoding='utf-8') as f:
+                raw_resume_details = json.load(f)
+        except Exception as e:
+            logging.error(f"Failed to read or decode {resume_path}: {e}")
+            return
+    else:
+        logging.error(f"Base resume not found in Supabase or at '{resume_path}'. Please run the 'Parse Resume' workflow first.")
         return
 
     if not raw_resume_details:
