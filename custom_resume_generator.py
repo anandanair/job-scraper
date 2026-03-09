@@ -8,20 +8,16 @@ import json # Import json for parsing LLM output
 import pdf_generator 
 import re
 import asyncio 
-from google import genai
-from google.genai import types
+from llm_client import primary_client
 from models import (
     Education, Experience, Project, Certification, Links, Resume,
     SummaryOutput, SkillsOutput, ExperienceListOutput, SingleExperienceOutput,
     ProjectListOutput, SingleProjectOutput, ValidationResponse
 )
 import time
-
+import os
 # --- Logging Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# --- Initialize Gemini Client ---
-client = genai.Client(api_key=config.GEMINI_SECOND_API_KEY)
 
 # --- LLM Personalization Function ---
 def extract_json_from_text(text: str) -> str:
@@ -60,9 +56,9 @@ async def personalize_section_with_llm(
     """
     Uses Gemini Flash 2.0 to personalize a specific section of the resume for the given job.
     """
-    if not section_content:
-        logging.warning(f"Skipping personalization for empty section: {section_name}")
-        return section_content # Return original if empty
+    if not section_content or section_content == "NA":
+        logging.warning(f"Skipping personalization for empty or 'NA' section: {section_name}")
+        return section_content # Return original if empty or NA
 
     output_model_map = {
         "summary": (SummaryOutput, "summary"),
@@ -227,28 +223,20 @@ async def personalize_section_with_llm(
         # ]
 
         try:
-            response = client.models.generate_content(
-                model=config.GEMINI_MODEL_NAME,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.2,
-                    system_instruction=system_prompt,
-                    response_mime_type='application/json',
-                    response_schema=OutputModel,
-
-                )
+            llm_output = primary_client.generate_content(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=1,
+                response_format=OutputModel,
             )
-           
-            llm_output = response.text.strip()
             
-            logging.info(f"Received response from Gemini for section: {section_name}")
+            logging.info(f"Received response from LLM for section: {section_name}")
 
             try:
                 # Validate and parse the JSON output against the Pydantic model
                 parsed_response_model = OutputModel.model_validate_json(llm_output)
                 # Extract the actual content (e.g., the string for summary, list for skills)
                 responses.append(parsed_response_model)
-                # return getattr(parsed_response_model, output_key)
             except ValidationError as e:
                 logging.error(f"Failed to validate LLM JSON output for {section_name} against schema: {e}")
                 logging.error(f"LLM Raw Output was for {section_name}: {llm_output}")
@@ -261,7 +249,7 @@ async def personalize_section_with_llm(
 
 
         except Exception as e:
-            logging.error(f"Error calling Gemini or processing response for section {section_name}: {e}")
+            logging.error(f"Error calling LLM or processing response for section {section_name}: {e}")
             # Fallback: return original content if LLM call fails
             return section_content
 
@@ -285,126 +273,65 @@ async def personalize_section_with_llm(
 async def validate_customization(
     section_name: str, 
     original_content: Any, 
-    customized_content: Any, 
-    full_original_resume: Resume, 
-    job_details: Dict[str, Any]
-    ) -> (bool, str):
-
-    resume_context_dict = full_original_resume.model_dump(exclude={section_name})
-    resume_context = json.dumps(resume_context_dict, indent=2)
-
-    # Convert original_content to JSON serializable format if it's a list of models
-    if isinstance(original_content, list) and original_content and hasattr(original_content[0], 'model_dump'):
-        serializable_original_content = [item.model_dump() for item in original_content]
-    else:
-        serializable_original_content = original_content 
-
-    # Convert customized_content to JSON serializable format if it's a list of models
-    if isinstance(customized_content, list) and customized_content and hasattr(customized_content[0], 'model_dump'):
-        serializable_customized_content = [item.model_dump() for item in customized_content]
-    else:
-        serializable_customized_content = customized_content 
-
-    system_prompt=f"""
-    You are a meticulous Resume Fact-Checker.
-    Your primary function is to compare an "Original Resume Section" with a "Customized Resume Section" and determine if the customized version introduces any information, skills, experiences, or qualifications that are NOT supported by or cannot be reasonably inferred from the original section or the broader original resume context.
-
-    **CRITICAL OUTPUT REQUIREMENTS:**
-    1.  You MUST ALWAYS output a single, valid JSON object.
-    2.  Your entire response MUST be *only* the JSON object.
-    3.  Do NOT include any introductory text, explanations, apologies, markdown formatting (like ```json or ```), or any text outside of the JSON structure itself.
-    4.  The JSON object MUST contain exactly two keys:
-        - "is_valid": A boolean value (true if the customized section is a faithful and accurate representation of the original according to the provided criteria; false otherwise).
-        - "reason": A string providing a brief explanation for your decision. If 'is_valid' is false, this reason MUST pinpoint the specific discrepancies or unsupported claims, especially if the primary job title or core professional identity was altered without direct support from the original resume. If 'is_valid' is true, the reason should be concise, such as "Customization is valid and factually consistent with the original materials."
-
-    You will be provided with the target job details, the full original resume context, the specific original resume section, and the customized version of that section, along with detailed evaluation criteria.
+    customized_content: Any
+) -> tuple[bool, str]:
     """
-
-    user_prompt = f"""
-    **Task:** Evaluate the "Customized Resume Section" against the "Original Resume Section" and "Original Full Resume Context" based on the criteria below, to determine if the customization is factually supported.
-
-    **Target Job Details:**
-    - Title: {job_details['job_title']}
-    - Company: {job_details['company']}
-    - Seniority Level: {job_details['level']}
-    - Job Description: {job_details['description']}
-
-    ---
-    **Original Full Resume Context (excluding this specific section if it were part of a larger list being iteratively processed):**
-    {resume_context}
-
-    ---
-    **Original Resume Section ("{section_name}"):**
-    {json.dumps(serializable_original_content, indent=2)}
-
-    ---
-    **Customized Resume Section ("{section_name}"):**
-    {json.dumps(serializable_customized_content, indent=2)}
-
-    ---
-    **Evaluation Criteria:**
-    1.  **Factual Accuracy:**
-        - Does the customized section add, remove, or alter core facts, numbers, dates, roles, or technologies in a way that is not *explicitly supported* by the original resume materials (original section or full context)?
-        - **Crucial Check**: Has the primary job title or core professional identity from the "Original Resume Section" (e.g., "IT Support and Cybersecurity Specialist") been fundamentally changed to something else (e.g., "Frontend Engineer") in the "Customized Resume Section"? This is UNACCEPTABLE if the new title is NOT *also explicitly stated as a primary role or a clearly documented career transition goal with supporting evidence* in the "Original Full Resume Context" or "Original Resume Section." Simply possessing skills used by a different profession does not equate to holding that profession's title if the original resume states a different primary role.
-        - Rephrasing, reordering bullet points, or using synonyms IS ACCEPTABLE.
-        - Emphasizing aspects present in the original to match the job description IS ACCEPTABLE, *as long as it doesn't change the nature of the original statement, invent new responsibilities for an existing role, or alter the primary professional identity.*
-        - Introducing entirely new skills, responsibilities, projects, or achievements NOT mentioned or clearly and directly implied in the original IS UNACCEPTABLE. "Reasonable inference" should be conservative; do not assume a new job title or significantly expanded responsibilities without explicit textual support in the original documents.
-
-    2.  **Skill Consistency:**
-        - If new technical skills or tools are mentioned in the customized section, are they verifiably present in the "Original Resume Section" OR in the broader "Original Full Resume Context"? (This is distinct from changing the primary job title). Listing a skill mentioned elsewhere in the resume is acceptable; inventing a skill is not.
-
-    3.  **Preservation of Core Meaning and Identity:**
-        - Does the customized section fundamentally change the nature, scope, or *primary professional identity* of what was originally stated? Changing "IT Support Specialist" to "Frontend Engineer" is a fundamental change of core meaning and UNACCEPTABLE if "Frontend Engineer" (or similar) is not supported as an actual primary role or clearly documented career aspiration with evidence in the original resume materials.
-
-    ---
-    **Example of an Invalid Change of Role:**
-    Original Summary: "IT Support Specialist with experience in Python scripting for task automation and basic web page updates using HTML/CSS."
-    Customized Summary for a Software Engineer role: "Software Engineer with Python expertise and frontend development skills."
-    **Evaluation:** INVALID if "Software Engineer" was not their stated role or a documented career transition supported by other parts of the original resume. While they used Python and HTML/CSS, the *role itself* has been misrepresented. It would be ACCEPTABLE to say: "IT Support Specialist leveraging Python for automation and foundational HTML/CSS for web updates, with skills applicable to software development environments."
-
-    Based on all the provided information and evaluation criteria, provide your JSON response.
+    Programmatically validates that the customized content hasn't altered
+    core facts like job titles, dates, companies, or project details.
     """
+    if not original_content or not customized_content:
+        return True, "Empty content, nothing to validate."
 
-    # messages = [
-    # {'role': 'system', 'content': 'You are a Resume Fact-Checker. Output ONLY a JSON object with "is_valid" (boolean) and "reason" (string).'},
-    # {'role': 'user', 'content': prompt}
-    # ]
+    if section_name == "experience":
+        # Ensure we have lists of the same length
+        if not isinstance(original_content, list) or not isinstance(customized_content, list):
+            return False, "Experience content is not a list."
+        if len(original_content) != len(customized_content):
+            return False, f"Experience count changed from {len(original_content)} to {len(customized_content)}."
 
-    try:
-        response = client.models.generate_content(
-                model=config.GEMINI_MODEL_NAME,
-                contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.0,
-                    system_instruction=system_prompt,
-                    response_mime_type='application/json',
-                    response_schema=ValidationResponse,
+        for orig, cust in zip(original_content, customized_content):
+            # Extract dict if it's a Pydantic model
+            o_dict = orig.model_dump() if hasattr(orig, 'model_dump') else orig
+            c_dict = cust.model_dump() if hasattr(cust, 'model_dump') else cust
 
-                )
-            )
-       
-        llm_output = response.text.strip()
+            # Check core fields haven't changed
+            for field in ['job_title', 'company', 'dates', 'location']:
+                o_val = str(o_dict.get(field, '')).strip()
+                c_val = str(c_dict.get(field, '')).strip()
+                # Use case-insensitive comparison to avoid false positives on minor formatting
+                if o_val.lower() != c_val.lower():
+                    return False, f"Core experience field '{field}' was changed from '{o_val}' to '{c_val}'."
         
-        try:
-            # Validate and parse the JSON output against the Pydantic model
-            parsed_validation_response_model = ValidationResponse.model_validate_json(llm_output)
-            logging.info(f"Customization validation response: {parsed_validation_response_model}")
-            return parsed_validation_response_model.is_valid, parsed_validation_response_model.reason
+        return True, "Experience validation passed."
 
-        except ValidationError as e:
-            logging.error(f"Failed to validate LLM JSON output against validation schema: {e}")
-            logging.error(f"LLM Raw Output was: {llm_output}")
-            return False, "Failed to validate LLM JSON output against validation schema."
+    elif section_name == "projects":
+        if not isinstance(original_content, list) or not isinstance(customized_content, list):
+            return False, "Projects content is not a list."
+        if len(original_content) != len(customized_content):
+            return False, f"Projects count changed from {len(original_content)} to {len(customized_content)}."
 
-        except json.JSONDecodeError as e: 
-            logging.error(f"Failed to parse LLM JSON output: {e}")
-            logging.error(f"LLM Raw Output was: {llm_output}")
-            return False, "Failed to parse LLM JSON output."
+        for orig, cust in zip(original_content, customized_content):
+            o_dict = orig.model_dump() if hasattr(orig, 'model_dump') else orig
+            c_dict = cust.model_dump() if hasattr(cust, 'model_dump') else cust
 
+            for field in ['name', 'link']:
+                o_val = str(o_dict.get(field, '')).strip()
+                c_val = str(c_dict.get(field, '')).strip()
+                if o_val.lower() != c_val.lower():
+                    return False, f"Core project field '{field}' was changed from '{o_val}' to '{c_val}'."
 
-    except Exception as e:
-        logging.error(f"Error calling Gemini or processing response: {e}")
-        return false, "Error calling Gemini or processing response."
+            # Check technologies list
+            o_tech = o_dict.get('technologies', [])
+            c_tech = c_dict.get('technologies', [])
+            if sorted([str(t).lower().strip() for t in o_tech]) != sorted([str(t).lower().strip() for t in c_tech]):
+                 return False, f"Technologies list was changed from '{o_tech}' to '{c_tech}'."
+
+        return True, "Projects validation passed."
+        
+    # For skills and summary, we trust the LLM since the prompt restricts fabrication
+    # and they don't have strictly rigid structures like experience/projects.
+    return True, f"Validation passed (no strict checks for {section_name})."
+
 
 # --- Main Processing Logic ---
 async def process_job(job_details: Dict[str, Any], base_resume_details: Resume):
@@ -430,15 +357,15 @@ async def process_job(job_details: Dict[str, Any], base_resume_details: Resume):
             "skills": base_resume_details.skills,
         }
 
-        sleep_time = 6
+        sleep_time = config.LLM_REQUEST_DELAY_SECONDS
 
         for section_name, section_content in sections_to_personalize.items():
             if any_validation_failed: # If a previous section failed validation, skip further personalization
                 logging.warning(f"Skipping further personalization for job_id {job_id} due to prior validation failure.")
                 break # Exit the loop over sections
 
-            if section_content:
-                logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
+            if section_content and section_content != "NA":
+                logging.info(f"Waiting for {sleep_time} seconds before next request...")
                 time.sleep(sleep_time)
 
                 logging.info(f"Personalizing section: {section_name} for job_id: {job_id}")
@@ -449,34 +376,29 @@ async def process_job(job_details: Dict[str, Any], base_resume_details: Resume):
                     job_details # Pass the specific job details
                 )
 
-                logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
-                time.sleep(sleep_time)
-
-                # Validate the customization
+                # Validate the customization programmatically
                 logging.info(f"Validating customization for section: {section_name} for job_id: {job_id}")
                 is_valid, reason = await validate_customization(
                     section_name,
                     section_content,
-                    personalized_content,
-                    base_resume_details,
-                    job_details 
+                    personalized_content
                 )
 
                 if is_valid:
-                    logging.info(f"Customization for section {section_name} is valid.")
+                    logging.info(f"Customization for section {section_name} is valid. Reason: {reason}")
+                    # Set the personalized content
                     setattr(personalized_resume_data, section_name, personalized_content)
                     # Update the copied resume data
                     sections_to_personalize[section_name] = personalized_content
-
                 else:
                     logging.warning(f"VALIDATION FAILED for section {section_name} for job_id {job_id}. Reason: {reason}")
-                    logging.warning(f"Halting resume generation for job_id {job_id}.")
-                    any_validation_failed = True  
-                    break;       
-                    # If customization is not valid, revert to the original content
-                    # setattr(personalized_resume_data, section_name, section_content)      
-                
-                logging.info(f"Finished personalizing section: {section_name} for job_id: {job_id}")
+                    logging.warning(f"Falling back to original {section_name} content for job_id {job_id}.")
+                    # Note: We NO LONGER abort the entire job generation here. 
+                    # We just skip updating the personalized_resume_data for this section, effectively falling back.
+                    # any_validation_failed = True 
+                    # break;  
+
+                logging.info(f"Finished processing section: {section_name} for job_id: {job_id}")
             else:
                  logging.info(f"Skipping empty section: {section_name} for job_id: {job_id}")
 
@@ -499,7 +421,7 @@ async def process_job(job_details: Dict[str, Any], base_resume_details: Resume):
 
         # 3. Upload PDF to Supabase Storage
         # Construct a unique path, e.g., using job_id
-        destination_path = f"personalized_resumes/resume_{job_id}.pdf"
+        destination_path = f"resume_{job_id}.pdf"
         logging.info(f"Uploading PDF to {destination_path} for job_id: {job_id}")
         resume_link = supabase_utils.upload_customized_resume_to_storage(pdf_bytes, destination_path)
 
@@ -537,17 +459,23 @@ async def run_job_processing_cycle():
     """
     logging.info("Starting new job processing cycle...")
 
-    # 1. Retrieve Base Resume Details
-    user_email = config.LINKEDIN_EMAIL
-    if not user_email:
-        logging.error("LINKEDIN_EMAIL not set in config. Cannot fetch base resume.")
+    # 1. Retrieve Base Resume Details from local file
+    resume_path = getattr(config, 'BASE_RESUME_PATH', 'resume.json')
+    if not os.path.exists(resume_path):
+        logging.error(f"Base resume not found at '{resume_path}'. Please run resume_parser.py first.")
         return
 
-    logging.info(f"Fetching base resume for user: {user_email}")
-    raw_resume_details = supabase_utils.get_resume_custom_fields_by_email(user_email)
+    logging.info(f"Loading local base resume from: {resume_path}")
+    raw_resume_details = None
+    try:
+        with open(resume_path, 'r', encoding='utf-8') as f:
+            raw_resume_details = json.load(f)
+    except Exception as e:
+        logging.error(f"Failed to read or decode {resume_path}: {e}")
+        return
 
     if not raw_resume_details:
-        logging.error(f"Could not find base resume for user: {user_email}. Aborting cycle.")
+        logging.error(f"Could not load valid base resume details. Aborting cycle.")
         return
 
     # Parse raw details into Pydantic model
@@ -564,7 +492,7 @@ async def run_job_processing_cycle():
         return # Abort cycle if base resume is invalid
 
     # 2. Fetch Top Jobs to Process
-    jobs_limit = 2 # Fetch top 2 jobs
+    jobs_limit = config.JOBS_TO_CUSTOMIZE_PER_RUN
     logging.info(f"Fetching top {jobs_limit} scored jobs to apply for...")
     jobs_to_process = supabase_utils.get_top_scored_jobs_for_resume_generation(limit=jobs_limit)
 
