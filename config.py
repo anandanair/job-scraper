@@ -11,7 +11,9 @@ SUPABASE_SERVICE_ROLE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_TABLE_NAME: str = "jobs"
 SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME = "customized_resumes"
 SUPABASE_STORAGE_BUCKET="personalized_resumes"
-BASE_RESUME_PATH = "resume.json"
+SUPABASE_RESUME_STORAGE_BUCKET="resumes"
+SUPABASE_BASE_RESUME_TABLE_NAME = "base_resume"
+BASE_RESUME_PATH = "resume.json"  # Local fallback for development
 
 # --- LLM Configuration ---
 # Use any model supported by LiteLLM (400+ models). 
@@ -44,10 +46,6 @@ JOBS_TO_SCORE_PER_RUN = int(os.environ.get("JOBS_TO_SCORE_PER_RUN", "1"))  # Job
 
 # --- Resume Customization Configuration ---
 JOBS_TO_CUSTOMIZE_PER_RUN = int(os.environ.get("JOBS_TO_CUSTOMIZE_PER_RUN", "1"))  # Jobs per customization run
-
-# --- LinkedIn Configuration ---
-LINKEDIN_EMAIL = os.environ.get("LINKEDIN_EMAIL")
-
 
 # --- Scraping Parameters ---
 SCRAPING_SOURCES = ["linkedin"] # Current options: "linkedin", "careers_future"
