@@ -1,6 +1,6 @@
 from supabase import create_client, Client
 import config # Import configuration
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 from models import Resume
 import datetime # Import datetime module
 import logging # Import logging
