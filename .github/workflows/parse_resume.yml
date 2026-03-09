@@ -1,20 +1,20 @@
 name: Parse Resume Manually
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   parse_resume_job:
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4 
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11" 
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -32,5 +32,10 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_FIRST_API_KEY: ${{ secrets.GEMINI_FIRST_API_KEY }} # Gemini API Key
+          # LLM Configuration (set via Repository Variables / Secrets)
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.GEMINI_FIRST_API_KEY }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python resume_parser.py

@@ -1,8 +1,9 @@
-name: Hourly Resume Customization
+name: Resume Customization
 
 on:
   schedule:
-    - cron: "0 * * * *" # Runs at the beginning of every hour
+    # Runs every 6 hours (configurable — adjust to match your quota)
+    - cron: "0 */6 * * *"
   workflow_dispatch: # Allows manual triggering from the Actions tab in GitHub
 
 jobs:
@@ -15,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10" # Specify your Python version, e.g., 3.9, 3.10, 3.11
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
@@ -28,8 +29,16 @@ jobs:
 
       - name: Run resume customization script
         env:
-          GEMINI_SECOND_API_KEY: ${{ secrets.GEMINI_SECOND_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
+          # LLM Configuration (set via Repository Variables / Secrets)
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.GEMINI_FIRST_API_KEY }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_MAX_RPM: ${{ vars.LLM_MAX_RPM }}
+          LLM_REQUEST_DELAY_SECONDS: ${{ vars.LLM_REQUEST_DELAY_SECONDS }}
+          JOBS_TO_CUSTOMIZE_PER_RUN: ${{ vars.JOBS_TO_CUSTOMIZE_PER_RUN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python custom_resume_generator.py
