@@ -341,7 +341,7 @@ def upload_customized_resume_to_storage(file_content: bytes, destination_path: s
                           Ensure this path is unique per job/resume.
 
     Returns:
-        The public URL of the uploaded file, or None if upload fails.
+        The destination path of the uploaded file, or None if upload fails.
     """
     if not file_content:
         logging.error("Cannot upload empty file content.")
@@ -363,12 +363,8 @@ def upload_customized_resume_to_storage(file_content: bytes, destination_path: s
                 file_options={"content-type": "application/pdf", "upsert": "true"} # Set upsert based on desired behavior
             )
 
-        # Retrieve the public URL after successful upload
-        public_url_response = supabase.storage.from_(config.SUPABASE_STORAGE_BUCKET)\
-            .get_public_url(destination_path)
-
-        logging.info(f"Successfully uploaded resume. Public URL: {public_url_response}")
-        return public_url_response
+        logging.info(f"Successfully uploaded resume to path: {destination_path}")
+        return destination_path
 
     except Exception as e:
         # Supabase client might raise specific exceptions, catch broadly for now
@@ -423,19 +419,20 @@ def update_job_with_resume_link(job_id: str, customized_resume_id: str,  new_sta
         logging.error(f"Error updating job {job_id} in Supabase: {e}")
         return False
 
-def save_customized_resume(resume_data: 'Resume', resume_link: str) -> Optional[Any]: # Return type changed
+def save_customized_resume(resume_data: 'Resume', resume_path: str) -> Optional[Any]: # Return type changed
     """
     Saves a customized resume to the Supabase 'customized_resumes' table.
 
     Args:
         resume_data: A Resume object (Pydantic model) containing the resume details.
+        resume_path: The path of the uploaded resume in storage.
 
     Returns:
         The ID (typically string UUID or integer) of the inserted resume if successful, None otherwise.
     """
 
-    if not resume_link:
-        logging.error("Resume Link is required for saving the resume.")
+    if not resume_path:
+        logging.error("Resume Path is required for saving the resume.")
         return False
 
     if not resume_data:
@@ -454,11 +451,11 @@ def save_customized_resume(resume_data: 'Resume', resume_link: str) -> Optional[
         else:
             data_to_insert = resume_data.dict(exclude_none=True)
 
-        data_to_insert['resume_link'] = resume_link
+        data_to_insert['resume_link'] = resume_path
 
         logging.info(
             f"Saving customized resume for email: {getattr(resume_data, 'email', 'N/A')} "
-            f"with link '{resume_link}' to table '{config.SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME}'"
+            f"with path '{resume_path}' to table '{config.SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME}'"
         )
 
         response = supabase.table(config.SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME)\

@@ -423,22 +423,22 @@ async def process_job(job_details: Dict[str, Any], base_resume_details: Resume):
         # Construct a unique path, e.g., using job_id
         destination_path = f"resume_{job_id}.pdf"
         logging.info(f"Uploading PDF to {destination_path} for job_id: {job_id}")
-        resume_link = supabase_utils.upload_customized_resume_to_storage(pdf_bytes, destination_path)
+        resume_path = supabase_utils.upload_customized_resume_to_storage(pdf_bytes, destination_path)
 
-        if not resume_link:
+        if not resume_path:
             logging.error(f"Failed to upload resume PDF for job_id: {job_id}")
             # Skip updating the job record if upload fails
             return # Stop processing this job
 
-        logging.info(f"Successfully uploaded PDF for job_id: {job_id}. Link: {resume_link}")
+        logging.info(f"Successfully uploaded PDF for job_id: {job_id}. Path: {resume_path}")
 
         # 4. Add Customized Resume to Supabase
         logging.info("Adding customized resume to Supabase")
-        customized_resume_id = supabase_utils.save_customized_resume(personalized_resume_data, resume_link)
+        customized_resume_id = supabase_utils.save_customized_resume(personalized_resume_data, resume_path)
 
 
         # 4. Update Job Record in Supabase
-        logging.info(f"Updating job record for job_id: {job_id} with resume link.")
+        logging.info(f"Updating job record for job_id: {job_id} with resume path.")
         # Optionally set a new status like "resume_generated" or "ready_to_apply"
         update_success = supabase_utils.update_job_with_resume_link(job_id, customized_resume_id, new_status="resume_generated")
 
