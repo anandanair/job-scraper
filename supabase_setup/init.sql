@@ -770,9 +770,22 @@ ALTER TABLE ONLY "public"."base_resume"
     ADD CONSTRAINT "base_resume_pkey" PRIMARY KEY ("id");
 
 -- Auto-update the updated_at column on changes
+-- NOTE: Cannot reuse update_last_updated_column() because it references
+-- "last_updated" which doesn't exist on base_resume (which uses "updated_at").
+CREATE OR REPLACE FUNCTION "public"."update_base_resume_updated_at_column"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+   NEW.updated_at = now();
+   RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION "public"."update_base_resume_updated_at_column"() OWNER TO "postgres";
+
 CREATE OR REPLACE TRIGGER "update_base_resume_updated_at"
     BEFORE UPDATE ON "public"."base_resume"
-    FOR EACH ROW EXECUTE FUNCTION "public"."update_last_updated_column"();
+    FOR EACH ROW EXECUTE FUNCTION "public"."update_base_resume_updated_at_column"();
 
 ALTER TABLE "public"."base_resume" ENABLE ROW LEVEL SECURITY;
 
