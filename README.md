@@ -64,11 +64,8 @@ This project is designed to run primarily through GitHub Actions. Follow these s
       - `GROQ_API_KEY`: (Optional) Your Groq API key if using Groq models.
       - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase project's `service_role` key.
       - `SUPABASE_URL`: Your Supabase project's URL.
-    - **Add Repository Variables** (Click the "Variables" tab, then "New repository variable"):
-      - `LLM_MODEL`: (Optional) The model name (e.g., `gemini` to cycle Gemini models, or `openai/gpt-4o-mini`). Defaults to `gemini`.
-      - `LLM_MAX_RPM`: (Optional) Max requests per minute for your API key. Default is `10`.
-      - `LLM_REQUEST_DELAY_SECONDS`: (Optional) Delay between API calls in seconds. Default is `8`.
-      - `JOBS_TO_SCORE_PER_RUN`: (Optional) Number of jobs to score per workflow run. Default is `1`.
+
+    - > **Note:** Other non-sensitive variables like `LLM_MODEL`, `LLM_MAX_RPM`, and `JOBS_TO_SCORE_PER_RUN` are now hardcoded in `config.py` as safe defaults. You only need to set them as GitHub Variables if you want to override the `config.py` defaults (though this is no longer the recommended approach).
 
 5.  **Upload Your Resume to Supabase Storage:**
     - In your Supabase project dashboard, navigate to **Storage** in the left sidebar.
@@ -86,29 +83,31 @@ This project is designed to run primarily through GitHub Actions. Follow these s
     - Edit the file to customize your job search preferences. The main variables you'll likely want to change are:
 
       ```python
-      # --- Scraping Parameters ---
-      SCRAPING_SOURCES = ["linkedin", "careers_future"] # Providers to scrape
-      MAX_JOBS_PER_SEARCH = {
-          "linkedin": 2, # Max jobs to scrape per LinkedIn query
-          "careers_future": 10, # Max jobs to scrape per CareersFuture query
-      }
-
       # --- LinkedIn Search Configuration ---
-      LINKEDIN_SEARCH_QUERIES = ["it support", "full stack web developer", "application support", "cybersecurity analyst", "AI"] # Keywords for LinkedIn job search
-      LINKEDIN_LOCATION = "Singapore" # Target location for LinkedIn jobs
-      LINKEDIN_GEO_ID = 102454443 # Geographical ID for LinkedIn location (e.g., Singapore)
-      LINKEDIN_JOB_TYPE = "F" # Job type: "F" for Full-time, "C" for Contract, etc.
-      LINKEDIN_JOB_POSTING_DATE = "r86400" # Time filter: "r86400" for past 24 hours, "r604800" for past week, leave it empty for 'anytime'
+      LINKEDIN_SEARCH_QUERIES = ["maths lecturer", "statistics lecturer"] # Your keywords
+      LINKEDIN_LOCATION = "Singapore" # Target location
+      LINKEDIN_GEO_ID = 102454443 # Geo ID (Singapore: 102454443, Dubai: 100205264)
+      LINKEDIN_JOB_TYPE = "F" # "F" for Full-time
+      LINKEDIN_JOB_POSTING_DATE = "r86400" # "r86400" for past 24 hours
 
       # --- Careers Future Search Configuration ---
       CAREERS_FUTURE_SEARCH_QUERIES = ["IT Support", "Full Stack Web Developer"]
       CAREERS_FUTURE_SEARCH_CATEGORIES = ["Information Technology"]
-      CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = ["Full Time"]
 
-      # --- LLM Configuration (Optional) ---
-      # LLM_MODEL = "gemini"                       # Google, dynamically switches models (Default)
-      # LLM_MODEL = "groq/llama-3.3-70b-versatile" # Groq (Free)
-      # LLM_MODEL = "openai/gpt-4o-mini"           # OpenAI
+      # --- LLM configuration ---
+      # For a full list of 100+ supported providers and model naming schemes, see:
+      # https://docs.litellm.ai/docs/providers
+
+      LLM_MODEL = "gemini"            # Model to use
+      LLM_MAX_RPM = 10                # Max requests per minute
+      LLM_REQUEST_DELAY_SECONDS = 8   # Delay between calls
+
+      # --- Processing Limits ---
+      JOBS_TO_SCORE_PER_RUN = 1       # Scaled for free tier
+      MAX_JOBS_PER_SEARCH = {
+          "linkedin": 2,
+          "careers_future": 10,
+      }
       ```
 
     - **IMPORTANT**: Do not modify other variables in `config.py` as they are carefully calibrated to prevent rate limiting and potential account bans. Only edit the search queries and location parameters shown above.
@@ -170,19 +169,12 @@ The individual Python scripts can still be run locally for development or testin
     - Add the keys and values that you configured as GitHub secrets:
 
       ```env
-      # LLM Configuration
-      LLM_MODEL="gemini"
+      # Essential Keys
       LLM_API_KEY="YOUR_LLM_API_KEY"
-      LLM_MAX_RPM="10"
-      JOBS_TO_SCORE_PER_RUN="1"
-
-      # Optional: Provider-specific keys (if not using LLM_API_KEY)
-      # OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
-      # GROQ_API_KEY="YOUR_GROQ_API_KEY"
-
-      # Supabase
       SUPABASE_URL="YOUR_SUPABASE_URL"
       SUPABASE_SERVICE_ROLE_KEY="YOUR_SUPABASE_SERVICE_ROLE_KEY"
+
+      # Note: LLM settings (MODEL, RPM, etc.) can be configured in config.py
       ```
 
 5.  **Run scripts locally (example):**
