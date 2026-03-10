@@ -3,22 +3,21 @@ name: Daily Job Scraper
 
 on:
   schedule:
-    # Runs every day at 10:00 UTC (6:00 PM SGT)
     - cron: "0 10 * * *"
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+  workflow_dispatch:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest # Use a standard Linux runner
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository code
-        uses: actions/checkout@v4 # Checks out your code
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11" # Specify your desired Python version
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -29,12 +28,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # LLM Configuration (set via Repository Variables / Secrets)
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.GEMINI_FIRST_API_KEY }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-          LLM_MAX_RPM: ${{ vars.LLM_MAX_RPM }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: python scraper.py # Execute your script
-
+        run: python scraper.py

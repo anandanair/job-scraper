@@ -28,32 +28,32 @@ BASE_RESUME_PATH = "resume.json"  # Local fallback for development
 #   "mistral/mistral-small-latest"       (Mistral)
 #   "openrouter/google/gemini-2.5-flash" (OpenRouter)
 # Full list: https://docs.litellm.ai/docs/providers
-LLM_MODEL = os.environ.get("LLM_MODEL", "gemini")
+LLM_MODEL = "gemini"
 
 # API keys — set only the key(s) needed for your chosen provider.
 # Backward compatible: GEMINI_API_KEY / GEMINI_FIRST_API_KEY / GEMINI_SECOND_API_KEY still work.
 LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_FIRST_API_KEY")
 
 # Rate Limiting & Quota Management
-LLM_MAX_RPM = int(os.environ.get("LLM_MAX_RPM", "10"))            # Max requests per minute
-LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "3"))     # Max retries on rate-limit errors
-LLM_RETRY_BASE_DELAY = int(os.environ.get("LLM_RETRY_BASE_DELAY", "10"))  # Base delay for backoff (seconds)
-LLM_DAILY_REQUEST_BUDGET = int(os.environ.get("LLM_DAILY_REQUEST_BUDGET", "0"))  # 0 = unlimited
-LLM_REQUEST_DELAY_SECONDS = int(os.environ.get("LLM_REQUEST_DELAY_SECONDS", "8"))  # Delay between API calls
+LLM_MAX_RPM = 10            # Max requests per minute
+LLM_MAX_RETRIES = 3         # Max retries on rate-limit errors
+LLM_RETRY_BASE_DELAY = 10    # Base delay for backoff (seconds)
+LLM_DAILY_REQUEST_BUDGET = 0 # 0 = unlimited
+LLM_REQUEST_DELAY_SECONDS = 8  # Delay between API calls
 
 # --- Resume Scoring Configuration ---
-JOBS_TO_SCORE_PER_RUN = int(os.environ.get("JOBS_TO_SCORE_PER_RUN", "1"))  # Jobs per script run
+JOBS_TO_SCORE_PER_RUN = 1  # Jobs per script run
 
 # --- Resume Customization Configuration ---
-JOBS_TO_CUSTOMIZE_PER_RUN = int(os.environ.get("JOBS_TO_CUSTOMIZE_PER_RUN", "1"))  # Jobs per customization run
+JOBS_TO_CUSTOMIZE_PER_RUN = 1  # Jobs per customization run
 
 # --- Scraping Parameters ---
 SCRAPING_SOURCES = ["linkedin"] # Current options: "linkedin", "careers_future"
 MAX_JOBS_PER_SEARCH = {
-    "linkedin": int(os.environ.get("MAX_JOBS_PER_SEARCH_LINKEDIN", "2")),
-    "careers_future": int(os.environ.get("MAX_JOBS_PER_SEARCH_CAREERS_FUTURE", "10")),
+    "linkedin": 2,
+    "careers_future": 10,
 }
-DEFAULT_MAX_JOBS_PER_SEARCH = int(os.environ.get("DEFAULT_MAX_JOBS_PER_SEARCH", "10"))
+DEFAULT_MAX_JOBS_PER_SEARCH = 10
 LINKEDIN_MAX_START = 1 # Reduced for 40 Jobs ids
 REQUEST_TIMEOUT = 30 # Timeout for HTTP requests in seconds
 MAX_RETRIES = 3
