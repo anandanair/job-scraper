@@ -42,7 +42,7 @@ LLM_DAILY_REQUEST_BUDGET = 0 # 0 = unlimited
 LLM_REQUEST_DELAY_SECONDS = 8  # Delay between API calls
 
 # --- Resume Scoring Configuration ---
-JOBS_TO_SCORE_PER_RUN = 1  # Jobs per script run
+JOBS_TO_SCORE_PER_RUN = 5  # Jobs per script run
 
 # --- Resume Customization Configuration ---
 JOBS_TO_CUSTOMIZE_PER_RUN = 1  # Jobs per customization run
