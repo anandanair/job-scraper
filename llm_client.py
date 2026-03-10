@@ -147,7 +147,7 @@ class LLMClient:
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        temperature: float = 0.7,
+        temperature: float = 1,
         response_format: Optional[Type[BaseModel]] = None,
         model_override: Optional[str] = None,
     ) -> str:
