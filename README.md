@@ -1,250 +1,272 @@
 # Job Scraper & Application Assistant
 
-This project is a comprehensive suite of tools designed to automate and enhance the job searching process, primarily focusing on LinkedIn. It scrapes job postings, parses resumes, scores job suitability against a candidate's resume, manages job application statuses, and can even generate custom PDF resumes. The system leverages AI (Google Gemini) for advanced text processing and Supabase for data storage.
+This project is a comprehensive suite of tools designed to automate and enhance the job searching process, primarily focusing on LinkedIn and CareersFuture. It scrapes job postings, parses resumes, scores job suitability against a candidate's resume, manages job application statuses, and can even generate custom PDF resumes. The system leverages AI (Fireworks AI, Google Gemini, OpenAI, Claude, etc.) for advanced text processing and Supabase for data storage.
 
 ## Features
 
-- **Job Scraping**: Automatically scrapes job postings. ([scraper.py](scraper.py))
+- **Job Scraping**: Automatically scrapes job postings from LinkedIn and CareersFuture. ([scraper.py](scraper.py))
 - **Resume Parsing**:
   - Extracts text from PDF resumes using `pdfplumber`. ([resume_parser.py](resume_parser.py))
-  - Utilizes Google Gemini AI to parse resume text into structured data ([parse_resume_with_ai.py](parse_resume_with_ai.py))
-- **Job Scoring**: Scores job descriptions against a parsed resume using AI to determine suitability. ([score_jobs.py](score_jobs.py))
-- **Universal LLM Support**: Supports 400+ model providers (Gemini, OpenAI, Anthropic, Ollama, Groq, etc.) via a unified abstraction layer. ([llm_client.py](llm_client.py))
+  - Uses AI to parse resume text into structured data and saves it securely to Supabase.
+- **Job Scoring**: Scores job descriptions against a parsed resume using AI to determine suitability (0–100 score). ([score_jobs.py](score_jobs.py))
+- **Universal LLM Support**: Supports 400+ model providers (Fireworks AI, Gemini, OpenAI, Anthropic, Groq, Ollama, etc.) via a unified LiteLLM abstraction layer. ([llm_client.py](llm_client.py))
 - **Job Management**:
   - Tracks the status of job applications.
   - Marks old or inactive jobs as expired.
-  - Periodically checks if active jobs are still available.
-    ([job_manager.py](job_manager.py))
-- **Data Storage**: Uses Supabase to store job data, resume details, and application statuses. (Utility functions in [supabase_utils.py](supabase_utils.py))
+  - Periodically checks if active jobs are still available. ([job_manager.py](job_manager.py))
+- **Data Storage**: Uses Supabase to store job data, resume details, and application statuses. ([supabase_utils.py](supabase_utils.py))
 - **Custom PDF Resume Generation**: Generates ATS-friendly PDF resumes from structured resume data. ([pdf_generator.py](pdf_generator.py))
-- **AI-Powered Text Processing**: Leverages any configured LLM for tasks like resume parsing and job description formatting.
-- **Quota Management**: Built-in rate limiting, exponential backoff, and daily budget tracking for LLM API calls. Features dynamic model rotation (e.g., automatically switching between Gemini models) to bypass rate limitations.
-- **Automated Workflows**: Includes optimized GitHub Actions for running tasks on a schedule without exhausting quotas. ([workflows](.github/workflows/))
+- **AI-Powered Text Personalization**: Tailors resume summaries and bullet points specifically for top-matching jobs. ([custom_resume_generator.py](custom_resume_generator.py))
+- **Automated Workflows**: Includes pre-configured GitHub Actions for running tasks on a schedule. ([workflows](.github/workflows/))
 
 ## Tech Stack
 
-- **Programming Language**: Python 3.11.9
-- **Web Scraping/HTTP**:
-  - `requests`
-  - `httpx`
-  - `BeautifulSoup4` (for HTML parsing)
-  - `Playwright` (for browser automation)
-- **PDF Processing**:
-  - `pdfplumber` (for text extraction)
-  - `ReportLab` (for PDF generation)
-- **AI/LLM**: `litellm` (Universal proxy supporting Gemini, OpenAI, Claude, etc.), `google-genai`
-- **Database**: Supabase (`supabase`)
+- **Programming Language**: Python 3.11+
+- **Web Scraping/HTTP**: `requests`, `httpx`, `BeautifulSoup4`
+- **PDF Processing**: `pdfplumber` (extraction), `ReportLab` (ATS PDF generation)
+- **AI/LLM**: `litellm` (Fireworks AI, Gemini, OpenAI, Claude, Groq, etc.)
+- **Database & Storage**: Supabase (`supabase`)
 - **Data Validation**: `Pydantic`
-- **Environment Management**: `python-dotenv`
-- **Text Conversion**: `html2text`
 - **CI/CD**: GitHub Actions
 
-## Setup and Installation
+---
 
-This project is designed to run primarily through GitHub Actions. Follow these steps to set it up for your own use:
+## Complete Setup and Installation Guide
 
-1.  **Fork the Repository:**
-    - Click the "Fork" button at the top right of this page to create a copy of this repository in your own GitHub account.
+Follow these steps to get the project running in under 10 minutes:
 
-2.  **Create a Supabase Project:**
-    - Go to [Supabase](https://supabase.com/) and create a new project.
-    - Once your project is created, navigate to the "SQL Editor" section.
-    - Open the `supabase_setup/init.sql` file from this repository, copy its content, and run it in your Supabase SQL Editor. This will set up the necessary tables (like `jobs`, `customized_resumes`, and `base_resume`) and storage buckets (`resumes`, `personalized_resumes`).
+### Step 1: Fork the Repository
+Click the **Fork** button at the top-right of this GitHub repository to create a copy under your own account.
 
-3.  **Obtain API Keys for Your LLM Provider:**
-    - Get API key(s) from your chosen provider (e.g., [Google AI Studio](https://aistudio.google.com/app/apikey), [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), etc.).
+---
 
-4.  **Configure GitHub Repository Secrets and Variables:**
-    - In your forked GitHub repository, go to "Settings".
-    - In the left sidebar, navigate to "Secrets and variables" under the "Security" section, and then click on "Actions".
-    - **Add Repository Secrets** (Click "New repository secret"):
-      - `LLM_API_KEY`: Your primary LLM API key (e.g., for Gemini or Groq). Also accepts legacy `GEMINI_FIRST_API_KEY`.
-      - `OPENAI_API_KEY`: (Optional) Your OpenAI API key if using GPT models.
-      - `ANTHROPIC_API_KEY`: (Optional) Your Anthropic API key if using Claude models.
-      - `GROQ_API_KEY`: (Optional) Your Groq API key if using Groq models.
-      - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase project's `service_role` key.
-      - `SUPABASE_URL`: Your Supabase project's URL.
+### Step 2: Create a Supabase Project & Run the Database Setup
 
-    - > **Note:** Other non-sensitive variables like `LLM_MODEL`, `LLM_MAX_RPM`, and `JOBS_TO_SCORE_PER_RUN` are now hardcoded in `config.py` as safe defaults. You only need to set them as GitHub Variables if you want to override the `config.py` defaults (though this is no longer the recommended approach).
+1. Go to [Supabase](https://supabase.com/) and create a free account or log in.
+2. Click **"New Project"**, choose an organization, give it a name, and set a database password.
+3. Once your project is created (takes ~1 minute), navigate to the **SQL Editor** tab (the `>_` icon on the left sidebar).
+4. Click **"New query"**.
+5. Open the [`supabase_setup/init.sql`](supabase_setup/init.sql) file from this repository, copy its entire contents, paste it into the Supabase SQL Editor, and click **"Run"**.
+   - *What this does*: Automatically creates all database tables (`jobs`, `base_resume`, `customized_resumes`), indexes, triggers, and creates both private storage buckets (`resumes` and `personalized_resumes`).
 
-5.  **Upload Your Resume to Supabase Storage:**
-    - In your Supabase project dashboard, navigate to **Storage** in the left sidebar.
-    - Find the **`resumes`** bucket (created by the `init.sql` script in step 2).
-    - Click on the bucket, then click **"Upload files"** and upload your resume. **The file must be named `resume.pdf`**.
-    - > **⚠️ Security Note:** Your resume is stored securely in your private Supabase Storage bucket — it is **never committed to the public GitHub repository**. This protects your personal information (name, email, phone, address, etc.) from being publicly visible.
+---
 
-6.  **Parse Your Resume:**
-    - Go to the "Actions" tab in your forked GitHub repository.
-    - Find the workflow named "Parse Resume Manually" in the list of workflows.
-    - Click on it, and then click the "Run workflow" button. This will trigger the `resume_parser.py` script, which will download your `resume.pdf` from Supabase Storage, parse it using AI, and store the structured data securely in the `base_resume` table in your Supabase database.
+### Step 3: Get Your Supabase Credentials
 
-7.  **Configure Job Search Parameters (Edit `config.py`):**
-    - In your forked GitHub repository, navigate to the [config.py](config.py) file.
-    - Edit the file to customize your job search preferences. The main variables you'll likely want to change are:
+> [!NOTE]
+> **Supabase recently renamed API keys:**
+> - The old **`service_role` key** is now called the **Secret key** (`sb_secret_...`).
+> - The old **`anon` key** is now called the **Publishable key** (`sb_publishable_...`).
 
-      ```python
-      # --- LinkedIn Search Configuration ---
-      LINKEDIN_SEARCH_QUERIES = ["maths lecturer", "statistics lecturer"] # Your keywords
-      LINKEDIN_LOCATION = "Singapore" # Target location
-      LINKEDIN_GEO_ID = 102454443 # Geo ID (Singapore: 102454443, Dubai: 100205264)
-      LINKEDIN_JOB_TYPE = "F" # "F" for Full-time
-      LINKEDIN_JOB_POSTING_DATE = "r86400" # "r86400" for past 24 hours
+There are two easy ways to find your credentials:
 
-      # --- Careers Future Search Configuration ---
-      CAREERS_FUTURE_SEARCH_QUERIES = ["IT Support", "Full Stack Web Developer"]
-      CAREERS_FUTURE_SEARCH_CATEGORIES = ["Information Technology"]
+#### Option A: The "Connect" Button (Fastest)
+1. At the very top header of your Supabase dashboard (next to your project name), click the **"Connect"** button.
+2. Select **Python** or **Next.js**.
+3. It will display your ready-to-copy credentials:
+   - **Project URL** (e.g., `https://abcdefghijkl.supabase.co`)
+   - **Secret key** (starts with `sb_secret_...` or legacy JWT string)
+   - **Publishable / Anon key** (starts with `sb_publishable_...`)
 
-      # --- LLM configuration ---
-      # For a full list of 100+ supported providers and model naming schemes, see:
-      # https://docs.litellm.ai/docs/providers
+#### Option B: From Project Settings
+1. Click the **Project Settings** (gear icon at the bottom of the left sidebar).
+2. Go to **API** (or **API Keys**):
+   - **Project URL**: Found under the *Project URL* section.
+   - **Secret key**: Click *Reveal* next to your Secret key — this is your `SUPABASE_SERVICE_ROLE_KEY`.
 
-      LLM_MODEL = "gemini"            # Model to use
-      LLM_MAX_RPM = 10                # Max requests per minute
-      LLM_REQUEST_DELAY_SECONDS = 8   # Delay between calls
+---
 
-      # --- Processing Limits ---
-      JOBS_TO_SCORE_PER_RUN = 1       # Scaled for free tier
-      MAX_JOBS_PER_SEARCH = {
-          "linkedin": 2,
-          "careers_future": 10,
-      }
-      ```
+### Step 4: Choose Your LLM Provider & Get an API Key
 
-    - **IMPORTANT**: Do not modify other variables in `config.py` as they are carefully calibrated to prevent rate limiting and potential account bans. Only edit the search queries and location parameters shown above.
-    - Commit the changes to your `config.py` file in your repository.
+You can use any LLM provider. Here are the most popular options:
 
-8.  **Enable GitHub Actions:**
-    - Go to the "Actions" tab in your forked GitHub repository.
-    - You will see a message saying "Workflows aren't running on this repository". Click the "Enable Actions on this repository" button (or a similar prompt) to allow the scheduled workflows to run automatically.
-    - Ensure all workflows listed (e.g., `scrape_jobs.yml`, `score_jobs.yml`, `job_manager.yml`) are enabled. If any are disabled, you may need to enable them individually.
+* **Fireworks AI (Recommended — Fast & Inexpensive)**:
+  - Sign up at [Fireworks AI](https://fireworks.ai/) and create an API key at [fireworks.ai/api-keys](https://fireworks.ai/api-keys).
+  - Great recommended models:
+    - `accounts/fireworks/models/glm-5p3-flash` (very fast and economical)
+    - `accounts/fireworks/models/llama-v3p3-70b-instruct`
+* **Google Gemini**:
+  - Get a free or pay-as-you-go key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+  - Supported models: `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-3-flash-preview`.
+* **Groq, OpenAI, Anthropic, or DeepSeek**:
+  - Supported directly via their standard API keys (`GROQ_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.).
 
-## Automated Workflows
+---
 
-Once the setup is complete and GitHub Actions are enabled, the workflows defined in [workflows](.github/workflows/) are scheduled to run automatically:
+### Step 5: Configure GitHub Repository Secrets
 
-- **`scrape_jobs.yml`**: Periodically scrapes new job postings from LinkedIn and CareersFuture based on your `config.py` settings and saves them to your Supabase database.
-- **`score_jobs.yml`**: Periodically scores the newly scraped jobs and jobs with custom resumes against your parsed resume / custom resume and updates the scores in the database.
-- **`job_manager.yml`**: Periodically manages job statuses (e.g., marks old jobs as expired, checks if active jobs are still available).
-- **`hourly_resume_customization.yml`**: (If enabled and configured) May run tasks related to customizing resumes for specific jobs.
+In your forked GitHub repository:
+1. Navigate to **Settings** > **Secrets and variables** > **Actions**.
+2. Click **"New repository secret"** and add the following:
 
-You can monitor the execution of these actions in the "Actions" tab of your repository.
+| Secret Name | Required? | Value / Description | Example |
+| :--- | :--- | :--- | :--- |
+| `SUPABASE_URL` | **Yes** | Your Supabase Project URL | `https://abcdefghijkl.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Yes** | Your Supabase Secret / Service Role Key | `sb_secret_...` |
+| `FIREWORKS_API_KEY` | If using Fireworks | Your Fireworks AI API key | `fw_...` |
+| `LLM_API_KEY` | If using Gemini/other | Your primary LLM API key | `AIzaSy...` |
+| `OPENAI_API_KEY` | Optional | OpenAI API key (if using GPT models) | `sk-...` |
+| `ANTHROPIC_API_KEY`| Optional | Anthropic API key (if using Claude) | `sk-ant-...` |
+| `GROQ_API_KEY` | Optional | Groq API key | `gsk_...` |
 
-## Usage
+*(Optional)* You can also add a **Repository Variable** (under the "Variables" tab) named `LLM_MODEL` with your model name (e.g., `accounts/fireworks/models/glm-5p3-flash`). If not set, it defaults to the model in [`config.py`](config.py).
 
-After the initial setup and the "Parse Resume Manually" action has successfully run, the system will operate automatically through the scheduled GitHub Actions.
+---
 
-You can interact with the data directly through your Supabase dashboard to view scraped jobs, your parsed resume, and job scores.
+### Step 6: Upload Your Resume to Supabase Storage
 
-### Web Interface for Viewing Data
+1. In your Supabase dashboard, click **Storage** in the left sidebar.
+2. Open the **`resumes`** bucket (created in Step 2).
+3. Click **"Upload files"** and upload your resume.
+4. **Important**: The file must be named exactly **`resume.pdf`**.
 
-A Next.js web application is available to view and manage the scraped jobs, your resume details, and job scores from the database.
+> [!TIP]
+> **Privacy & Security**: Your resume is stored in your private Supabase Storage bucket. It is **never committed to GitHub**, keeping your personal contact information secure.
 
-- **Repository:** [jobs-scrapper-web](https://github.com/anandanair/jobs-scraper-web)
-- **Setup:** To use the web interface, clone the `jobs-scrapper-web` repository and follow the setup instructions provided in its `README.md` file to run it locally. This will typically involve configuring it to connect to your Supabase instance.
+---
 
-The individual Python scripts can still be run locally for development or testing, but this requires setting up a local Python environment, installing dependencies from `requirements.txt`, and creating a local `.env` file with the necessary credentials (mirroring the GitHub secrets).
+### Step 7: Parse Your Resume
 
-**Local Development Setup (Optional):**
+1. Go to the **Actions** tab in your forked GitHub repository.
+2. In the left workflow list, select **"Parse Resume Manually"**.
+3. Click **"Run workflow"** > **"Run workflow"**.
+4. This script downloads `resume.pdf` from Supabase Storage, parses it with AI, and stores your structured experience, skills, and education into the `base_resume` database table.
 
-1.  **Clone your forked repository locally:**
-    ```bash
-    git clone https://github.com/anandanair/linkedin-jobs-scrapper
-    cd linkedin-jobs-scrapper
-    ```
-2.  **Create and activate a virtual environment:**
-    ```bash
-    python -m venv .venv
-    # On Windows
-    .\.venv\Scripts\activate
-    # On macOS/Linux
-    source .venv/bin/activate
-    ```
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    playwright install # Install browser drivers for Playwright
-    ```
-4.  **Create a `.env` file:**
-    - In the root of your local repository, create a `.env` file.
-    - Add the keys and values that you configured as GitHub secrets:
+---
 
-      ```env
-      # Essential Keys
-      LLM_API_KEY="YOUR_LLM_API_KEY"
-      SUPABASE_URL="YOUR_SUPABASE_URL"
-      SUPABASE_SERVICE_ROLE_KEY="YOUR_SUPABASE_SERVICE_ROLE_KEY"
+### Step 8: Customize Job Search Preferences ([`config.py`](config.py))
 
-      # Note: LLM settings (MODEL, RPM, etc.) can be configured in config.py
-      ```
+Edit [`config.py`](config.py) directly on GitHub or locally to configure the jobs you are looking for:
 
-5.  **Run scripts locally (example):**
-    ```bash
-    python scraper.py
-    python resume_parser.py
-    python score_jobs.py
-    python job_manager.py
-    ```
+```python
+# --- Search Configuration ---
+LINKEDIN_SEARCH_QUERIES = ["Software Engineer", "Full Stack Developer"]  # Your job titles
+LINKEDIN_LOCATION = "Singapore"                                          # Target city/country
+LINKEDIN_GEO_ID = 102454443                                              # Singapore: 102454443, Dubai: 100205264, US: 103644278
+LINKEDIN_JOB_TYPE = "F"                                                  # F=Full-time, C=Contract, P=Part-time, I=Internship
+LINKEDIN_JOB_POSTING_DATE = "r86400"                                     # r86400=Past 24h, r604800=Past week
+
+# --- Which Platforms to Scrape ---
+SCRAPING_SOURCES = ["linkedin", "careers_future"]  # Both platforms are supported!
+
+# --- LLM Model Selection ---
+LLM_MODEL = "accounts/fireworks/models/glm-5p3-flash"  # Or "gemini", "openai/gpt-4o-mini", etc.
+```
+
+Commit your changes to [`config.py`](config.py).
+
+---
+
+### Step 9: Enable Automated GitHub Actions
+
+1. In your forked repository, click the **Actions** tab.
+2. If GitHub displays a banner saying *"Workflows aren’t running on this forked repository"*, click **"Enable Actions on this repository"**.
+3. The automated background workflows will now run on a schedule:
+   - **`Daily Job Scraper`** (`scrape_jobs.yml`): Scrapes new job postings daily and saves them to Supabase.
+   - **`Job Scorer`** (`score_jobs.yml`): Runs every 4 hours to score unscored jobs against your resume (0–100).
+   - **`Daily Job Manager`** (`job_manager.yml`): Marks jobs older than 30 days as expired and checks if postings are still active.
+   - **`Resume Customization`** (`hourly_resume_customization.yml`): Generates custom tailored resumes for top-scoring jobs.
+
+---
+
+## Viewing Your Jobs: Web Interface
+
+A modern Next.js web application is available to view scraped jobs, filter by score/interest, track applications, and preview generated PDF resumes.
+
+- **Frontend Repository**: [jobs-scrapper-web](https://github.com/anandanair/jobs-scrapper-web)
+- **Setup**:
+  1. Clone `jobs-scrapper-web`:
+     ```bash
+     git clone https://github.com/anandanair/jobs-scrapper-web.git
+     cd jobs-scrapper-web
+     npm install
+     ```
+  2. Create a `.env.local` file with the **same Supabase project credentials**:
+     ```env
+     NEXT_PUBLIC_SUPABASE_URL="https://<YOUR_PROJECT_REF>.supabase.co"
+     NEXT_PUBLIC_SUPABASE_ANON_KEY="sb_publishable_..."
+     SUPABASE_SERVICE_ROLE_KEY="sb_secret_..."
+     ```
+  3. Start the dashboard:
+     ```bash
+     npm run dev
+     ```
+  4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## Local Development (Optional)
+
+If you prefer to run or test the Python scripts on your local machine:
+
+1. **Clone your repository locally:**
+   ```bash
+   git clone https://github.com/<your-username>/linkedin-jobs-scrapper.git
+   cd linkedin-jobs-scrapper
+   ```
+2. **Create and activate a virtual environment:**
+   ```bash
+   python -m venv .venv
+   # Windows:
+   .\.venv\Scripts\activate
+   # macOS/Linux:
+   source .venv/bin/activate
+   ```
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. **Create a `.env` file in the root folder:**
+   ```env
+   SUPABASE_URL="https://<YOUR_PROJECT_REF>.supabase.co"
+   SUPABASE_SERVICE_ROLE_KEY="sb_secret_..."
+   FIREWORKS_API_KEY="fw_..."
+   LLM_MODEL="accounts/fireworks/models/glm-5p3-flash"
+   ```
+5. **Run any script directly:**
+   ```bash
+   python scraper.py        # Scrapes new jobs
+   python resume_parser.py  # Parses your resume PDF from Supabase
+   python score_jobs.py     # Scores jobs against your resume
+   python job_manager.py    # Manages expiration and active status
+   ```
+
+---
 
 ## Project Structure
 
 ```
 .
-├── .github/                    # GitHub Actions workflows
-│   └── workflows/
-│       ├── hourly_resume_customization.yml
-│       ├── job_manager.yml
-│       ├── parse_resume.yml
-│       ├── score_jobs.yml
-│       └── scrape_jobs.yml
-├── .gitignore                  # Specifies intentionally untracked files that Git should ignore
-├── README.md                   # This file
-├── config.py                   # Configuration settings (API keys, search parameters)
-├── custom_resume_generator.py  # Script to generate customized resumes (if applicable)
-├── job_manager.py              # Manages job statuses
-├── llm_client.py               # Universal LLM abstraction (LiteLLM) with rate limiting
-├── models.py                   # Pydantic models for data validation
-├── pdf_generator.py            # Generates PDF resumes
+├── .github/workflows/          # Automated GitHub Actions
+│   ├── hourly_resume_customization.yml
+│   ├── job_manager.yml
+│   ├── parse_resume.yml
+│   ├── score_jobs.yml
+│   └── scrape_jobs.yml
+├── config.py                   # Job search parameters & LLM configurations
+├── custom_resume_generator.py  # Generates tailored resumes for top-scored jobs
+├── job_manager.py              # Manages job statuses & expires old jobs
+├── llm_client.py               # Universal LLM client (LiteLLM) with rate limiting
+├── models.py                   # Pydantic models for structured resume & job validation
+├── pdf_generator.py            # Generates ATS-friendly PDF resumes (ReportLab)
 ├── requirements.txt            # Python dependencies
-├── resume_parser.py            # Parses resume PDF from Supabase Storage and saves to DB
-├── score_jobs.py               # Scores job suitability against resumes
-├── scraper.py                  # Core scraping logic for LinkedIn and CareersFuture
-├── supabase_setup/             # SQL scripts for Supabase database initialization
-│   └── init.sql
-├── supabase_utils.py           # Utility functions for interacting with Supabase
-└── user_agents.py              # List of user-agents for web scraping
+├── resume_parser.py            # Extracts text from resume PDF & parses with AI
+├── score_jobs.py               # Evaluates job suitability against candidate profile
+├── scraper.py                  # Core scraping engine (LinkedIn & CareersFuture)
+├── supabase_setup/
+│   └── init.sql                # Complete database schema & storage setup
+├── supabase_utils.py           # Database & Storage helper functions
+└── user_agents.py              # Modern browser User-Agent rotation pool
 ```
 
 ## Contributing
 
-Contributions are welcome! If you'd like to contribute, please follow these steps:
-
-1.  **Fork the Repository:** Create your own fork of the project on GitHub.
-2.  **Create a Branch:** Create a new branch in your fork for your feature or bug fix (e.g., `git checkout -b feature/your-awesome-feature` or `git checkout -b fix/issue-description`).
-3.  **Make Changes:** Implement your changes in your branch.
-4.  **Test Your Changes:** Ensure your changes work as expected and do not break existing functionality.
-5.  **Commit Your Changes:** Commit your changes with clear and descriptive commit messages (e.g., `git commit -m 'feat: Add awesome new feature'`).
-6.  **Push to Your Fork:** Push your changes to your forked repository (`git push origin feature/your-awesome-feature`).
-7.  **Open a Pull Request:** Go to the original repository and open a Pull Request from your forked branch to the main branch of the original repository. Provide a clear description of your changes in the Pull Request.
-
-Please ensure your code adheres to the existing style and that any new dependencies are added to `requirements.txt`.
+Contributions, bug reports, and suggestions are welcome! Feel free to open an issue or submit a pull request.
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
-
-## Acknowledgements
-
-- This project utilizes [LiteLLM](https://docs.litellm.ai/) as a universal proxy to support 400+ LLM providers.
-- Originally built with the powerful [Google Gemini API](https://ai.google.dev/models/gemini) for AI-driven text processing.
-- Data storage is managed with [Supabase](https://supabase.com/), an excellent open-source Firebase alternative.
-- Web scraping capabilities are enhanced by [Playwright](https://playwright.dev/) and [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/).
-- PDF generation is handled by [ReportLab](https://www.reportlab.com/).
-- PDF text extraction is performed using [pdfplumber](https://github.com/jsvine/pdfplumber).
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Disclaimer
 
-This project is for educational and personal use only. Scraping websites like LinkedIn may be against their Terms of Service. Use this tool responsibly and at your own risk. The developers of this project are not responsible for any misuse or any action taken against your account by LinkedIn or other platforms.
-
-## Contact
-
-If you have any questions, suggestions, or issues, please open an issue on the GitHub repository.
+This tool is created for educational and personal career-search purposes. Please ensure your scraping frequency adheres to platform policies and respect rate limits.
