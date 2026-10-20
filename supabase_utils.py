@@ -12,14 +12,23 @@ if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
 
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY)
 
+# Module-level cache for in-memory deduplication across queries
+_CACHED_EXISTING_IDS = None
+_CACHED_COMPANY_TITLE_KEYS = None
+
 # --- Supabase Functions ---
-def get_existing_jobs_from_supabase(batch_size: int = 1000) -> tuple[set, set]:
+def get_existing_jobs_from_supabase(batch_size: int = 1000, force_refresh: bool = False) -> tuple[set, set]:
     """
     Fetches all existing job IDs and company-title pairs from the Supabase 'jobs' table.
+    Caches results in memory so subsequent calls in the same run don't re-query Supabase.
     Returns:
         - A set of job_ids
-        - A set of 'company|job_title' keys (both lowercased for consistency)
+        - A set of (company, job_title) tuples (both lowercased for consistency)
     """
+    global _CACHED_EXISTING_IDS, _CACHED_COMPANY_TITLE_KEYS
+    if not force_refresh and _CACHED_EXISTING_IDS is not None and _CACHED_COMPANY_TITLE_KEYS is not None:
+        return _CACHED_EXISTING_IDS, _CACHED_COMPANY_TITLE_KEYS
+
     existing_ids = set()
     existing_company_title_keys = set()
     offset = 0
@@ -51,9 +60,14 @@ def get_existing_jobs_from_supabase(batch_size: int = 1000) -> tuple[set, set]:
                     normalized_title = job_title.strip().lower()
                     existing_company_title_keys.add((normalized_company, normalized_title))
 
+            if len(data) < batch_size:
+                break  # Reached the last page, early exit
+
             offset += batch_size
 
-        print(f"Fetched {len(existing_ids)} job IDs and {len(existing_company_title_keys)} company-title pairs.")
+        print(f"Fetched {len(existing_ids)} job IDs and {len(existing_company_title_keys)} company-title pairs from Supabase.")
+        _CACHED_EXISTING_IDS = existing_ids
+        _CACHED_COMPANY_TITLE_KEYS = existing_company_title_keys
 
     except Exception as e:
         print(f"Error fetching existing jobs from Supabase: {e}")
@@ -100,6 +114,16 @@ def save_jobs_to_supabase(jobs_data: list):
         # Ensure 'job_id' is the primary key or has a unique constraint in your Supabase table.
         # By default, supabase-py's upsert updates the row on conflict.
         data, count = supabase.table(config.SUPABASE_TABLE_NAME).upsert(processed_jobs_data).execute()
+
+        # Update in-memory cache with newly saved jobs
+        global _CACHED_EXISTING_IDS, _CACHED_COMPANY_TITLE_KEYS
+        if _CACHED_EXISTING_IDS is not None:
+            for job in processed_jobs_data:
+                _CACHED_EXISTING_IDS.add(str(job['job_id']))
+                comp = job.get('company')
+                title = job.get('job_title')
+                if comp and title:
+                    _CACHED_COMPANY_TITLE_KEYS.add((comp.strip().lower(), title.strip().lower()))
 
         # Check the actual response structure from your Supabase client version for upsert
         # It might differ slightly from insert's response structure

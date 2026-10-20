@@ -7,8 +7,35 @@ on:
   workflow_dispatch:
 
 jobs:
-  scrape:
+  prepare-matrix:
     runs-on: ubuntu-latest
+    outputs:
+      linkedin_queries: ${{ steps.get-queries.outputs.linkedin_queries }}
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dotenv
+        run: pip install python-dotenv
+
+      - name: Extract search queries from config
+        id: get-queries
+        run: |
+          python -c "import config, json; print('linkedin_queries=' + json.dumps(config.LINKEDIN_SEARCH_QUERIES))" >> $GITHUB_OUTPUT
+
+  scrape-linkedin:
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2 # Limits concurrent workers hitting LinkedIn and Supabase
+      matrix:
+        query: ${{ fromJson(needs.prepare-matrix.outputs.linkedin_queries) }}
 
     steps:
       - name: Checkout repository code
@@ -24,8 +51,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run scraper script
+      - name: Run LinkedIn scraper for query
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python scraper.py
+        run: python scraper.py --source linkedin --query "${{ matrix.query }}"
+
+  scrape-careers-future:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run CareersFuture scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python scraper.py --source careers_future

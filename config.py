@@ -12,8 +12,8 @@ SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_TABLE_NAME: str = "jobs"
 SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME = "customized_resumes"
-SUPABASE_STORAGE_BUCKET="personalized_resumes"
-SUPABASE_RESUME_STORAGE_BUCKET="resumes"
+SUPABASE_STORAGE_BUCKET = "personalized_resumes"
+SUPABASE_RESUME_STORAGE_BUCKET = "resumes"
 SUPABASE_BASE_RESUME_TABLE_NAME = "base_resume"
 BASE_RESUME_PATH = "resume.json"
 
@@ -48,12 +48,12 @@ CAREERS_FUTURE_SEARCH_CATEGORIES = ["Information Technology"]
 CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = ["Full Time"]
 
 # --- Processing Limits ---
-SCRAPING_SOURCES = ["linkedin"] # "linkedin", "careers_future"
+SCRAPING_SOURCES = ["linkedin", "careers_future"] # "linkedin", "careers_future"
 JOBS_TO_SCORE_PER_RUN = 5
 JOBS_TO_CUSTOMIZE_PER_RUN = 1
 MAX_JOBS_PER_SEARCH = {
-    "linkedin": 2,
-    "careers_future": 10,
+    "linkedin": 10,
+    "careers_future": 20,
 }
 
 # =================================================================
@@ -65,10 +65,14 @@ LLM_RETRY_BASE_DELAY = 10
 LLM_DAILY_REQUEST_BUDGET = 0
 LLM_REQUEST_DELAY_SECONDS = 8
 
-LINKEDIN_MAX_START = 1 
+LINKEDIN_MAX_START = 25 
 REQUEST_TIMEOUT = 30
 MAX_RETRIES = 3
-RETRY_DELAY_SECONDS = 15
+RETRY_DELAY_SECONDS = 60          # Base cool-down on HTTP 429
+DETAIL_FETCH_MIN_DELAY = 12.0     # Minimum delay between detail requests (seconds)
+DETAIL_FETCH_MAX_DELAY = 22.0     # Maximum delay between detail requests (seconds)
+SEARCH_QUERY_MIN_DELAY = 15.0     # Delay between search queries in standalone runs (seconds)
+SEARCH_QUERY_MAX_DELAY = 30.0
 
 JOB_EXPIRY_DAYS = 30
 JOB_CHECK_DAYS = 3
