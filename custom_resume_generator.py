@@ -181,6 +181,9 @@ WRITING RULES:
    - Include ONLY the selected projects provided in the prompt.
    - Preserve the 'name' and 'technologies' fields from the original project.
    - Rewrite each project's 'description' into 2 to 3 concise, impactful bullet points separated by newlines (e.g., "- Engineered...\n- Applied...").
+5. LENGTH & CONCISENESS (CRITICAL FOR 2-PAGE BUDGET):
+   - Keep bullet points punchy and concise (maximum 1 to 2 lines per bullet point).
+   - Ensure the content is focused so the complete resume fits comfortably within a clean 2-page layout.
 """
 
     prompt = f"""

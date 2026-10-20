@@ -114,11 +114,17 @@ def test_validation_logic():
     print(f"[OK] Case D (Max 3 projects limit rejection) PASSED: {reason_count}")
 
 def test_pdf_generation():
-    print("Testing PDF generation with tailored resume...")
+    print("Testing PDF generation with tailored resume & link filtering...")
+    import pypdfium2 as pdfium
     base_resume = load_sample_base_resume()
     personalized_resume = base_resume.model_copy(deep=True)
 
-    # Apply tailored content
+    # Apply tailored content with generic github and valid linkedin
+    personalized_resume.links = Links(
+        github="https://github.com/",
+        linkedin="https://www.linkedin.com/in/gopika-thampi/",
+        portfolio="NA"
+    )
     personalized_resume.summary = "Experienced Statistician with 3+ years in Python, R, and statistical data modeling."
     personalized_resume.skills = ["Python", "R", "Pandas", "NumPy", "Statistical Analysis", "SQL", "Probability Theory"]
     personalized_resume.projects = [base_resume.projects[1]] # Only the Credit Risk project!
@@ -126,7 +132,14 @@ def test_pdf_generation():
 
     pdf_bytes = pdf_generator.create_resume_pdf(personalized_resume)
     assert pdf_bytes is not None and len(pdf_bytes) > 1000, "PDF bytes should be non-empty and valid!"
-    print(f"[OK] PDF generated successfully! Size: {len(pdf_bytes)} bytes.")
+    
+    pdf = pdfium.PdfDocument(pdf_bytes)
+    assert len(pdf) <= 2, f"PDF exceeded 2 pages! Actual count: {len(pdf)}"
+    page1_text = pdf[0].get_textpage().get_text_range()
+    assert "GitHub" not in page1_text, "Generic GitHub link should have been filtered out!"
+    assert "LinkedIn" in page1_text, "Valid LinkedIn link should have been rendered!"
+
+    print(f"[OK] PDF generated successfully! Pages: {len(pdf)} | Size: {len(pdf_bytes)} bytes | Links validated.")
 
 if __name__ == "__main__":
     test_models()
