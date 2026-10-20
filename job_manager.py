@@ -40,11 +40,15 @@ async def _check_single_linkedin_job_active(job_id: str, client: httpx.AsyncClie
         try:
             sleep_time = random.uniform(5.0, 15.0)
             logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
-            time.sleep(sleep_time)
+            await asyncio.sleep(sleep_time)
 
-            # Rotate user agent and proxy for each attempt
+            # Rotate user agent and headers for each attempt
             user_agent = random.choice(user_agents.USER_AGENTS)
-            headers = {'User-Agent': user_agent}
+            headers = {
+                'User-Agent': user_agent,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
 
             logging.debug(f"Checking job {job_id} (Attempt {retries+1}/{config.ACTIVE_CHECK_MAX_RETRIES+1}) URL: {job_detail_url} with UA: {user_agent}")
 
@@ -119,22 +123,20 @@ async def mark_expired_jobs():
             logging.info(f"Found {len(job_ids_to_expire)} jobs older than {config.JOB_EXPIRY_DAYS} days to mark as expired.")
 
             if job_ids_to_expire:
-                # Update in batches if necessary, though supabase-py might handle large lists
-                # For simplicity, updating all at once here. Consider batching for >1000s of IDs.
-                update_response = supabase.table(config.SUPABASE_TABLE_NAME)\
-                    .update({"job_state": "expired", "is_active": False})\
-                    .in_("job_id", job_ids_to_expire)\
-                    .execute()
-
-                # Check response structure - may vary slightly
-                if hasattr(update_response, 'data') and update_response.data:
-                     updated_count = len(update_response.data) # Supabase often returns the updated rows
-                     logging.info(f"Successfully marked {updated_count} jobs as expired.")
-                elif hasattr(update_response, 'count') and update_response.count is not None:
-                     logging.info(f"Successfully marked {update_response.count} jobs as expired (based on count).")
-                else:
-                     # Log raw response if structure is unexpected
-                     logging.warning(f"Mark expired jobs update executed. Response: {update_response}")
+                # Update in batches to avoid URL length / payload limits
+                CHUNK_SIZE = 100
+                total_updated = 0
+                for idx in range(0, len(job_ids_to_expire), CHUNK_SIZE):
+                    chunk = job_ids_to_expire[idx:idx + CHUNK_SIZE]
+                    update_response = supabase.table(config.SUPABASE_TABLE_NAME)\
+                        .update({"job_state": "expired", "is_active": False})\
+                        .in_("job_id", chunk)\
+                        .execute()
+                    if hasattr(update_response, 'data') and update_response.data:
+                        total_updated += len(update_response.data)
+                    else:
+                        total_updated += len(chunk)
+                logging.info(f"Successfully marked {total_updated} jobs as expired.")
 
         else:
             logging.info("No jobs found meeting the criteria for expiration.")
@@ -207,21 +209,23 @@ async def check_linkedin_job_activity():
 
     # Update Supabase
     try:
+        CHUNK_SIZE = 100
         if inactive_job_ids:
-            update_inactive = supabase.table(config.SUPABASE_TABLE_NAME)\
-                .update({"job_state": "removed", "is_active": False, "last_checked": now_str})\
-                .in_("job_id", inactive_job_ids)\
-                .execute()
-            # Add logging for update_inactive response count/data
-            logging.info(f"Marked {len(inactive_job_ids)} jobs as removed. Response: {update_inactive}")
-
+            for idx in range(0, len(inactive_job_ids), CHUNK_SIZE):
+                chunk = inactive_job_ids[idx:idx + CHUNK_SIZE]
+                supabase.table(config.SUPABASE_TABLE_NAME)\
+                    .update({"job_state": "removed", "is_active": False, "last_checked": now_str})\
+                    .in_("job_id", chunk)\
+                    .execute()
+            logging.info(f"Marked {len(inactive_job_ids)} jobs as removed.")
 
         if active_checked_job_ids:
-            update_active = supabase.table(config.SUPABASE_TABLE_NAME)\
-                .update({"last_checked": now_str})\
-                .in_("job_id", active_checked_job_ids)\
-                .execute()
-            # Add logging for update_active response count/data
+            for idx in range(0, len(active_checked_job_ids), CHUNK_SIZE):
+                chunk = active_checked_job_ids[idx:idx + CHUNK_SIZE]
+                supabase.table(config.SUPABASE_TABLE_NAME)\
+                    .update({"last_checked": now_str})\
+                    .in_("job_id", chunk)\
+                    .execute()
             logging.info(f"Updated last_checked for {len(active_checked_job_ids)} active jobs.")
 
     except Exception as e:

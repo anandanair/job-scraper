@@ -18,7 +18,13 @@ SUPABASE_BASE_RESUME_TABLE_NAME = "base_resume"
 BASE_RESUME_PATH = "resume.json"
 
 # API keys — set only the key(s) needed for your chosen provider.
-LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_FIRST_API_KEY")
+LLM_API_KEY = (
+    os.environ.get("LLM_API_KEY")
+    or os.environ.get("FIREWORKS_API_KEY")
+    or os.environ.get("FIREWORKS_AI_API_KEY")
+    or os.environ.get("GEMINI_API_KEY")
+    or os.environ.get("GEMINI_FIRST_API_KEY")
+)
 
 # =================================================================
 # 2. USER PREFERENCES (Editable)
@@ -27,7 +33,7 @@ LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY") 
 # --- LLM Settings ---
 # Use any model supported by LiteLLM (gemini, openai/gpt-4o-mini, groq/llama-3.3-70b-versatile)
 # Full list of supported models & naming: https://docs.litellm.ai/docs/providers
-LLM_MODEL = "gemini"
+LLM_MODEL = os.environ.get("LLM_MODEL") or "gemini"
 
 # --- Search Configuration ---
 LINKEDIN_SEARCH_QUERIES = ["maths lecturer", "statistics lecturer", "maths teacher", "Maths assistant professor", "Maths professor"]

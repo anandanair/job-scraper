@@ -122,10 +122,17 @@ class LLMClient:
             "deepseek": "DEEPSEEK_API_KEY",
             "mistral": "MISTRAL_API_KEY",
             "openrouter": "OPENROUTER_API_KEY",
+            "fireworks_ai": "FIREWORKS_API_KEY",
+            "fireworks": "FIREWORKS_API_KEY",
         }
         env_var = env_var_map.get(provider)
         if env_var and not os.environ.get(env_var):
             os.environ[env_var] = api_key
+        if provider in ("fireworks", "fireworks_ai") or "fireworks" in self.model.lower():
+            if not os.environ.get("FIREWORKS_API_KEY"):
+                os.environ["FIREWORKS_API_KEY"] = api_key
+            if not os.environ.get("FIREWORKS_AI_API_KEY"):
+                os.environ["FIREWORKS_AI_API_KEY"] = api_key
 
     def _check_daily_budget(self):
         """Check if daily request budget is exceeded. Resets at midnight."""
@@ -171,6 +178,10 @@ class LLMClient:
         self._check_daily_budget()
 
         model = model_override or self.model
+        # Auto-prefix Fireworks models if provided without provider prefix
+        if model.startswith("accounts/fireworks/") and not model.startswith("fireworks_ai/"):
+            model = f"fireworks_ai/{model}"
+
         messages = []
 
         if system_prompt:
@@ -189,7 +200,17 @@ class LLMClient:
 
         # Add structured output (Pydantic model)
         if response_format is not None:
-            base_kwargs["response_format"] = response_format
+            if isinstance(response_format, type) and issubclass(response_format, BaseModel):
+                # Fireworks AI LiteLLM integration expects a dict schema rather than the raw ModelMetaclass
+                if "fireworks" in model.lower():
+                    base_kwargs["response_format"] = {
+                        "type": "json_object",
+                        "schema": response_format.model_json_schema(),
+                    }
+                else:
+                    base_kwargs["response_format"] = response_format
+            else:
+                base_kwargs["response_format"] = response_format
 
         last_exception = None
 
@@ -224,8 +245,10 @@ class LLMClient:
                 # Track daily usage
                 self._daily_count += 1
 
-                # Extract text from response
+                # Extract text from response (supports standard and reasoning models)
                 content = response.choices[0].message.content
+                if not content and hasattr(response.choices[0].message, "reasoning_content") and response.choices[0].message.reasoning_content:
+                    content = response.choices[0].message.reasoning_content
                 if content:
                     return content.strip()
                 else:

@@ -75,6 +75,16 @@ def _get_careers_future_job_company_name(job_item: dict) -> str | None:
         
     return None
 
+def _get_request_headers() -> dict:
+    """Helper to return realistic browser headers with a random modern user agent."""
+    user_agent = random.choice(user_agents.USER_AGENTS)
+    return {
+        'User-Agent': user_agent,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Upgrade-Insecure-Requests': '1',
+    }
+
 # --- LinkedIn Scraping Logic ---
 def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
     """Fetches job IDs from LinkedIn search results pages with delays, rotating user agents, and retries."""
@@ -93,10 +103,8 @@ def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
             logging.info(f"Waiting for {sleep_time:.2f} seconds before next request...")
             time.sleep(sleep_time)
 
-        user_agent = random.choice(user_agents.USER_AGENTS)
-        headers = {'User-Agent': user_agent}
-    
-        logging.info(f"Using User-Agent: {user_agent}")
+        headers = _get_request_headers()
+        logging.info(f"Using User-Agent: {headers['User-Agent']}")
 
     
         logging.info(f"Scraping URL: {target_url}")
@@ -116,10 +124,8 @@ def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
                     logging.warning(f"Error 429: Too Many Requests. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
                     time.sleep(wait_time)
 
-                    user_agent = random.choice(user_agents.USER_AGENTS)
-                    headers = {'User-Agent': user_agent}
-                
-                    logging.info(f"Retrying with new User-Agent: {user_agent}")
+                    headers = _get_request_headers()
+                    logging.info(f"Retrying with new User-Agent: {headers['User-Agent']}")
                     continue
                 else:
                     
@@ -194,10 +200,8 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
     logging.info(f"Waiting for {sleep_time:.2f} seconds before fetching details...")
     time.sleep(sleep_time)
 
-    user_agent = random.choice(user_agents.USER_AGENTS)
-    headers = {'User-Agent': user_agent}
-
-    logging.info(f"Using User-Agent for details: {user_agent}")
+    headers = _get_request_headers()
+    logging.info(f"Using User-Agent for details: {headers['User-Agent']}")
 
 
     logging.info(f"Fetching details from: {job_detail_url}")
@@ -216,10 +220,8 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
                 
                 logging.warning(f"Error 429 for job ID {job_id}. Retrying attempt {retries}/{config.MAX_RETRIES} after {wait_time:.2f} seconds...")
                 time.sleep(wait_time)
-                user_agent = random.choice(user_agents.USER_AGENTS)
-                headers = {'User-Agent': user_agent}
-            
-                logging.info(f"Retrying job {job_id} with new User-Agent: {user_agent}")
+                headers = _get_request_headers()
+                logging.info(f"Retrying job {job_id} with new User-Agent: {headers['User-Agent']}")
                 continue
             else:
                 

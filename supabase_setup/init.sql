@@ -140,111 +140,10 @@ COMMENT ON COLUMN "public"."jobs"."last_checked" IS 'Timestamp when the record w
 
 
 
-CREATE OR REPLACE FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer) RETURNS SETOF "public"."jobs"
-    LANGUAGE "plpgsql"
-    AS $$
-BEGIN
-  RETURN QUERY
-  SELECT *
-  FROM jobs
-  WHERE 
-    is_active = TRUE AND
-    job_state = 'new' AND
-    status IN ('applied', 'interviewing', 'offered') -- Ensure these are the exact status strings in your DB
-  ORDER BY
-    CASE status
-      WHEN 'offered' THEN 1
-      WHEN 'interviewing' THEN 2
-      WHEN 'applied' THEN 3
-      ELSE 4 -- Should ideally not be reached due to the IN clause
-    END ASC,
-    application_date DESC
-  LIMIT p_page_size
-  OFFSET (p_page_number - 1) * p_page_size;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer) OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text" DEFAULT NULL::"text", "p_search_query" "text" DEFAULT NULL::"text") RETURNS SETOF "public"."jobs"
-    LANGUAGE "plpgsql"
-    AS $$
-BEGIN
-  RETURN QUERY
-  SELECT *
-  FROM jobs j -- Added alias 'j' for clarity
-  WHERE
-    j.is_active = TRUE AND
-    j.job_state = 'new' AND
-    j.status IN ('applied', 'interviewing', 'offer') -- Corrected 'offered' to 'offer' as per your count function
-    -- Conditionally apply provider filter
-    AND (p_provider IS NULL OR j.provider = p_provider)
-    -- Conditionally apply search query filter
-    AND (
-      p_search_query IS NULL OR
-      j.job_title ILIKE '%' || p_search_query || '%' OR
-      j.company ILIKE '%' || p_search_query || '%'
-      -- Add other fields to search if needed, e.g.:
-      -- OR j.job_description ILIKE '%' || p_search_query || '%'
-    )
-  ORDER BY
-    CASE j.status
-      WHEN 'offer' THEN 1       -- Corrected 'offered' to 'offer'
-      WHEN 'interviewing' THEN 2
-      WHEN 'applied' THEN 3
-      ELSE 4
-    END ASC,
-    j.application_date DESC
-  LIMIT p_page_size
-  OFFSET (p_page_number - 1) * p_page_size;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text" DEFAULT NULL::"text", "p_search_query" "text" DEFAULT NULL::"text", "p_application_status" "text" DEFAULT NULL::"text") RETURNS SETOF "public"."jobs"
-    LANGUAGE "plpgsql"
-    AS $$
-BEGIN
-  RETURN QUERY
-  SELECT *
-  FROM jobs j
-  WHERE
-    j.is_active = TRUE AND
-    j.job_state = 'new' AND
-    -- Conditionally apply application status filter
-    (
-      p_application_status IS NULL AND j.status IN ('applied', 'interviewing', 'offer') OR
-      j.status = p_application_status
-    )
-    -- Conditionally apply provider filter
-    AND (p_provider IS NULL OR j.provider = p_provider)
-    -- Conditionally apply search query filter
-    AND (
-      p_search_query IS NULL OR
-      j.job_title ILIKE '%' || p_search_query || '%' OR
-      j.company ILIKE '%' || p_search_query || '%'
-    )
-  ORDER BY
-    CASE j.status
-      WHEN 'offer' THEN 1
-      WHEN 'interviewing' THEN 2
-      WHEN 'applied' THEN 3
-      ELSE 4
-    END ASC,
-    j.application_date DESC
-  LIMIT p_page_size
-  OFFSET (p_page_number - 1) * p_page_size;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text") OWNER TO "postgres";
-
+-- Drop any obsolete function overloads to prevent PostgREST PGRST203 ambiguity
+DROP FUNCTION IF EXISTS "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer);
+DROP FUNCTION IF EXISTS "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text");
+DROP FUNCTION IF EXISTS "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text");
 
 CREATE OR REPLACE FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text" DEFAULT NULL::"text", "p_search_query" "text" DEFAULT NULL::"text", "p_application_status" "text" DEFAULT NULL::"text", "p_sort_by" "text" DEFAULT NULL::"text", "p_sort_order" "text" DEFAULT 'desc'::"text") RETURNS SETOF "public"."jobs"
     LANGUAGE "plpgsql"
@@ -389,70 +288,8 @@ $$;
 ALTER FUNCTION "public"."get_jobs_for_resume_generation_custom_sort"("p_page_number" integer, "p_page_size" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text" DEFAULT NULL::"text", "p_min_score" integer DEFAULT 50, "p_max_score" integer DEFAULT 100, "p_is_interested_option" "text" DEFAULT NULL::"text") RETURNS TABLE("job_id" "text", "company" "text", "job_title" "text", "level" "text", "location" "text", "description" "text", "status" "text", "is_active" boolean, "application_date" timestamp with time zone, "resume_score" smallint, "notes" "text", "scraped_at" timestamp with time zone, "last_checked" timestamp with time zone, "job_state" "text", "resume_score_stage" "text", "is_interested" boolean, "customized_resume_id" "uuid", "resume_link" "text", "provider" "text")
-    LANGUAGE "plpgsql"
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT
-        j.job_id,
-        j.company,
-        j.job_title,
-        j.level,
-        j.location,
-        j.description,
-        j.status,
-        j.is_active,
-        j.application_date,
-        j.resume_score,
-        j.notes,
-        j.scraped_at,
-        j.last_checked,
-        j.job_state,
-        j.resume_score_stage,
-        j.is_interested,
-        j.customized_resume_id,
-        cr.resume_link,
-        j.provider
-    FROM
-        jobs j
-    INNER JOIN
-        customized_resumes cr ON j.customized_resume_id = cr.id
-    WHERE
-        j.is_active = TRUE
-        AND j.status = 'new'
-        AND j.job_state = 'new'
-        AND j.resume_score >= p_min_score
-        AND j.resume_score <= p_max_score
-        AND (p_provider IS NULL OR j.provider = p_provider)
-        AND (
-            p_is_interested_option IS NULL
-            OR (p_is_interested_option = 'true' AND j.is_interested IS TRUE)
-            OR (p_is_interested_option = 'false' AND j.is_interested IS FALSE)
-            OR (p_is_interested_option = 'null_value' AND j.is_interested IS NULL)
-        )
-    ORDER BY
-        CASE
-            WHEN j.is_interested IS TRUE THEN 1
-            WHEN j.is_interested IS NULL THEN 2
-            WHEN j.is_interested IS FALSE THEN 3
-            ELSE 4
-        END,
-        CASE
-            WHEN j.resume_score_stage = 'custom' THEN 1
-            WHEN j.resume_score_stage = 'initial' THEN 2
-            ELSE 3
-        END,
-        j.resume_score DESC NULLS LAST,
-        j.scraped_at DESC
-    LIMIT p_page_size
-    OFFSET (p_page_number - 1) * p_page_size;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_min_score" integer, "p_max_score" integer, "p_is_interested_option" "text") OWNER TO "postgres";
-
+-- Drop obsolete 6-parameter overload to prevent PostgREST PGRST203 ambiguity
+DROP FUNCTION IF EXISTS "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_min_score" integer, "p_max_score" integer, "p_is_interested_option" "text");
 
 CREATE OR REPLACE FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text" DEFAULT NULL::"text", "p_min_score" integer DEFAULT 50, "p_max_score" integer DEFAULT 100, "p_is_interested_option" "text" DEFAULT NULL::"text", "p_search_query" "text" DEFAULT NULL::"text") RETURNS TABLE("job_id" "text", "company" "text", "job_title" "text", "level" "text", "location" "text", "description" "text", "status" "text", "is_active" boolean, "application_date" timestamp with time zone, "resume_score" smallint, "notes" "text", "scraped_at" timestamp with time zone, "last_checked" timestamp with time zone, "job_state" "text", "resume_score_stage" "text", "is_interested" boolean, "customized_resume_id" "uuid", "resume_link" "text", "provider" "text")
     LANGUAGE "plpgsql"
@@ -655,24 +492,6 @@ GRANT ALL ON TABLE "public"."jobs" TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer) TO "anon";
-GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer) TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text") TO "service_role";
-
-
-
 GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text", "p_sort_by" "text", "p_sort_order" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text", "p_sort_by" "text", "p_sort_order" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text", "p_sort_by" "text", "p_sort_order" "text") TO "service_role";
@@ -688,12 +507,6 @@ GRANT ALL ON FUNCTION "public"."get_jobs_for_rescore"("p_limit_val" integer) TO 
 GRANT ALL ON FUNCTION "public"."get_jobs_for_resume_generation_custom_sort"("p_page_number" integer, "p_page_size" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."get_jobs_for_resume_generation_custom_sort"("p_page_number" integer, "p_page_size" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_jobs_for_resume_generation_custom_sort"("p_page_number" integer, "p_page_size" integer) TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_min_score" integer, "p_max_score" integer, "p_is_interested_option" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_min_score" integer, "p_max_score" integer, "p_is_interested_option" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_min_score" integer, "p_max_score" integer, "p_is_interested_option" "text") TO "service_role";
 
 
 
