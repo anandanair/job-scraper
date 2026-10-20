@@ -45,7 +45,54 @@ class Resume(BaseModel):
     languages: List[str] = Field(default_factory=list)
     links: Links = Field(default_factory=Links)
 
-# --- Pydantic models for LLM structured output ---
+# --- Pydantic models for Stage 1 & Stage 2 LLM structured output ---
+class RoleFocus(BaseModel):
+    company: str
+    job_title: str
+    key_achievements_to_highlight: List[str] = Field(
+        default_factory=list,
+        description="Key responsibilities, tools, or achievements from this role in the base resume to emphasize."
+    )
+    points_to_condense_or_omit: List[str] = Field(
+        default_factory=list,
+        description="Responsibilities or tasks from this role in the base resume that are irrelevant to the target JD."
+    )
+
+class CurationPlan(BaseModel):
+    strategy_summary: str = Field(
+        description="Brief 1-2 sentence strategy explaining how the candidate's actual background aligns with the target job."
+    )
+    selected_project_names: List[str] = Field(
+        default_factory=list,
+        description="Exact names of projects from the base resume to include (choose 1 to 3 most relevant projects; omit irrelevant ones)."
+    )
+    selected_skills: List[str] = Field(
+        default_factory=list,
+        description="Curated list of 8 to 15 skills strictly from the candidate's base resume that match the target JD."
+    )
+    experience_guidance: List[RoleFocus] = Field(
+        default_factory=list,
+        description="Guidance for each job in the candidate's history on what to highlight or prune."
+    )
+
+class TailoredResumeContent(BaseModel):
+    summary: str = Field(
+        description="Impactful 2-3 sentence professional summary tailored to the target job, preserving core identity."
+    )
+    skills: List[str] = Field(
+        default_factory=list,
+        description="Curated list of 8-15 skills matching the target job (strictly subset of base resume)."
+    )
+    experience: List[Experience] = Field(
+        default_factory=list,
+        description="List of all work experiences with tailored, newline-separated bullet-point descriptions."
+    )
+    projects: List[Project] = Field(
+        default_factory=list,
+        description="List of selected projects with tailored, newline-separated bullet-point descriptions."
+    )
+
+# --- Legacy models kept for backwards compatibility ---
 class SummaryOutput(BaseModel):
     summary: str
 
