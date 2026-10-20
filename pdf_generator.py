@@ -58,7 +58,7 @@ def is_valid_profile_link(url: Optional[str], platform: str) -> bool:
 def create_resume_pdf(resume_data: Resume) -> bytes:
     """
     Generates an ATS-friendly PDF resume with improved design from the provided Resume data object.
-    Enforces clean page budgeting to comfortably fit within 2 pages.
+    Enforces clean page budgeting to comfortably fit within 2 pages without orphan section headings.
     Returns the PDF content as bytes.
     """
     buffer = io.BytesIO()
@@ -82,7 +82,6 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
     # Define a modern color palette
     primary_color = colors.HexColor('#1976D2')  # Modern blue
     secondary_color = colors.HexColor('#455A64')  # Dark blue-gray
-    accent_color = colors.HexColor('#03A9F4')  # Light blue
     text_color = colors.HexColor('#212121')  # Near black
     light_text = colors.HexColor('#757575')  # Medium gray
     
@@ -106,6 +105,7 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
         fontName='Helvetica-Bold',
         textColor=primary_color,
         alignment=TA_LEFT,
+        keepWithNext=True,  # Prevent heading from separating from following content
     )
     
     style_normal = ParagraphStyle(
@@ -211,24 +211,22 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
 
     # --- Summary ---
     if resume_data.summary and resume_data.summary != "NA":
-        story.append(Paragraph("PROFESSIONAL SUMMARY", style_section_heading))
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4))
-        
         cleaned_summary = resume_data.summary
         if cleaned_summary.startswith('"') and cleaned_summary.endswith('"'):
             cleaned_summary = cleaned_summary[1:-1]
             
-        story.append(Paragraph(cleaned_summary, style_normal))
-        story.append(Spacer(1, 0.04*inch))
+        story.append(KeepTogether([
+            Paragraph("PROFESSIONAL SUMMARY", style_section_heading),
+            HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4),
+            Paragraph(cleaned_summary, style_normal),
+            Spacer(1, 0.04*inch)
+        ]))
     
     # --- Skills ---
     if resume_data.skills and resume_data.skills != ["NA"]:
         skills_list = [s for s in resume_data.skills if s != "NA"]
         
         if skills_list:
-            story.append(Paragraph("SKILLS", style_section_heading))
-            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4))
-            
             num_columns = 3
             table_data = []
             num_skills = len(skills_list)
@@ -257,15 +255,24 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                     ('BOTTOMPADDING', (0,0), (-1,-1), 2),
                     ('TOPPADDING', (0,0), (-1,-1), 1),
                 ]))
-                story.append(skills_table)
-                story.append(Spacer(1, 0.05*inch))
+                
+                story.append(KeepTogether([
+                    Paragraph("SKILLS", style_section_heading),
+                    HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4),
+                    skills_table,
+                    Spacer(1, 0.05*inch)
+                ]))
     
     # --- Experience ---
     if resume_data.experience:
-        story.append(Paragraph("PROFESSIONAL EXPERIENCE", style_section_heading))
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4))
+        exp_header = [
+            Paragraph("PROFESSIONAL EXPERIENCE", style_section_heading),
+            HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4)
+        ]
         
+        first_exp = True
         for exp in resume_data.experience:
+            exp_flowables = []
             job_title = f"{exp.job_title}" if exp.job_title != "NA" else ""
             
             company_parts = []
@@ -294,8 +301,8 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                 ('LEFTPADDING', (0, 0), (0, -1), 0),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 0),
             ]))
-            story.append(tbl)
-            story.append(Spacer(1, 0.03*inch))
+            exp_flowables.append(tbl)
+            exp_flowables.append(Spacer(1, 0.03*inch))
             
             if exp.description and exp.description != "NA":
                 if '\n' in exp.description:
@@ -308,7 +315,7 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                             elif bullet_text.startswith('-'):
                                 bullet_text = f"• {bullet_text[1:].strip()}"
                             
-                            story.append(Paragraph(bullet_text, style_bullet))
+                            exp_flowables.append(Paragraph(bullet_text, style_bullet))
                 else:
                     text = exp.description.strip()
                     for abr, placeholder in [("e.g.", "TEMP_EG"), ("i.e.", "TEMP_IE"), ("etc.", "TEMP_ETC"), ("vs.", "TEMP_VS"), ("Ph.D.", "TEMP_PHD"), ("U.S.", "TEMP_US")]:
@@ -320,16 +327,27 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                                 sentence = sentence.replace(placeholder, abr)
                             if i < len(sentences) - 1 or not sentence[-1] in ['.', '!', '?']:
                                 sentence = sentence + '.'
-                            story.append(Paragraph(f"• {sentence.strip()}", style_bullet))
+                            exp_flowables.append(Paragraph(f"• {sentence.strip()}", style_bullet))
             
-            story.append(Spacer(1, 0.06*inch))
+            exp_flowables.append(Spacer(1, 0.06*inch))
+            
+            if first_exp:
+                # Bind section heading with the first experience so it never orphans at bottom of page
+                story.append(KeepTogether(exp_header + exp_flowables))
+                first_exp = False
+            else:
+                story.append(KeepTogether(exp_flowables))
     
     # --- Education ---
     if resume_data.education:
-        story.append(Paragraph("EDUCATION", style_section_heading))
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4))
+        edu_header = [
+            Paragraph("EDUCATION", style_section_heading),
+            HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4)
+        ]
         
+        first_edu = True
         for edu in resume_data.education:
+            edu_flowables = []
             degree_info = f"<b>{edu.degree}</b>" if edu.degree != "NA" else ""
             if edu.field_of_study and edu.field_of_study != "NA": 
                 degree_info += f", {edu.field_of_study}"
@@ -356,13 +374,24 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
                 ('TOPPADDING', (0, 0), (-1, -1), 1),
             ]))
-            story.append(KeepTogether([tbl, Spacer(1, 0.05*inch)]))
+            edu_flowables.append(tbl)
+            edu_flowables.append(Spacer(1, 0.05*inch))
+            
+            if first_edu:
+                # Bind section heading with first education item
+                story.append(KeepTogether(edu_header + edu_flowables))
+                first_edu = False
+            else:
+                story.append(KeepTogether(edu_flowables))
     
     # --- Projects ---
     if resume_data.projects:
-        story.append(Paragraph("PROJECTS", style_section_heading))
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4))
+        proj_header = [
+            Paragraph("PROJECTS", style_section_heading),
+            HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4)
+        ]
         
+        first_proj = True
         for proj in resume_data.projects:
             proj_flowables = []
             if proj.name and proj.name != "NA":
@@ -392,15 +421,27 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                     proj_flowables.append(Paragraph(tech_text, style_tech))
             
             proj_flowables.append(Spacer(1, 0.05*inch))
-            story.append(KeepTogether(proj_flowables))
+            
+            if first_proj:
+                # Bind section heading with first project item so PROJECTS is never stranded at page bottom
+                story.append(KeepTogether(proj_header + proj_flowables))
+                first_proj = False
+            else:
+                story.append(KeepTogether(proj_flowables))
     
     # --- Certifications ---
     if resume_data.certifications:
-        cert_items = []
+        cert_header = [
+            Paragraph("CERTIFICATIONS", style_section_heading),
+            HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4)
+        ]
+        
+        first_cert = True
         for cert in resume_data.certifications:
             if (not cert.name or cert.name == "NA") and (not cert.issuer or cert.issuer == "NA"):
                 continue
 
+            cert_flowables = []
             cert_name = f"<b>{cert.name}</b>" if cert.name and cert.name != "NA" else ""
             year_text = cert.year if cert.year and cert.year != "NA" else ""
             
@@ -419,21 +460,25 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
                 ('TOPPADDING', (0, 0), (-1, -1), 1),
             ]))
-            cert_items.append(KeepTogether([tbl, Spacer(1, 0.04*inch)]))
+            cert_flowables.append(tbl)
+            cert_flowables.append(Spacer(1, 0.04*inch))
 
-        if cert_items:
-            story.append(Paragraph("CERTIFICATIONS", style_section_heading))
-            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4))
-            for item in cert_items:
-                story.append(item)
+            if first_cert:
+                # Bind section heading with first certification item
+                story.append(KeepTogether(cert_header + cert_flowables))
+                first_cert = False
+            else:
+                story.append(KeepTogether(cert_flowables))
     
     # --- Languages ---
     if resume_data.languages and resume_data.languages != ["NA"]:
         lang_list = [l for l in resume_data.languages if l != "NA"]
         if lang_list:
-            story.append(Paragraph("LANGUAGES", style_section_heading))
-            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4))
-            story.append(Paragraph(", ".join(lang_list), style_normal))
+            story.append(KeepTogether([
+                Paragraph("LANGUAGES", style_section_heading),
+                HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2C3E50'), spaceBefore=0, spaceAfter=4),
+                Paragraph(", ".join(lang_list), style_normal)
+            ]))
     
     try:
         doc.build(story)
