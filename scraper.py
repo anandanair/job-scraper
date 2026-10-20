@@ -94,9 +94,19 @@ def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
     max_start = config.LINKEDIN_MAX_START
 
 
+    # Format workplace type filter (f_WT: 1=Onsite, 2=Remote, 3=Hybrid)
+    f_wt = getattr(config, 'LINKEDIN_F_WT', None)
+    if isinstance(f_wt, (list, tuple)):
+        f_wt_str = ",".join(str(x) for x in f_wt)
+    elif f_wt is not None:
+        f_wt_str = str(f_wt).strip()
+    else:
+        f_wt_str = ""
+    f_wt_param = f"&f_WT={f_wt_str}" if f_wt_str else ""
+
     logging.info(f"--- Starting Phase 1: Scraping Job IDs (Max Start: {max_start}) ---")
     while start <= max_start:
-        target_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={search_query.replace(' ', '%20')}&location={location}&geoId={config.LINKEDIN_GEO_ID}&f_TPR={config.LINKEDIN_JOB_POSTING_DATE}&f_JT={config.LINKEDIN_JOB_TYPE}&f_WT={config.LINKEDIN_F_WT}&start={start}"
+        target_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={search_query.replace(' ', '%20')}&location={location}&geoId={config.LINKEDIN_GEO_ID}&f_TPR={config.LINKEDIN_JOB_POSTING_DATE}&f_JT={config.LINKEDIN_JOB_TYPE}{f_wt_param}&start={start}"
 
         if start > 0:
             sleep_time = random.uniform(5.0, 15.0)
