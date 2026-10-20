@@ -2,7 +2,7 @@ import io
 import logging
 from typing import Optional
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle, KeepTogether
+from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, HRFlowable, Table, TableStyle, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from reportlab.lib.units import inch
@@ -64,7 +64,7 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
     buffer = io.BytesIO()
     
     # Document setup with tight ATS margins to preserve vertical space
-    doc = SimpleDocTemplate(
+    doc = BaseDocTemplate(
         buffer, 
         pagesize=letter,
         leftMargin=0.5*inch, 
@@ -72,9 +72,22 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
         topMargin=0.45*inch, 
         bottomMargin=0.45*inch
     )
+    frame = Frame(
+        doc.leftMargin, 
+        doc.bottomMargin, 
+        doc.width, 
+        doc.height, 
+        leftPadding=0, 
+        rightPadding=0, 
+        topPadding=0, 
+        bottomPadding=0, 
+        id='normal'
+    )
+    template = PageTemplate(id='resume_page', frames=frame)
+    doc.addPageTemplates([template])
     
     # Available content width
-    avail_width = letter[0] - doc.leftMargin - doc.rightMargin # 7.5 inches
+    avail_width = doc.width # 7.5 inches = 540 points
     
     # Create custom styles
     styles = getSampleStyleSheet()
@@ -170,9 +183,10 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
         name='Technologies',
         parent=styles['Normal'],
         fontSize=8.5,
+        leading=11.5,
         fontName='Helvetica-Oblique',
         textColor=light_text,
-        spaceAfter=4,
+        spaceAfter=3,
     )
     
     story = []
@@ -247,11 +261,12 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                 col_width = avail_width / num_columns
                 colWidths = [col_width] * num_columns
                 
-                skills_table = Table(table_data, colWidths=colWidths)
+                skills_table = Table(table_data, colWidths=colWidths, hAlign='LEFT')
                 skills_table.setStyle(TableStyle([
                     ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                    ('LEFTPADDING', (0,0), (-1,-1), 4),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 4),
+                    ('LEFTPADDING', (0,0), (0,-1), 0),
+                    ('LEFTPADDING', (1,0), (-1,-1), 8),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
                     ('BOTTOMPADDING', (0,0), (-1,-1), 2),
                     ('TOPPADDING', (0,0), (-1,-1), 1),
                 ]))
@@ -293,12 +308,12 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
             if company_location:
                 job_rows.append([Paragraph(company_location, style_company), Paragraph("", style_dates)])
                 
-            tbl = Table(job_rows, colWidths=[avail_width - 2.0*inch, 2.0*inch])
+            tbl = Table(job_rows, colWidths=[avail_width - 2.0*inch, 2.0*inch], hAlign='LEFT')
             tbl.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
                 ('TOPPADDING', (0, 0), (-1, -1), 1),
-                ('LEFTPADDING', (0, 0), (0, -1), 0),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 0),
             ]))
             exp_flowables.append(tbl)
@@ -366,7 +381,7 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
             if edu.institution and edu.institution != "NA":
                 edu_rows.append([Paragraph(edu.institution, style_normal), Paragraph("", style_dates)])
                 
-            tbl = Table(edu_rows, colWidths=[avail_width - 1.8*inch, 1.8*inch])
+            tbl = Table(edu_rows, colWidths=[avail_width - 1.8*inch, 1.8*inch], hAlign='LEFT')
             tbl.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
@@ -397,6 +412,13 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
             if proj.name and proj.name != "NA":
                 proj_flowables.append(Paragraph(f"<b>{proj.name}</b>", style_job_title))
             
+            # Technologies right below header before description
+            if proj.technologies and proj.technologies != ["NA"]:
+                tech_list = [t for t in proj.technologies if t != "NA"]
+                if tech_list:
+                    tech_text = f"<i>Technologies:</i> {', '.join(tech_list)}"
+                    proj_flowables.append(Paragraph(tech_text, style_tech))
+
             if proj.description and proj.description != "NA":
                 if '\n' in proj.description:
                     bullets = proj.description.split('\n')
@@ -413,12 +435,6 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
                     sentences = [s.strip() for s in text.split('.') if s.strip()]
                     for s in sentences:
                         proj_flowables.append(Paragraph(f"• {s}.", style_bullet))
-            
-            if proj.technologies and proj.technologies != ["NA"]:
-                tech_list = [t for t in proj.technologies if t != "NA"]
-                if tech_list:
-                    tech_text = f"<i>Technologies:</i> {', '.join(tech_list)}"
-                    proj_flowables.append(Paragraph(tech_text, style_tech))
             
             proj_flowables.append(Spacer(1, 0.05*inch))
             
@@ -452,7 +468,7 @@ def create_resume_pdf(resume_data: Resume) -> bytes:
             if cert.issuer and cert.issuer != "NA":
                 table_rows.append([Paragraph(cert.issuer, style_company), Paragraph("", style_dates)])
 
-            tbl = Table(table_rows, colWidths=[avail_width - 1.8*inch, 1.8*inch])
+            tbl = Table(table_rows, colWidths=[avail_width - 1.8*inch, 1.8*inch], hAlign='LEFT')
             tbl.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
