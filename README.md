@@ -47,7 +47,7 @@ Click the **Fork** button at the top-right of this GitHub repository to create a
 3. Once your project is created (takes ~1 minute), navigate to the **SQL Editor** tab (the `>_` icon on the left sidebar).
 4. Click **"New query"**.
 5. Open the [`supabase_setup/init.sql`](supabase_setup/init.sql) file from this repository, copy its entire contents, paste it into the Supabase SQL Editor, and click **"Run"**.
-   - *What this does*: Automatically creates all database tables (`jobs`, `base_resume`, `customized_resumes`), indexes, triggers, and creates both private storage buckets (`resumes` and `personalized_resumes`).
+   - *What this does*: Automatically creates all database tables (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`), indexes, triggers, and creates both private storage buckets (`resumes` and `personalized_resumes`).
 
 ---
 
@@ -171,9 +171,13 @@ Commit your changes to [`config.py`](config.py).
 
 ## Viewing Your Jobs: Web Interface
 
-A modern Next.js web application is available to view scraped jobs, filter by score/interest, track applications, on-demand tailor custom resumes, rescore jobs with AI, and preview generated PDF resumes.
+A modern Next.js web application is available to view scraped jobs, filter by score/interest, track applications, customize your base resume and ATS styling via **Resume Studio**, on-demand tailor custom resumes, rescore jobs with AI, and preview generated PDF resumes.
 
 - **Frontend Repository**: [jobs-scrapper-web](https://github.com/anandanair/jobs-scrapper-web)
+- **Key Features Included**:
+  - **Resume Studio (`/resume-studio`)**: Dual-mode master resume editor (`Resume Content` + `Design & Style`) with live ATS persona switching, tag chip editor, unified save/reset, and calibrated 1:1 PDF typesetting with orphan heading prevention.
+  - **Pipeline Dashboard**: Interactive pipeline tracking, metrics, and clear score distinction between base and tailored resumes.
+  - **On-Demand AI Tailoring & Rescoring**: Tailor any resume for a specific job description with single-click AI optimization.
 - **Setup**:
   1. Clone `jobs-scrapper-web`:
      ```bash
