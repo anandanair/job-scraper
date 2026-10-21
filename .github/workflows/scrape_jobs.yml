@@ -3,7 +3,8 @@ name: Daily Job Scraper
 
 on:
   schedule:
-    - cron: "0 10 * * *"
+    - cron: "30 3 * * *"   # 11:30 AM SGT (Morning job postings)
+    - cron: "0 11 * * *"   # 7:00 PM SGT (Evening job postings)
   workflow_dispatch:
 
 jobs:

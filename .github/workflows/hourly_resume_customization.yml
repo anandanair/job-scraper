@@ -2,8 +2,8 @@ name: Resume Customization
 
 on:
   schedule:
-    # Runs every 6 hours (configurable — adjust to match your quota)
-    - cron: "0 */6 * * *"
+    # Runs every 3 hours (8 runs/day) (configurable — adjust to match your quota)
+    - cron: "0 */3 * * *"
   workflow_dispatch: # Allows manual triggering from the Actions tab in GitHub
 
 jobs:

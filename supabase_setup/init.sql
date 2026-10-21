@@ -270,7 +270,7 @@ BEGIN
         j.is_active = TRUE
         AND j.status = 'new'
         AND j.job_state = 'new'
-        AND j.resume_score >= 50
+        AND j.resume_score >= 70
         AND j.customized_resume_id IS NULL -- Key new filter
     ORDER BY
         CASE
