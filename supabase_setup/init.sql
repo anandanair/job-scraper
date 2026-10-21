@@ -360,6 +360,39 @@ $$;
 
 ALTER FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_min_score" integer, "p_max_score" integer, "p_is_interested_option" "text", "p_search_query" "text") OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."get_dashboard_stats"(
+    "p_today_start" timestamp with time zone,
+    "p_today_end" timestamp with time zone
+) RETURNS "json"
+    LANGUAGE "plpgsql" STABLE
+    AS $$
+DECLARE
+    result json;
+BEGIN
+    SELECT json_build_object(
+        'totalNewJobs', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new'),
+        'totalAppliedJobs', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new'),
+        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score >= 50 AND resume_score <= 100),
+        'expiredJobsCount', count(*) FILTER (WHERE job_state = 'expired'),
+        'pendingScoreJobsCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NULL),
+        'scoredJobsCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NOT NULL),
+        'customResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NOT NULL),
+        'noCustomResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NULL),
+        'scoredWithOriginalResumeCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'initial'),
+        'scoredWithCustomResumeCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'custom'),
+        'linkedInJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'linkedin'),
+        'careersFutureJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'careers_future'),
+        'appliedTodayCount', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new' AND application_date >= p_today_start AND application_date < p_today_end)
+    )
+    INTO result
+    FROM "public"."jobs";
+
+    RETURN result;
+END;
+$$;
+
+ALTER FUNCTION "public"."get_dashboard_stats"("p_today_start" timestamp with time zone, "p_today_end" timestamp with time zone) OWNER TO "postgres";
+
 
 CREATE OR REPLACE FUNCTION "public"."update_last_updated_column"() RETURNS "trigger"
     LANGUAGE "plpgsql"
@@ -455,6 +488,11 @@ CREATE INDEX "idx_jobs_scraped_at" ON "public"."jobs" USING "btree" ("scraped_at
 
 CREATE INDEX "idx_jobs_status" ON "public"."jobs" USING "btree" ("status");
 
+CREATE INDEX IF NOT EXISTS "idx_jobs_job_state" ON "public"."jobs" USING "btree" ("job_state");
+CREATE INDEX IF NOT EXISTS "idx_jobs_provider" ON "public"."jobs" USING "btree" ("provider");
+CREATE INDEX IF NOT EXISTS "idx_jobs_application_date" ON "public"."jobs" USING "btree" ("application_date");
+CREATE INDEX IF NOT EXISTS "idx_jobs_active_status_state" ON "public"."jobs" ("is_active", "status", "job_state");
+
 
 
 CREATE OR REPLACE TRIGGER "update_customized_resumes_last_updated" BEFORE UPDATE ON "public"."customized_resumes" FOR EACH ROW EXECUTE FUNCTION "public"."update_last_updated_column"();
@@ -513,6 +551,10 @@ GRANT ALL ON FUNCTION "public"."get_jobs_for_resume_generation_custom_sort"("p_p
 GRANT ALL ON FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_min_score" integer, "p_max_score" integer, "p_is_interested_option" "text", "p_search_query" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_min_score" integer, "p_max_score" integer, "p_is_interested_option" "text", "p_search_query" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_top_scored_jobs_custom_sort"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_min_score" integer, "p_max_score" integer, "p_is_interested_option" "text", "p_search_query" "text") TO "service_role";
+
+GRANT ALL ON FUNCTION "public"."get_dashboard_stats"("p_today_start" timestamp with time zone, "p_today_end" timestamp with time zone) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_dashboard_stats"("p_today_start" timestamp with time zone, "p_today_end" timestamp with time zone) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_dashboard_stats"("p_today_start" timestamp with time zone, "p_today_end" timestamp with time zone) TO "service_role";
 
 
 
