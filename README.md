@@ -162,16 +162,16 @@ Commit your changes to [`config.py`](config.py).
 1. In your forked repository, click the **Actions** tab.
 2. If GitHub displays a banner saying *"Workflows aren’t running on this forked repository"*, click **"Enable Actions on this repository"**.
 3. The automated background workflows will now run on a schedule:
-   - **`Daily Job Scraper`** (`scrape_jobs.yml`): Scrapes new job postings daily and saves them to Supabase.
-   - **`Job Scorer`** (`score_jobs.yml`): Runs every 4 hours to score unscored jobs against your resume (0–100).
-   - **`Daily Job Manager`** (`job_manager.yml`): Marks jobs older than 30 days as expired and checks if postings are still active.
-   - **`Resume Customization`** (`hourly_resume_customization.yml`): Generates custom tailored resumes for top-scoring jobs.
+   - **`Daily Job Scraper`** (`scrape_jobs.yml`): Runs twice daily at 11:30 AM SGT (`30 3 * * *`) and 7:00 PM SGT (`0 11 * * *`) to capture both morning and end-of-day postings.
+   - **`Job Scorer`** (`score_jobs.yml`): Runs every 4 hours to score unscored jobs against your resume (0–100) in batches of 10 (`JOBS_TO_SCORE_PER_RUN = 10`).
+   - **`Daily Job Manager`** (`job_manager.yml`): Runs daily to mark jobs older than 30 days as expired and check if postings are still active.
+   - **`Resume Customization`** (`hourly_resume_customization.yml`): Runs every 3 hours (`0 */3 * * *`) to generate custom tailored resumes (2 per run) for jobs with `resume_score >= 70`.
 
 ---
 
 ## Viewing Your Jobs: Web Interface
 
-A modern Next.js web application is available to view scraped jobs, filter by score/interest, track applications, and preview generated PDF resumes.
+A modern Next.js web application is available to view scraped jobs, filter by score/interest, track applications, on-demand tailor custom resumes, rescore jobs with AI, and preview generated PDF resumes.
 
 - **Frontend Repository**: [jobs-scrapper-web](https://github.com/anandanair/jobs-scrapper-web)
 - **Setup**:
@@ -181,11 +181,15 @@ A modern Next.js web application is available to view scraped jobs, filter by sc
      cd jobs-scrapper-web
      npm install
      ```
-  2. Create a `.env.local` file with the **same Supabase project credentials**:
+  2. Create a `.env.local` file with your Supabase and LLM credentials:
      ```env
      NEXT_PUBLIC_SUPABASE_URL="https://<YOUR_PROJECT_REF>.supabase.co"
      NEXT_PUBLIC_SUPABASE_ANON_KEY="sb_publishable_..."
      SUPABASE_SERVICE_ROLE_KEY="sb_secret_..."
+
+     # Optional: Enables on-demand in-app resume tailoring & rescoring
+     LLM_API_KEY="AIzaSy... or fw_..."
+     LLM_MODEL="accounts/fireworks/models/glm-5p3-flash"
      ```
   3. Start the dashboard:
      ```bash
