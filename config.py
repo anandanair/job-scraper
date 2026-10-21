@@ -15,6 +15,7 @@ SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME = "customized_resumes"
 SUPABASE_STORAGE_BUCKET = "personalized_resumes"
 SUPABASE_RESUME_STORAGE_BUCKET = "resumes"
 SUPABASE_BASE_RESUME_TABLE_NAME = "base_resume"
+SUPABASE_RESUME_STYLE_TABLE_NAME = "resume_style_settings"
 BASE_RESUME_PATH = "resume.json"
 
 # API keys — set only the key(s) needed for your chosen provider.

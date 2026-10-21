@@ -657,3 +657,63 @@ def get_base_resume() -> Optional[dict]:
         logging.error(f"Error fetching base resume from Supabase: {e}", exc_info=True)
         return None
 
+
+DEFAULT_THEME_CONFIG = {
+    "preset": "modern_tech",
+    "typography": {
+        "fontFamily": "Helvetica",
+        "fontSizeScale": "normal",
+        "lineSpacing": "normal",
+    },
+    "colors": {
+        "primary": "#1976D2",
+        "secondary": "#455A64",
+        "text": "#212121",
+        "light": "#757575",
+        "divider": "#2C3E50",
+    },
+    "layout": {
+        "headerAlignment": "left",
+        "showDividers": True,
+        "dividerThickness": 1,
+        "skillsLayout": "grid_3col",
+        "margins": "normal",
+        "sectionOrder": [
+            "summary",
+            "skills",
+            "experience",
+            "education",
+            "projects",
+            "certifications",
+            "languages",
+        ],
+        "hiddenSections": [],
+        "customSectionTitles": {},
+    },
+}
+
+
+def get_active_resume_style() -> dict:
+    """
+    Fetches the active resume style settings from the 'resume_style_settings' table.
+    Falls back gracefully to DEFAULT_THEME_CONFIG if table or record does not exist.
+    """
+    table_name = getattr(config, "SUPABASE_RESUME_STYLE_TABLE_NAME", "resume_style_settings")
+    try:
+        response = supabase.table(table_name)\
+            .select("*")\
+            .eq("is_active", True)\
+            .order("updated_at", desc=True)\
+            .limit(1)\
+            .execute()
+
+        if response.data and len(response.data) > 0:
+            theme_config = response.data[0].get("theme_config")
+            if theme_config and isinstance(theme_config, dict):
+                return theme_config
+    except Exception as e:
+        logging.warning(f"Could not fetch resume style from Supabase: {e}. Using default.")
+
+    return DEFAULT_THEME_CONFIG
+
+

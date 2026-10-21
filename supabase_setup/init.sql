@@ -658,3 +658,22 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('personalized_resumes', 'personalized_resumes', false)
 ON CONFLICT (id) DO NOTHING;
+
+-- --- Resume Style Settings Table ---
+CREATE TABLE IF NOT EXISTS "public"."resume_style_settings" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL PRIMARY KEY,
+    "name" "text" NOT NULL DEFAULT 'Modern Tech',
+    "preset" "text" NOT NULL DEFAULT 'modern_tech',
+    "is_active" boolean DEFAULT true,
+    "theme_config" "jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now(),
+    "updated_at" timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE "public"."resume_style_settings" OWNER TO "postgres";
+ALTER TABLE "public"."resume_style_settings" ENABLE ROW LEVEL SECURITY;
+
+GRANT ALL ON TABLE "public"."resume_style_settings" TO "anon";
+GRANT ALL ON TABLE "public"."resume_style_settings" TO "authenticated";
+GRANT ALL ON TABLE "public"."resume_style_settings" TO "service_role";
+
