@@ -17,7 +17,7 @@ echo [*] Checking Node.js prerequisite...
 where node >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js is not installed or not found in your PATH!
-    echo Please install Node.js v20+ from: https://nodejs.org
+    echo Please install Node.js v24 LTS from: https://nodejs.org
     echo After installing, reopen this script.
     echo.
     pause

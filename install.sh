@@ -19,7 +19,7 @@ echo ""
 echo -e "${BLUE}[*] Checking Node.js prerequisite...${NC}"
 if ! command -v node &> /dev/null; then
     echo -e "${RED}[ERROR] Node.js is not installed or not in PATH!${NC}"
-    echo "Please install Node.js 20+ from: https://nodejs.org"
+    echo "Please install Node.js 24 (LTS) from: https://nodejs.org"
     exit 1
 fi
 echo -e "    Found Node.js $(node -v)"

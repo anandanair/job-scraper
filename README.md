@@ -72,7 +72,7 @@ graph TD
 
 ## 🚀 Quick Start (1-Click Installer)
 
-The repository provides automated 1-click installers that verify prerequisites (Node.js 20+, Python 3.10+), install dependencies, start the dev server, and launch the setup wizard.
+The repository provides automated 1-click installers that verify prerequisites (Node.js 24 LTS recommended, Python 3.10+), install dependencies, start the dev server, and launch the setup wizard.
 
 ### Windows
 Double-click [`install.bat`](install.bat) or run from PowerShell / Command Prompt:
