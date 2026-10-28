@@ -1,0 +1,15 @@
+{
+  "name": "job-scraper-monorepo",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix web run start",
+    "install:web": "npm --prefix web install",
+    "scrape": "python backend/scraper.py",
+    "score": "python backend/score_jobs.py",
+    "customize": "python backend/custom_resume_generator.py",
+    "test:backend": "python backend/test_customizer_stages.py"
+  }
+}

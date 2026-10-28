@@ -7,6 +7,10 @@ on:
     - cron: "0 17 * * *"
   workflow_dispatch: # Allows manual triggering from the Actions tab
 
+defaults:
+  run:
+    working-directory: backend
+
 jobs:
   manage:
     runs-on: ubuntu-latest # Use a standard Linux runner

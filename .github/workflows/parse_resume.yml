@@ -3,6 +3,10 @@ name: Parse Resume Manually
 on:
   workflow_dispatch:
 
+defaults:
+  run:
+    working-directory: backend
+
 jobs:
   parse_resume_job:
     runs-on: ubuntu-latest
@@ -33,7 +37,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           # LLM Configuration (set via Repository Variables / Secrets)
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.GEMINI_FIRST_API_KEY }}
+          LLM_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.LLM_API_KEY || secrets.GEMINI_FIRST_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.LLM_API_KEY || secrets.GEMINI_FIRST_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}

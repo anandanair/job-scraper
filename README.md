@@ -4,19 +4,19 @@ This project is a comprehensive suite of tools designed to automate and enhance 
 
 ## Features
 
-- **Job Scraping**: Automatically scrapes job postings from LinkedIn and CareersFuture. ([scraper.py](scraper.py))
+- **Job Scraping**: Automatically scrapes job postings from LinkedIn and CareersFuture. ([backend/scraper.py](backend/scraper.py))
 - **Resume Parsing**:
-  - Extracts text from PDF resumes using `pdfplumber`. ([resume_parser.py](resume_parser.py))
+  - Extracts text from PDF resumes using `pdfplumber`. ([backend/resume_parser.py](backend/resume_parser.py))
   - Uses AI to parse resume text into structured data and saves it securely to Supabase.
-- **Job Scoring**: Scores job descriptions against a parsed resume using AI to determine suitability (0–100 score). ([score_jobs.py](score_jobs.py))
-- **Universal LLM Support**: Supports 400+ model providers (Fireworks AI, Gemini, OpenAI, Anthropic, Groq, Ollama, etc.) via a unified LiteLLM abstraction layer. ([llm_client.py](llm_client.py))
+- **Job Scoring**: Scores job descriptions against a parsed resume using AI to determine suitability (0–100 score). ([backend/score_jobs.py](backend/score_jobs.py))
+- **Universal LLM Support**: Supports 400+ model providers (Gemini, OpenAI, Anthropic, Groq, Fireworks AI, etc.) via a unified LiteLLM abstraction layer with dynamic settings loaded directly from Supabase. ([backend/llm_client.py](backend/llm_client.py))
 - **Job Management**:
   - Tracks the status of job applications.
   - Marks old or inactive jobs as expired.
-  - Periodically checks if active jobs are still available. ([job_manager.py](job_manager.py))
-- **Data Storage**: Uses Supabase to store job data, resume details, and application statuses. ([supabase_utils.py](supabase_utils.py))
-- **Custom PDF Resume Generation**: Generates ATS-friendly PDF resumes from structured resume data. ([pdf_generator.py](pdf_generator.py))
-- **AI-Powered Text Personalization**: Tailors resume summaries and bullet points specifically for top-matching jobs. ([custom_resume_generator.py](custom_resume_generator.py))
+  - Periodically checks if active jobs are still available. ([backend/job_manager.py](backend/job_manager.py))
+- **Data Storage**: Uses Supabase to store job data, resume details, and application statuses. ([backend/supabase_utils.py](backend/supabase_utils.py))
+- **Custom PDF Resume Generation**: Generates ATS-friendly PDF resumes from structured resume data. ([backend/pdf_generator.py](backend/pdf_generator.py))
+- **AI-Powered Text Personalization**: Tailors resume summaries and bullet points specifically for top-matching jobs. ([backend/custom_resume_generator.py](backend/custom_resume_generator.py))
 - **Automated Workflows**: Includes pre-configured GitHub Actions for running tasks on a schedule. ([workflows](.github/workflows/))
 
 ## Tech Stack
@@ -169,31 +169,25 @@ Commit your changes to [`config.py`](config.py).
 
 ---
 
-## Viewing Your Jobs: Web Interface
+## Web Interface (Included in Monorepo)
 
-A modern Next.js web application is available to view scraped jobs, filter by score/interest, track applications, customize your base resume and ATS styling via **Resume Studio**, on-demand tailor custom resumes, rescore jobs with AI, and preview generated PDF resumes.
+A modern Next.js web application is built directly into the repository under `/web` to view scraped jobs, filter by score/interest, track applications, customize your base resume and ATS styling via **Resume Studio**, configure AI settings and rate limits via the **Settings** dashboard, on-demand tailor custom resumes, and preview generated PDF resumes.
 
-- **Frontend Repository**: [jobs-scrapper-web](https://github.com/anandanair/jobs-scrapper-web)
 - **Key Features Included**:
+  - **Settings & Model Switcher (`/settings`)**: Live configuration for AI Provider (Gemini, OpenAI, Anthropic, Groq), model selection with auto-detection, API key testing, and requests-per-minute (RPM) limits saved directly into Supabase without requiring code redeployments.
   - **Resume Studio (`/resume-studio`)**: Dual-mode master resume editor (`Resume Content` + `Design & Style`) with live ATS persona switching, tag chip editor, unified save/reset, and calibrated 1:1 PDF typesetting with orphan heading prevention.
   - **Pipeline Dashboard**: Interactive pipeline tracking, metrics, and clear score distinction between base and tailored resumes.
   - **On-Demand AI Tailoring & Rescoring**: Tailor any resume for a specific job description with single-click AI optimization.
-- **Setup**:
-  1. Clone `jobs-scrapper-web`:
+- **Quick Start**:
+  1. From the repository root, install dependencies:
      ```bash
-     git clone https://github.com/anandanair/jobs-scrapper-web.git
-     cd jobs-scrapper-web
-     npm install
+     npm run install:web
      ```
-  2. Create a `.env.local` file with your Supabase and LLM credentials:
+  2. Create a `web/.env.local` file with your Supabase credentials:
      ```env
      NEXT_PUBLIC_SUPABASE_URL="https://<YOUR_PROJECT_REF>.supabase.co"
      NEXT_PUBLIC_SUPABASE_ANON_KEY="sb_publishable_..."
      SUPABASE_SERVICE_ROLE_KEY="sb_secret_..."
-
-     # Optional: Enables on-demand in-app resume tailoring & rescoring
-     LLM_API_KEY="AIzaSy... or fw_..."
-     LLM_MODEL="accounts/fireworks/models/glm-5p3-flash"
      ```
   3. Start the dashboard:
      ```bash
@@ -220,19 +214,27 @@ If you prefer to run or test the Python scripts on your local machine:
    # macOS/Linux:
    source .venv/bin/activate
    ```
-3. **Install dependencies:**
+3. **Install backend dependencies:**
    ```bash
-   pip install -r requirements.txt
+   pip install -r backend/requirements.txt
    ```
-4. **Create a `.env` file in the root folder:**
+4. **Create a `.env` file (in root or `backend/.env`):**
    ```env
    SUPABASE_URL="https://<YOUR_PROJECT_REF>.supabase.co"
    SUPABASE_SERVICE_ROLE_KEY="sb_secret_..."
-   FIREWORKS_API_KEY="fw_..."
-   LLM_MODEL="accounts/fireworks/models/glm-5p3-flash"
+   GEMINI_API_KEY="AIzaSy..."
+   LLM_MODEL="gemini/gemini-2.5-flash"
    ```
-5. **Run any script directly:**
+5. **Run any script directly or via npm:**
    ```bash
+   # Using npm convenience scripts from root:
+   npm run scrape
+   npm run score
+   npm run customize
+   npm run test:backend
+
+   # Or running directly from backend:
+   cd backend
    python scraper.py        # Scrapes new jobs
    python resume_parser.py  # Parses your resume PDF from Supabase
    python score_jobs.py     # Scores jobs against your resume
@@ -245,26 +247,42 @@ If you prefer to run or test the Python scripts on your local machine:
 
 ```
 .
-├── .github/workflows/          # Automated GitHub Actions
+├── .github/workflows/          # Automated GitHub Actions (runs backend tasks)
 │   ├── hourly_resume_customization.yml
 │   ├── job_manager.yml
 │   ├── parse_resume.yml
 │   ├── score_jobs.yml
 │   └── scrape_jobs.yml
-├── config.py                   # Job search parameters & LLM configurations
-├── custom_resume_generator.py  # Generates tailored resumes for top-scored jobs
-├── job_manager.py              # Manages job statuses & expires old jobs
-├── llm_client.py               # Universal LLM client (LiteLLM) with rate limiting
-├── models.py                   # Pydantic models for structured resume & job validation
-├── pdf_generator.py            # Generates ATS-friendly PDF resumes (ReportLab)
-├── requirements.txt            # Python dependencies
-├── resume_parser.py            # Extracts text from resume PDF & parses with AI
-├── score_jobs.py               # Evaluates job suitability against candidate profile
-├── scraper.py                  # Core scraping engine (LinkedIn & CareersFuture)
-├── supabase_setup/
-│   └── init.sql                # Complete database schema & storage setup
-├── supabase_utils.py           # Database & Storage helper functions
-└── user_agents.py              # Modern browser User-Agent rotation pool
+├── backend/                    # Python Backend & Scraping Engine
+│   ├── config.py               # Search parameters & fallback LLM settings
+│   ├── custom_resume_generator.py # Generates tailored resumes for top-scored jobs
+│   ├── job_manager.py          # Manages job statuses & expires old jobs
+│   ├── llm_client.py           # Universal LiteLLM client with dynamic settings
+│   ├── models.py               # Pydantic schemas (jobs, resumes, app settings)
+│   ├── pdf_generator.py        # ATS-friendly ReportLab PDF generation
+│   ├── requirements.txt        # Python backend dependencies
+│   ├── resume_parser.py        # Extracts text from resume PDF & parses with AI
+│   ├── score_jobs.py           # Evaluates job suitability against resume
+│   ├── scraper.py              # Core scraping engine (LinkedIn & CareersFuture)
+│   ├── supabase_utils.py       # Supabase database & storage integration
+│   ├── test_customizer_stages.py # Backend test suite
+│   └── user_agents.py          # Browser User-Agent rotation pool
+├── supabase_setup/             # Database Schemas & Migrations
+│   ├── init.sql                # Complete initial schema & storage bucket setup
+│   └── add_app_settings.sql    # App settings table migration for dynamic config
+├── web/                        # Next.js 14 Frontend Application
+│   ├── src/
+│   │   ├── app/                # Pages (Dashboard, Settings, Resume Studio, APIs)
+│   │   ├── components/         # React UI components
+│   │   ├── lib/                # Client-side Supabase and LLM utilities
+│   │   └── types.ts            # TypeScript interfaces & AppSettings types
+│   ├── package.json            # Web dependencies
+│   └── tsconfig.json
+├── package.json                # Monorepo root scripts (dev, build, start, scrape)
+├── vercel.json                 # Vercel deployment configuration
+├── .gitignore                  # Unified gitignore for Python, Node, and secrets
+├── README.md                   # Project documentation & onboarding guide
+└── LICENSE                     # MIT License
 ```
 
 ## Contributing

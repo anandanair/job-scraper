@@ -1,7 +1,38 @@
+# --- Python & Virtual Environment ---
+.venv/
+venv/
 __pycache__/
-.env
-.venv
-resume.json
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.log
 resume.pdf
-verify_pdf.py
-test_resume.pdf
+resume.json
+backend/resume.pdf
+backend/resume.json
+/customized_resumes/
+/backend/customized_resumes/
+customized_resume_*.pdf
+backend/customized_resume_*.pdf
+
+# --- Environment & Secrets ---
+.env
+.env.*
+backend/.env
+backend/.env.*
+!.env.example
+web/.env.local
+web/.env*.local
+
+# --- Next.js & Node ---
+web/node_modules/
+node_modules/
+web/.next/
+web/out/
+web/*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+*.pem
