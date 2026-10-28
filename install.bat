@@ -3,6 +3,9 @@ setlocal enabledelayedexpansion
 
 title JobTrack Installer
 
+:: Ensure we are running in the directory containing this script
+cd /d "%~dp0"
+
 echo ============================================================
 echo     JobTrack: Autonomous Job Scraper ^& AI Resume Studio
 echo                   One-Click Local Installer
@@ -14,7 +17,7 @@ echo [*] Checking Node.js prerequisite...
 where node >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js is not installed or not found in your PATH!
-    echo Please install Node.js (v20+ recommended) from: https://nodejs.org
+    echo Please install Node.js v20+ from: https://nodejs.org
     echo After installing, reopen this script.
     echo.
     pause
@@ -28,7 +31,7 @@ echo [*] Checking Python prerequisite...
 where python >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Python is not installed or not found in your PATH!
-    echo Please install Python (v3.10+ recommended) from: https://www.python.org
+    echo Please install Python v3.10+ from: https://www.python.org
     echo Ensure you check "Add Python to PATH" during installation.
     echo.
     pause
@@ -41,7 +44,7 @@ echo.
 :: 3. Determine if running inside the repository directory
 if not exist "web\package.json" (
     if exist "job-scraper\web\package.json" (
-        cd job-scraper
+        cd /d "%~dp0job-scraper"
     ) else (
         echo [*] Repository not found locally. Cloning from GitHub...
         git clone https://github.com/anandanair/job-scraper.git
@@ -50,7 +53,7 @@ if not exist "web\package.json" (
             pause
             exit /b 1
         )
-        cd job-scraper
+        cd /d "%~dp0job-scraper"
     )
 )
 
@@ -59,7 +62,7 @@ echo.
 echo [*] Step 1/3: Installing web application dependencies...
 call npm --prefix web install
 if %errorlevel% neq 0 (
-    echo [WARNING] npm install reported warnings/errors. Continuing...
+    echo [WARNING] npm install reported warnings or errors. Continuing...
 )
 
 :: 5. Install python dependencies
@@ -68,13 +71,13 @@ echo [*] Step 2/3: Installing scraper python packages...
 python -m pip install --quiet --upgrade pip
 python -m pip install --quiet -r backend\requirements.txt
 if %errorlevel% neq 0 (
-    echo [WARNING] pip install reported warnings/errors. Continuing...
+    echo [WARNING] pip install reported warnings or errors. Continuing...
 )
 
 :: 6. Launch web server and browser
 echo.
 echo [*] Step 3/3: Starting JobTrack web server on http://localhost:3000...
-start "JobTrack Dev Server" cmd /k "cd web && npm run dev"
+start "JobTrack Dev Server" cmd /k "cd /d ""%~dp0web"" && npm run dev"
 
 echo.
 echo ============================================================
@@ -84,7 +87,9 @@ echo ============================================================
 echo.
 
 :: Brief pause to let Next.js initialize before launching browser
-timeout /t 3 /nobreak >nul
+ping -n 4 127.0.0.1 >nul
 start http://localhost:3000/setup
 
+echo Press any key to close this installer window (the dev server will stay open).
+pause >nul
 exit /b 0
