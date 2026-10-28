@@ -36,11 +36,11 @@ export async function POST(req: Request) {
 
     if (targetOrgId === "__CREATE_NEW_ORG__") {
       // User explicitly requested to create a brand new organization
-      const orgSlug = `jobtrack-${Math.random().toString(36).substring(2, 8)}`;
+      // Note: Supabase Management API POST /v1/organizations only accepts { name: string }
       const createOrgRes = await fetch("https://api.supabase.com/v1/organizations", {
         method: "POST",
         headers,
-        body: JSON.stringify({ name: "JobTrack Org", slug: orgSlug }),
+        body: JSON.stringify({ name: "JobTrack Org" }),
       });
 
       if (!createOrgRes.ok) {
@@ -59,9 +59,10 @@ export async function POST(req: Request) {
       const orgsRes = await fetch("https://api.supabase.com/v1/organizations", { headers });
       if (orgsRes.ok) {
         const orgs: Array<{ id: string; name: string; slug?: string }> = await orgsRes.json();
-        const found = orgs.find((o) => o.id === targetOrgId);
+        const found = orgs.find((o) => o.id === targetOrgId || o.slug === targetOrgId);
         if (found) {
           targetOrgSlug = found.slug || found.id;
+          targetOrgId = found.id;
         } else {
           targetOrgSlug = targetOrgId;
         }
@@ -86,11 +87,10 @@ export async function POST(req: Request) {
         targetOrgSlug = orgs[0].slug || orgs[0].id;
       } else {
         // Zero organizations exist -> auto-create default organization
-        const orgSlug = `jobtrack-${Math.random().toString(36).substring(2, 8)}`;
         const createOrgRes = await fetch("https://api.supabase.com/v1/organizations", {
           method: "POST",
           headers,
-          body: JSON.stringify({ name: "JobTrack Org", slug: orgSlug }),
+          body: JSON.stringify({ name: "JobTrack Org" }),
         });
 
         if (!createOrgRes.ok) {
@@ -111,22 +111,28 @@ export async function POST(req: Request) {
     const dbPass = generateDbPass();
 
     // 3. Create the project via Supabase Management API
+    const projectPayload: Record<string, any> = {
+      name: projectName,
+      organization_slug: targetOrgSlug || targetOrgId,
+      db_pass: dbPass,
+      region: region,
+    };
+
     const createProjectRes = await fetch("https://api.supabase.com/v1/projects", {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        name: projectName,
-        organization_id: targetOrgId,
-        organization_slug: targetOrgSlug || targetOrgId,
-        db_pass: dbPass,
-        region: region,
-        plan: "free",
-      }),
+      body: JSON.stringify(projectPayload),
     });
 
     if (!createProjectRes.ok) {
-      const errData = await createProjectRes.json().catch(() => ({}));
-      const errMessage = errData.message || createProjectRes.statusText;
+      const errText = await createProjectRes.text();
+      let errData: any = {};
+      try {
+        errData = JSON.parse(errText);
+      } catch {
+        errData = { message: errText };
+      }
+      const errMessage = errData.message || createProjectRes.statusText || errText;
 
       let userFacingError = `Failed to create project: ${errMessage}`;
       if (createProjectRes.status === 400 && errMessage.toLowerCase().includes("quota")) {
