@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 import { seal } from "tweetsodium";
 
 export const dynamic = "force-dynamic";
@@ -371,6 +372,23 @@ export async function POST(req: Request) {
       console.warn("Notice persisting GITHUB_REPO_OWNER:", e);
     }
 
+    // 9. Update local git remote origin to the user's personal fork
+    let localRemoteUpdated = false;
+    try {
+      const forkGitUrl = `https://github.com/${targetOwner}/${targetRepo}.git`;
+      const repoRoot = fs.existsSync(path.resolve(process.cwd(), ".git"))
+        ? process.cwd()
+        : fs.existsSync(path.resolve(process.cwd(), "..", ".git"))
+        ? path.resolve(process.cwd(), "..")
+        : process.cwd();
+
+      execSync(`git remote set-url origin ${forkGitUrl}`, { cwd: repoRoot, stdio: "ignore" });
+      localRemoteUpdated = true;
+      console.log(`✓ Updated local git remote origin to ${forkGitUrl}`);
+    } catch (gitErr) {
+      console.warn("Could not update local git remote (non-fatal):", gitErr);
+    }
+
     return NextResponse.json({
       success: true,
       username,
@@ -381,6 +399,7 @@ export async function POST(req: Request) {
       syncedSecrets,
       actionsEnabled,
       workflowDispatched,
+      localRemoteUpdated,
       message: `Successfully configured secrets and initiated cloud scraper on ${targetOwner}/${targetRepo}!`,
     });
   } catch (error: any) {

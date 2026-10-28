@@ -178,6 +178,7 @@ export function Step5GitHub({
     repoUrl: string;
     actionsEnabled?: boolean;
     workflowDispatched?: boolean;
+    localRemoteUpdated?: boolean;
   } | null>(null);
 
   // --- Manual Mode State ---
@@ -252,6 +253,7 @@ export function Step5GitHub({
         repoUrl: data.repoUrl,
         actionsEnabled: data.actionsEnabled,
         workflowDispatched: data.workflowDispatched,
+        localRemoteUpdated: data.localRemoteUpdated,
       });
       setSyncStatus("success");
     } catch (err: any) {
@@ -680,6 +682,9 @@ export function Step5GitHub({
                   <p>✓ Encrypted & pushed <span className="font-mono font-bold">SUPABASE_URL</span></p>
                   <p>✓ Encrypted & pushed <span className="font-mono font-bold">SUPABASE_SERVICE_ROLE_KEY</span></p>
                   <p>✓ Configured workload: <span className="font-bold">{jobsPerRun} jobs & {resumesPerRun} resumes per run</span></p>
+                  {syncResult.localRemoteUpdated && (
+                    <p>✓ Local git remote origin linked to your personal fork</p>
+                  )}
                   {syncResult.actionsEnabled && (
                     <p>✓ Enabled GitHub Actions & scheduled automation workflows</p>
                   )}
