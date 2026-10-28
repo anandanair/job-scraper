@@ -8,8 +8,9 @@
     "start": "npm --prefix web run start",
     "install:web": "npm --prefix web install",
     "scrape": "python backend/scraper.py",
-    "score": "python backend/score_jobs.py",
-    "customize": "python backend/custom_resume_generator.py",
-    "test:backend": "python backend/test_customizer_stages.py"
+    "score": "npm --prefix web run score",
+    "customize": "npm --prefix web run customize",
+    "manage": "npm --prefix web run manage",
+    "parse-resume": "npm --prefix web run parse-resume"
   }
 }

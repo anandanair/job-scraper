@@ -1,16 +1,5 @@
 import { Resume } from "@/types";
 
-// Configuration for LLMs
-function getLLMConfig() {
-  const apiKey =
-    process.env.LLM_API_KEY ||
-    process.env.FIREWORKS_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    "";
-  const model = (process.env.LLM_MODEL || "gemini").replace(/["']/g, "").trim();
-  return { apiKey: apiKey.replace(/["']/g, "").trim(), model };
-}
-
 interface CallLLMOptions {
   prompt: string;
   systemPrompt?: string;
@@ -18,10 +7,13 @@ interface CallLLMOptions {
   jsonMode?: boolean;
   apiKeyOverride?: string;
   modelOverride?: string;
+  providerOverride?: string;
 }
 
 /**
- * Universal LLM caller supporting both Google Gemini and Fireworks AI / OpenAI compatible APIs.
+ * Universal LLM caller supporting Google Gemini, OpenAI, Fireworks AI, and Anthropic.
+ * Prioritizes Supabase app_settings table as the single source of truth,
+ * with process.env used only as a developer fallback.
  */
 export async function callLLM({
   prompt,
@@ -30,36 +22,98 @@ export async function callLLM({
   jsonMode = false,
   apiKeyOverride,
   modelOverride,
+  providerOverride,
 }: CallLLMOptions): Promise<string> {
-  let { apiKey, model } = getLLMConfig();
-  if (apiKeyOverride) apiKey = apiKeyOverride;
-  if (modelOverride) model = modelOverride;
+  let apiKey = apiKeyOverride;
+  let model = modelOverride;
+  let explicitProvider = providerOverride?.toLowerCase();
 
-  if (!apiKey) {
-    // Attempt fallback to dynamic app_settings in Supabase
+  // 1. Fetch dynamic config from Supabase app_settings (Single Source of Truth)
+  if (!apiKey || !model || !explicitProvider) {
     try {
       const { getAppSettings } = await import("@/lib/supabase/queries");
       const dbSettings = await getAppSettings();
-      if (dbSettings?.llm_api_key) {
+      if (!apiKey && dbSettings?.llm_api_key) {
         apiKey = dbSettings.llm_api_key;
       }
-      if (!modelOverride && dbSettings?.llm_model) {
+      if (!model && dbSettings?.llm_model) {
         model = dbSettings.llm_model;
       }
+      if (!explicitProvider && dbSettings?.llm_provider) {
+        explicitProvider = dbSettings.llm_provider.toLowerCase();
+      }
     } catch {
-      // Ignore database lookup error
+      // Ignore database lookup error if DB not yet reachable
     }
   }
 
+  // 2. Fallback to process.env (for offline CLI or unit test environments)
+  if (!apiKey) {
+    apiKey =
+      process.env.LLM_API_KEY ||
+      process.env.FIREWORKS_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      process.env.OPENAI_API_KEY ||
+      process.env.ANTHROPIC_API_KEY ||
+      "";
+  }
+  if (!model) {
+    model = (process.env.LLM_MODEL || "gemini-3.8-flash").replace(/["']/g, "").trim();
+  }
+
+  apiKey = (apiKey || "").replace(/["']/g, "").trim();
+  model = (model || "").replace(/["']/g, "").trim();
+
   if (!apiKey) {
     throw new Error(
-      "LLM API key not configured. Set GEMINI_API_KEY, LLM_API_KEY in .env.local or configure it in Settings."
+      "LLM API key not configured. Please configure your AI provider and API key in Settings or complete the Setup Wizard."
     );
   }
 
-  // Detect Fireworks AI
+  const modelLower = model.toLowerCase();
+
+  // 1. Detect Anthropic Claude
+  const isAnthropic =
+    explicitProvider === "anthropic" ||
+    modelLower.includes("claude") ||
+    apiKey.startsWith("sk-ant-");
+
+  if (isAnthropic) {
+    const cleanModel = model.replace(/^anthropic\//, "");
+    const messages = [{ role: "user", content: prompt }];
+    const payload: any = {
+      model: cleanModel,
+      messages,
+      max_tokens: 4096,
+      temperature,
+    };
+    if (systemPrompt) {
+      payload.system = systemPrompt;
+    }
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Anthropic API error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.content?.[0]?.text || "";
+  }
+
+  // 2. Detect Fireworks AI
   const isFireworks =
-    model.toLowerCase().includes("fireworks") ||
+    explicitProvider === "fireworks" ||
+    modelLower.includes("fireworks") ||
     apiKey.startsWith("fw_") ||
     model.startsWith("accounts/fireworks/");
 
@@ -104,7 +158,50 @@ export async function callLLM({
     return data.choices?.[0]?.message?.content || "";
   }
 
-  // Default: Google Gemini
+  // 3. Detect OpenAI
+  const isOpenAI =
+    explicitProvider === "openai" ||
+    modelLower.includes("gpt") ||
+    modelLower.startsWith("openai/") ||
+    apiKey.startsWith("sk-proj-");
+
+  if (isOpenAI) {
+    const cleanModel = model.replace(/^openai\//, "");
+    const messages: any[] = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+    messages.push({ role: "user", content: prompt });
+
+    const payload: any = {
+      model: cleanModel,
+      messages,
+      temperature,
+    };
+
+    if (jsonMode) {
+      payload.response_format = { type: "json_object" };
+    }
+
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OpenAI API error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || "";
+  }
+
+  // 4. Default: Google Gemini
   const modernGeminiFallbacks = [
     "gemini-3.8-flash",
     "gemini-3.5-flash-lite",
@@ -154,6 +251,7 @@ export async function callLLM({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(20000),
       });
 
       if (!res.ok) {

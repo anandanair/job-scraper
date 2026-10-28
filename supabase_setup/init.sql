@@ -84,6 +84,26 @@ CREATE TABLE IF NOT EXISTS "public"."jobs" (
     "posted_at" timestamp with time zone
 );
 
+-- Upgrade existing jobs tables if columns are missing from earlier versions
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "company" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "job_title" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "level" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "location" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "description" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "status" "text" DEFAULT 'new'::"text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "is_active" boolean DEFAULT true;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "application_date" timestamp with time zone;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "resume_score" smallint;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "notes" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "scraped_at" timestamp with time zone DEFAULT "now"();
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "last_checked" timestamp with time zone DEFAULT "now"();
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "job_state" "text" DEFAULT 'new'::"text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "resume_score_stage" "text" DEFAULT 'initial'::"text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "is_interested" boolean;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "customized_resume_id" "uuid";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "provider" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "posted_at" timestamp with time zone;
+
 
 ALTER TABLE "public"."jobs" OWNER TO "postgres";
 
@@ -428,6 +448,20 @@ CREATE TABLE IF NOT EXISTS "public"."customized_resumes" (
 
 
 ALTER TABLE "public"."customized_resumes" OWNER TO "postgres";
+-- Upgrade existing customized_resumes table if columns are missing
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "phone" "text";
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "location" "text";
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "summary" "text";
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "skills" "text"[];
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "education" "jsonb";
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "experience" "jsonb";
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "projects" "jsonb";
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "certifications" "jsonb";
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "languages" "text"[];
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "links" "jsonb";
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "created_at" timestamp with time zone DEFAULT "now"();
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "last_updated" timestamp with time zone DEFAULT "now"();
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "resume_link" "text";
 
 
 
@@ -444,49 +478,52 @@ ALTER TABLE "public"."customized_resumes" OWNER TO "postgres";
 
 
 
-ALTER TABLE ONLY "public"."customized_resumes"
-    ADD CONSTRAINT "customized_resumes_pkey" PRIMARY KEY ("id");
 
-
-
-ALTER TABLE ONLY "public"."jobs"
-    ADD CONSTRAINT "jobs_pkey" PRIMARY KEY ("job_id");
-
-
-
-
-
-
-
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'customized_resumes_pkey') THEN 
+    ALTER TABLE ONLY "public"."customized_resumes" ADD CONSTRAINT "customized_resumes_pkey" PRIMARY KEY ("id"); 
+  END IF; 
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'jobs_pkey') THEN 
+    ALTER TABLE ONLY "public"."jobs" ADD CONSTRAINT "jobs_pkey" PRIMARY KEY ("job_id"); 
+  END IF; 
+END $$;
 
 
 
 
-CREATE INDEX "idx_jobs_company" ON "public"."jobs" USING "btree" ("company");
 
 
 
-CREATE INDEX "idx_jobs_is_active" ON "public"."jobs" USING "btree" ("is_active");
 
 
 
-CREATE INDEX "idx_jobs_job_title" ON "public"."jobs" USING "btree" ("job_title");
+
+CREATE INDEX IF NOT EXISTS "idx_jobs_company" ON "public"."jobs" USING "btree" ("company");
 
 
 
-CREATE INDEX "idx_jobs_last_checked" ON "public"."jobs" USING "btree" ("last_checked");
+CREATE INDEX IF NOT EXISTS "idx_jobs_is_active" ON "public"."jobs" USING "btree" ("is_active");
 
 
 
-CREATE INDEX "idx_jobs_resume_score" ON "public"."jobs" USING "btree" ("resume_score");
+CREATE INDEX IF NOT EXISTS "idx_jobs_job_title" ON "public"."jobs" USING "btree" ("job_title");
 
 
 
-CREATE INDEX "idx_jobs_scraped_at" ON "public"."jobs" USING "btree" ("scraped_at");
+CREATE INDEX IF NOT EXISTS "idx_jobs_last_checked" ON "public"."jobs" USING "btree" ("last_checked");
 
 
 
-CREATE INDEX "idx_jobs_status" ON "public"."jobs" USING "btree" ("status");
+CREATE INDEX IF NOT EXISTS "idx_jobs_resume_score" ON "public"."jobs" USING "btree" ("resume_score");
+
+
+
+CREATE INDEX IF NOT EXISTS "idx_jobs_scraped_at" ON "public"."jobs" USING "btree" ("scraped_at");
+
+
+
+CREATE INDEX IF NOT EXISTS "idx_jobs_status" ON "public"."jobs" USING "btree" ("status");
 
 CREATE INDEX IF NOT EXISTS "idx_jobs_job_state" ON "public"."jobs" USING "btree" ("job_state");
 CREATE INDEX IF NOT EXISTS "idx_jobs_provider" ON "public"."jobs" USING "btree" ("provider");
@@ -495,12 +532,18 @@ CREATE INDEX IF NOT EXISTS "idx_jobs_active_status_state" ON "public"."jobs" ("i
 
 
 
-CREATE OR REPLACE TRIGGER "update_customized_resumes_last_updated" BEFORE UPDATE ON "public"."customized_resumes" FOR EACH ROW EXECUTE FUNCTION "public"."update_last_updated_column"();
+DROP TRIGGER IF EXISTS "update_customized_resumes_last_updated" ON "public"."customized_resumes";
+CREATE TRIGGER "update_customized_resumes_last_updated" BEFORE UPDATE ON "public"."customized_resumes" FOR EACH ROW EXECUTE FUNCTION "public"."update_last_updated_column"();
 
 
 
-ALTER TABLE ONLY "public"."jobs"
-    ADD CONSTRAINT "jobs_customized_resume_id_fkey" FOREIGN KEY ("customized_resume_id") REFERENCES "public"."customized_resumes"("id") ON UPDATE CASCADE ON DELETE SET NULL;
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'jobs_customized_resume_id_fkey') THEN 
+    ALTER TABLE ONLY "public"."jobs"
+      ADD CONSTRAINT "jobs_customized_resume_id_fkey" FOREIGN KEY ("customized_resume_id") REFERENCES "public"."customized_resumes"("id") ON UPDATE CASCADE ON DELETE SET NULL;
+  END IF; 
+END $$;
 
 
 
@@ -621,8 +664,12 @@ CREATE TABLE IF NOT EXISTS "public"."base_resume" (
 
 ALTER TABLE "public"."base_resume" OWNER TO "postgres";
 
-ALTER TABLE ONLY "public"."base_resume"
-    ADD CONSTRAINT "base_resume_pkey" PRIMARY KEY ("id");
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'base_resume_pkey') THEN 
+    ALTER TABLE ONLY "public"."base_resume" ADD CONSTRAINT "base_resume_pkey" PRIMARY KEY ("id"); 
+  END IF; 
+END $$;
 
 -- Auto-update the updated_at column on changes
 -- NOTE: Cannot reuse update_last_updated_column() because it references
@@ -638,9 +685,8 @@ $$;
 
 ALTER FUNCTION "public"."update_base_resume_updated_at_column"() OWNER TO "postgres";
 
-CREATE OR REPLACE TRIGGER "update_base_resume_updated_at"
-    BEFORE UPDATE ON "public"."base_resume"
-    FOR EACH ROW EXECUTE FUNCTION "public"."update_base_resume_updated_at_column"();
+DROP TRIGGER IF EXISTS "update_base_resume_updated_at" ON "public"."base_resume";
+CREATE TRIGGER "update_base_resume_updated_at" BEFORE UPDATE ON "public"."base_resume" FOR EACH ROW EXECUTE FUNCTION "public"."update_base_resume_updated_at_column"();
 
 ALTER TABLE "public"."base_resume" ENABLE ROW LEVEL SECURITY;
 
@@ -700,6 +746,8 @@ CREATE TABLE IF NOT EXISTS "public"."app_settings" (
     "llm_max_rpm" integer NOT NULL DEFAULT 10,
     "llm_request_delay_seconds" integer NOT NULL DEFAULT 8,
     "llm_daily_request_budget" integer NOT NULL DEFAULT 0,
+    "setup_step" integer NOT NULL DEFAULT 1,
+    "setup_completed" boolean NOT NULL DEFAULT false,
     "created_at" timestamp with time zone DEFAULT now(),
     "updated_at" timestamp with time zone DEFAULT now()
 );
@@ -711,9 +759,72 @@ GRANT ALL ON TABLE "public"."app_settings" TO "anon";
 GRANT ALL ON TABLE "public"."app_settings" TO "authenticated";
 GRANT ALL ON TABLE "public"."app_settings" TO "service_role";
 
+
+-- Upgrade existing app_settings if columns are missing from earlier builds
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "llm_tier" "text" NOT NULL DEFAULT 'free';
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "setup_step" integer NOT NULL DEFAULT 1;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "setup_completed" boolean NOT NULL DEFAULT false;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "careers_future_search_queries" "jsonb" NOT NULL DEFAULT '["Software Engineer", "Frontend Developer"]'::"jsonb";
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "careers_future_search_categories" "jsonb" DEFAULT '["Information Technology"]'::"jsonb";
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "careers_future_search_employment_types" "jsonb" DEFAULT '["Full Time"]'::"jsonb";
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "scraping_sources" "jsonb" NOT NULL DEFAULT '["linkedin"]'::"jsonb";
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "jobs_to_score_per_run" integer NOT NULL DEFAULT 10;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "jobs_to_customize_per_run" integer NOT NULL DEFAULT 2;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "max_jobs_per_search" "jsonb" DEFAULT '{"linkedin": 10, "careers_future": 20}'::"jsonb";
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "llm_max_rpm" integer NOT NULL DEFAULT 10;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "llm_request_delay_seconds" integer NOT NULL DEFAULT 8;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "llm_daily_request_budget" integer NOT NULL DEFAULT 0;
+
 -- Seed singleton default configuration if no row exists
 INSERT INTO "public"."app_settings" (id)
 SELECT '00000000-0000-0000-0000-000000000001'::uuid
 WHERE NOT EXISTS (SELECT 1 FROM "public"."app_settings");
+
+-- --- LinkedIn Geo Locations Catalog ---
+CREATE TABLE IF NOT EXISTS "public"."linkedin_geo_locations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL PRIMARY KEY,
+    "name" "text" NOT NULL,
+    "country" "text" NOT NULL,
+    "geo_id" "text" NOT NULL UNIQUE,
+    "entity_type" "text" DEFAULT 'Country',
+    "is_preset" boolean DEFAULT true,
+    "created_at" timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE "public"."linkedin_geo_locations" OWNER TO "postgres";
+ALTER TABLE "public"."linkedin_geo_locations" ENABLE ROW LEVEL SECURITY;
+
+GRANT ALL ON TABLE "public"."linkedin_geo_locations" TO "anon";
+GRANT ALL ON TABLE "public"."linkedin_geo_locations" TO "authenticated";
+GRANT ALL ON TABLE "public"."linkedin_geo_locations" TO "service_role";
+
+DROP POLICY IF EXISTS "Allow public read access to geo locations" ON "public"."linkedin_geo_locations";
+CREATE POLICY "Allow public read access to geo locations" ON "public"."linkedin_geo_locations"
+    FOR SELECT TO "anon", "authenticated", "service_role" USING (true);
+
+DROP POLICY IF EXISTS "Allow insert to geo locations" ON "public"."linkedin_geo_locations";
+CREATE POLICY "Allow insert to geo locations" ON "public"."linkedin_geo_locations"
+    FOR INSERT TO "anon", "authenticated", "service_role" WITH CHECK (true);
+
+-- Seed initial preset locations
+INSERT INTO "public"."linkedin_geo_locations" ("name", "country", "geo_id", "entity_type", "is_preset") VALUES
+('Singapore', 'Singapore', '102454443', 'Country', true),
+('Malaysia', 'Malaysia', '106604213', 'Country', true),
+('Kuala Lumpur', 'Malaysia', '104246733', 'Capital / Metro', true),
+('Selangor', 'Malaysia', '105151591', 'State / Region', true),
+('India', 'India', '102713980', 'Country', true),
+('Greater Bengaluru Area', 'India', '90009633', 'Major Metro Hub', true),
+('Mumbai Metropolitan Region', 'India', '90009639', 'Major Metro Hub', true),
+('Delhi', 'India', '106187582', 'Major Metro Hub', true),
+('Dubai / United Arab Emirates', 'United Arab Emirates', '100205264', 'Metro / Country', true),
+('United States', 'United States', '103644278', 'Country', true),
+('United Kingdom', 'United Kingdom', '102257491', 'Country', true),
+('Canada', 'Canada', '101174742', 'Country', true),
+('Australia', 'Australia', '101452733', 'Country', true),
+('Japan', 'Japan', '101355337', 'Country', true),
+('China', 'China', '102890883', 'Country', true),
+('Worldwide / Remote', 'Worldwide', '92000000', 'Global', true)
+ON CONFLICT ("geo_id") DO NOTHING;
+
 
 

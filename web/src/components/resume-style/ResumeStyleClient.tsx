@@ -1868,17 +1868,20 @@ export default function ResumeStyleClient({
                     </div>
                   );
 
-                case "languages":
-                  if (!displayData.languages || displayData.languages.length === 0)
-                    return null;
+                case "languages": {
+                  const validLangs = (displayData.languages || []).filter(
+                    (l) => l && l.trim() && !["NA", "N/A", "NONE", "NULL"].includes(l.trim().toUpperCase())
+                  );
+                  if (validLangs.length === 0) return null;
                   return (
                     <div key="languages" className="mb-2.5">
                       {renderCanvasSectionHeading(sectionHeading)}
                       <p style={{ fontSize: currentSizes.body }}>
-                        {displayData.languages.join(", ")}
+                        {validLangs.join(", ")}
                       </p>
                     </div>
                   );
+                }
 
                 default:
                   return null;

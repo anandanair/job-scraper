@@ -529,7 +529,7 @@ export async function uploadPersonalizedResume(
  * @returns A promise that resolves to the Resume object or null if not found.
  */
 export async function getUserProfileByEmail(): Promise<Resume | null> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseStaticClient();
 
   // Fetch the latest base resume from the 'base_resume' table
   // This follows the backend's architecture of keeping a single/latest base resume.
@@ -554,6 +554,52 @@ export async function getUserProfileByEmail(): Promise<Resume | null> {
 }
 
 /**
+ * Upserts the base resume data into the 'base_resume' table.
+ * If an existing row exists, it updates it; if not, it inserts a new row.
+ * Ensures there is only one active base resume.
+ */
+export async function upsertBaseResume(
+  resumeData: Omit<Resume, "id" | "created_at">
+): Promise<Resume> {
+  const supabase = createSupabaseStaticClient();
+
+  // Find existing row
+  const { data: existing } = await supabase
+    .from("base_resume")
+    .select("id")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from("base_resume")
+      .update({ resume_data: resumeData, updated_at: new Date().toISOString() })
+      .eq("id", existing.id)
+      .select("resume_data")
+      .single();
+
+    if (error) {
+      console.error("Error updating base resume:", error);
+      throw new Error(error.message);
+    }
+    return (data as any)?.resume_data as Resume;
+  } else {
+    const { data, error } = await supabase
+      .from("base_resume")
+      .insert({ resume_data: resumeData })
+      .select("resume_data")
+      .single();
+
+    if (error) {
+      console.error("Error inserting base resume:", error);
+      throw new Error(error.message);
+    }
+    return (data as any)?.resume_data as Resume;
+  }
+}
+
+/**
  * Updates the base resume data in the 'base_resume' table.
  * Finds the latest row and updates its resume_data JSONB column.
  * @param resumeData The full Resume data object to save.
@@ -562,7 +608,7 @@ export async function getUserProfileByEmail(): Promise<Resume | null> {
 export async function updateBaseResume(
   resumeData: Omit<Resume, "id" | "created_at" | "parsed_at" | "last_updated" | "resume_link">,
 ): Promise<Resume | null> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseStaticClient();
 
   // First, find the latest base resume row ID
   const { data: existing, error: fetchError } = await supabase
@@ -1160,13 +1206,17 @@ export async function getAppSettings(): Promise<AppSettings | null> {
       if (error.code === "PGRST116") {
         return null;
       }
-      console.warn("Could not fetch app_settings from Supabase:", error.message);
+      if (!error.message?.includes("fetch failed")) {
+        console.warn("Could not fetch app_settings from Supabase:", error.message);
+      }
       return null;
     }
 
     return data as AppSettings;
   } catch (err: any) {
-    console.warn("Exception fetching app_settings:", err.message);
+    if (!err.message?.includes("fetch failed")) {
+      console.warn("Exception fetching app_settings:", err.message);
+    }
     return null;
   }
 }
@@ -1203,7 +1253,9 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
   }
 
   if (result.error) {
-    console.error("Failed to update app_settings:", result.error);
+    if (!result.error.message?.includes("fetch failed")) {
+      console.error("Failed to update app_settings:", result.error);
+    }
     throw new Error(`Failed to update app_settings: ${result.error.message}`);
   }
 

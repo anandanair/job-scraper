@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "parse-resume": "tsx scripts/parse-resume.ts",
+    "score": "tsx scripts/score-jobs.ts",
+    "customize": "tsx scripts/customize-resumes.ts",
+    "manage": "tsx scripts/job-manager.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
@@ -20,7 +24,8 @@
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
     "react-pdf": "^10.4.1",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "tweetsodium": "^0.0.4"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.11",
@@ -29,7 +34,9 @@
     "@types/node": "^25.4.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "dotenv": "^18.0.9",
     "tailwindcss": "^4.1.5",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }
 }

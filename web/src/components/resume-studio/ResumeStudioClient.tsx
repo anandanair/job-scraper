@@ -196,6 +196,31 @@ export default function ResumeStudioClient({
     type: "success" | "error";
   } | null>(null);
 
+  // Sync internal state if initialBaseResume updates asynchronously
+  useEffect(() => {
+    if (initialBaseResume?.name) {
+      setFormData(initialBaseResume);
+      baselineFormDataRef.current = JSON.parse(JSON.stringify(initialBaseResume));
+    }
+  }, [initialBaseResume]);
+
+  // Sync theme if initialThemeConfig updates
+  useEffect(() => {
+    if (initialThemeConfig) {
+      setTheme(initialThemeConfig);
+      baselineThemeRef.current = JSON.parse(JSON.stringify(initialThemeConfig));
+    }
+  }, [initialThemeConfig]);
+
+  // Sync presets if initialSavedSettings updates
+  useEffect(() => {
+    if (initialSavedSettings && initialSavedSettings.length > 0) {
+      setSavedPresets(initialSavedSettings);
+      const active = initialSavedSettings.find((p) => p.is_active);
+      setSelectedPersonaId(active?.id || initialSavedSettings[0]?.id || null);
+    }
+  }, [initialSavedSettings]);
+
   useEffect(() => {
     if (paperRef.current) {
       setPaperHeight(paperRef.current.scrollHeight);
@@ -2134,17 +2159,20 @@ export default function ResumeStudioClient({
                       </div>
                     );
 
-                  case "languages":
-                    if (!formData.languages || formData.languages.length === 0)
-                      return null;
+                  case "languages": {
+                    const validLangs = (formData.languages || []).filter(
+                      (l) => l && l.trim() && !["NA", "N/A", "NONE", "NULL"].includes(l.trim().toUpperCase())
+                    );
+                    if (validLangs.length === 0) return null;
                     return (
                       <div key="languages" className="mb-2.5 break-inside-avoid">
                         {renderCanvasSectionHeading(sectionHeading)}
                         <p style={{ fontSize: currentSizes.body }}>
-                          {formData.languages.join(", ")}
+                          {validLangs.join(", ")}
                         </p>
                       </div>
                     );
+                  }
 
                   default:
                     return null;

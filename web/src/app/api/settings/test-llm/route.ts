@@ -24,6 +24,7 @@ export async function POST(request: Request) {
       temperature: 0.1,
       apiKeyOverride: cleanApiKey,
       modelOverride: cleanModel,
+      providerOverride: provider,
     });
 
     const latencyMs = Date.now() - startTime;

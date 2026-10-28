@@ -3,43 +3,31 @@ name: Job Scorer
 
 on:
   schedule:
-    # Runs every 4 hours (configurable — adjust to match your quota)
+    # Runs every 4 hours (configurable in Step 5 Automation)
     - cron: "0 */4 * * *"
   workflow_dispatch: # Allows manual triggering from the Actions tab
 
-defaults:
-  run:
-    working-directory: backend
-
 jobs:
   score:
-    runs-on: ubuntu-latest # Use a standard Linux runner
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository code
-        uses: actions/checkout@v4 # Checks out your code
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.11" # Specify your desired Python version
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "web/package-lock.json"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: npm --prefix web ci
 
       - name: Run job scoring script
         env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # LLM Configuration (set via Repository Variables / Secrets)
-          LLM_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.LLM_API_KEY || secrets.GEMINI_FIRST_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.LLM_API_KEY || secrets.GEMINI_FIRST_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-        run: python score_jobs.py # Execute the job scoring script
-
+        run: npm run score

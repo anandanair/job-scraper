@@ -7,34 +7,27 @@ on:
     - cron: "0 17 * * *"
   workflow_dispatch: # Allows manual triggering from the Actions tab
 
-defaults:
-  run:
-    working-directory: backend
-
 jobs:
   manage:
-    runs-on: ubuntu-latest # Use a standard Linux runner
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository code
-        uses: actions/checkout@v4 # Checks out your code
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.11" # Specify your desired Python version
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "web/package-lock.json"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          # Ensure requirements.txt includes httpx if not already added
-          pip install -r requirements.txt
+        run: npm --prefix web ci
 
       - name: Run job manager script
         env:
-          # Define environment variables needed by your script
-          # These should be set as Secrets in your GitHub repository settings
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # Add other secrets if job_manager.py needs them (e.g., proxies if used differently)
-        run: python job_manager.py # Execute the job manager script
+        run: npm run manage

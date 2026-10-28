@@ -1,7 +1,6 @@
 from supabase import create_client, Client
 import config # Import configuration
 from typing import Optional, Any, Dict
-from models import Resume
 import datetime # Import datetime module
 import logging # Import logging
 
@@ -370,17 +369,15 @@ def upload_customized_resume_to_storage(file_content: bytes, destination_path: s
     if not file_content:
         logging.error("Cannot upload empty file content.")
         return None
-    if not config.SUPABASE_STORAGE_BUCKET:
+    bucket_name = getattr(config, "SUPABASE_STORAGE_BUCKET", "personalized_resumes")
+    if not bucket_name:
         logging.error("Supabase storage bucket name not configured.")
         return None
 
     try:
         logging.info(f"Uploading resume to Supabase Storage at path: {destination_path}")
 
-        # Use upsert=True if you want to overwrite if a file with the same name exists,
-        # otherwise False (or omit) to potentially get an error if it exists.
-        # Ensure your destination_path includes job_id or similar for uniqueness.
-        upload_response = supabase.storage.from_(config.SUPABASE_STORAGE_BUCKET)\
+        upload_response = supabase.storage.from_(bucket_name)\
             .upload(
                 path=destination_path,
                 file=file_content,
@@ -565,7 +562,7 @@ def download_resume_from_storage(file_name: str = "resume.pdf") -> Optional[byte
     Returns:
         The file content as bytes, or None if download fails.
     """
-    bucket_name = config.SUPABASE_RESUME_STORAGE_BUCKET
+    bucket_name = getattr(config, "SUPABASE_RESUME_STORAGE_BUCKET", "resumes")
     if not bucket_name:
         logging.error("Resume storage bucket name not configured (SUPABASE_RESUME_STORAGE_BUCKET).")
         return None
@@ -743,86 +740,60 @@ def get_app_settings() -> Optional[Dict[str, Any]]:
 
 def load_and_apply_app_settings() -> Optional[Dict[str, Any]]:
     """
-    Loads dynamic settings from the 'app_settings' Supabase table and updates
-    the 'config' module variables and the global 'primary_client' in-memory.
-    Falls back gracefully to config.py defaults if settings are not found.
+    Loads dynamic user preferences from the 'app_settings' Supabase table and attaches
+    them to the 'config' module in-memory for the scraper.
     """
     settings = get_app_settings()
     if not settings:
-        logging.info("No remote app_settings found in Supabase. Using local config.py settings.")
+        logging.warning("No remote app_settings found in Supabase. Please complete the Setup Wizard.")
+        config.LINKEDIN_SEARCH_QUERIES = []
+        config.LINKEDIN_LOCATION = "Singapore"
+        config.LINKEDIN_GEO_ID = 102454443
+        config.LINKEDIN_JOB_TYPE = "F"
+        config.LINKEDIN_JOB_POSTING_DATE = "r86400"
+        config.LINKEDIN_F_WT = "1,2,3"
+        config.CAREERS_FUTURE_SEARCH_QUERIES = []
+        config.CAREERS_FUTURE_SEARCH_CATEGORIES = []
+        config.CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = []
+        config.SCRAPING_SOURCES = ["linkedin"]
+        config.MAX_JOBS_PER_SEARCH = {"linkedin": 10, "careers_future": 20}
         return None
 
-    # 1. Update Search Preferences
-    if settings.get("linkedin_search_queries"):
-        config.LINKEDIN_SEARCH_QUERIES = settings["linkedin_search_queries"]
-    if settings.get("linkedin_location"):
-        config.LINKEDIN_LOCATION = settings["linkedin_location"]
-    if settings.get("linkedin_geo_id"):
-        try:
-            config.LINKEDIN_GEO_ID = int(settings["linkedin_geo_id"])
-        except (ValueError, TypeError):
-            config.LINKEDIN_GEO_ID = settings["linkedin_geo_id"]
-    if settings.get("linkedin_job_type"):
-        config.LINKEDIN_JOB_TYPE = settings["linkedin_job_type"]
-    if settings.get("linkedin_job_posting_date"):
-        config.LINKEDIN_JOB_POSTING_DATE = settings["linkedin_job_posting_date"]
-    if settings.get("linkedin_f_wt"):
-        config.LINKEDIN_F_WT = settings["linkedin_f_wt"]
-
-    if settings.get("careers_future_search_queries"):
-        config.CAREERS_FUTURE_SEARCH_QUERIES = settings["careers_future_search_queries"]
-    if settings.get("careers_future_search_categories"):
-        config.CAREERS_FUTURE_SEARCH_CATEGORIES = settings["careers_future_search_categories"]
-    if settings.get("careers_future_search_employment_types"):
-        config.CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = settings["careers_future_search_employment_types"]
-
-    # 2. Update Processing Limits
-    if settings.get("scraping_sources"):
-        config.SCRAPING_SOURCES = settings["scraping_sources"]
-    if settings.get("jobs_to_score_per_run"):
-        config.JOBS_TO_SCORE_PER_RUN = settings["jobs_to_score_per_run"]
-    if settings.get("jobs_to_customize_per_run"):
-        config.JOBS_TO_CUSTOMIZE_PER_RUN = settings["jobs_to_customize_per_run"]
-    if settings.get("max_jobs_per_search"):
-        config.MAX_JOBS_PER_SEARCH = settings["max_jobs_per_search"]
-
-    # 3. Update LLM Settings
-    db_model = settings.get("llm_model")
-    db_api_key = settings.get("llm_api_key")
-    db_max_rpm = settings.get("llm_max_rpm")
-    db_request_delay = settings.get("llm_request_delay_seconds")
-    db_daily_budget = settings.get("llm_daily_request_budget")
-
-    if db_model:
-        config.LLM_MODEL = db_model
-    if db_api_key:
-        config.LLM_API_KEY = db_api_key
-    if db_max_rpm:
-        config.LLM_MAX_RPM = db_max_rpm
-    if db_request_delay is not None:
-        config.LLM_REQUEST_DELAY_SECONDS = db_request_delay
-    if db_daily_budget is not None:
-        config.LLM_DAILY_REQUEST_BUDGET = db_daily_budget
-
-    # 4. Reconfigure Global LLM Client
+    # 1. Update Search Preferences from Supabase app_settings
+    config.LINKEDIN_SEARCH_QUERIES = settings.get("linkedin_search_queries") or []
+    config.LINKEDIN_LOCATION = settings.get("linkedin_location") or "Singapore"
+    geo_id = settings.get("linkedin_geo_id")
     try:
-        import llm_client
-        llm_client.primary_client.configure(
-            model=config.LLM_MODEL,
-            api_key=config.LLM_API_KEY,
-            max_rpm=config.LLM_MAX_RPM,
-            request_delay=config.LLM_REQUEST_DELAY_SECONDS,
-            daily_budget=config.LLM_DAILY_REQUEST_BUDGET,
-        )
-        logging.info(
-            f"Successfully applied dynamic app_settings from Supabase: "
-            f"Model={config.LLM_MODEL}, ScoringBatch={config.JOBS_TO_SCORE_PER_RUN}, "
-            f"CustomizeBatch={config.JOBS_TO_CUSTOMIZE_PER_RUN}, Delay={config.LLM_REQUEST_DELAY_SECONDS}s"
-        )
-    except Exception as client_err:
-        logging.warning(f"Failed to reconfigure primary_client with dynamic settings: {client_err}")
+        config.LINKEDIN_GEO_ID = int(geo_id) if geo_id else 102454443
+    except (ValueError, TypeError):
+        config.LINKEDIN_GEO_ID = geo_id or 102454443
+
+    config.LINKEDIN_JOB_TYPE = settings.get("linkedin_job_type") or "F"
+    config.LINKEDIN_JOB_POSTING_DATE = settings.get("linkedin_job_posting_date") or "r86400"
+    config.LINKEDIN_F_WT = settings.get("linkedin_f_wt") or "1,2,3"
+
+    config.CAREERS_FUTURE_SEARCH_QUERIES = settings.get("careers_future_search_queries") or []
+    config.CAREERS_FUTURE_SEARCH_CATEGORIES = settings.get("careers_future_search_categories") or []
+    config.CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = settings.get("careers_future_search_employment_types") or []
+
+    # 2. Update Sources and Limits
+    config.SCRAPING_SOURCES = settings.get("scraping_sources") or ["linkedin"]
+    config.MAX_JOBS_PER_SEARCH = settings.get("max_jobs_per_search") or {"linkedin": 10, "careers_future": 20}
+
+    logging.info(
+        f"Successfully applied dynamic app_settings from Supabase: "
+        f"ScrapingSources={config.SCRAPING_SOURCES}, Location='{config.LINKEDIN_LOCATION}', "
+        f"LinkedInQueries={config.LINKEDIN_SEARCH_QUERIES}"
+    )
 
     return settings
+
+
+# Automatically load dynamic settings from Supabase upon import
+try:
+    load_and_apply_app_settings()
+except Exception as _e:
+    logging.debug(f"Initial load of app_settings deferred: {_e}")
 
 
 

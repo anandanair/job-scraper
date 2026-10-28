@@ -182,6 +182,8 @@ export interface AppSettings {
   llm_max_rpm: number;
   llm_request_delay_seconds: number;
   llm_daily_request_budget: number;
+  setup_step?: number;
+  setup_completed?: boolean;
   created_at?: string;
   updated_at?: string;
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar"; // Import the Navbar component
+import Footer from "@/components/Footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,11 +34,7 @@ export default function RootLayout({
         <main className="flex-grow container mx-auto p-4 overflow-auto">
           {children}
         </main>
-        {/* Footer fixed at bottom */}
-        <footer className="flex-shrink-0 bg-gray-200 p-4 text-center text-sm text-gray-600">
-          {" "}
-          © {new Date().getFullYear()} Job App Tracker
-        </footer>
+        <Footer />
       </body>
     </html>
   );

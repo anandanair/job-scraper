@@ -67,7 +67,9 @@ function splitIntoSentences(text: string): string[] {
 }
 
 function isNA(value: string | null | undefined): boolean {
-  return !value || value === "NA";
+  if (!value) return true;
+  const upper = value.trim().toUpperCase();
+  return upper === "" || upper === "NA" || upper === "N/A" || upper === "NONE" || upper === "NULL" || upper === "UNDEFINED";
 }
 
 // --- Font family helper ---

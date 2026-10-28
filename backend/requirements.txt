@@ -2,11 +2,4 @@ requests
 beautifulsoup4
 python-dotenv
 supabase
-httpx
-pdfplumber
-google-genai
-litellm
-pydantic
-playwright
 markdownify
-reportlab

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getCachedDashboardStats, getAppSettings } from "@/lib/supabase/queries";
 import {
   Briefcase,
@@ -64,6 +65,13 @@ function StatCard({
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  const hasSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
+  const isSetupComplete = process.env.SETUP_COMPLETED === "true";
+
+  if (!hasSupabase || !isSetupComplete) {
+    redirect("/setup");
+  }
+
   // Get server's current local date in YYYY-MM-DD format
   const now = new Date(); // Current date/time in server's local timezone
   const year = now.getFullYear();

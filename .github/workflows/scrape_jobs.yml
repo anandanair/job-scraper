@@ -3,8 +3,7 @@ name: Daily Job Scraper
 
 on:
   schedule:
-    - cron: "30 3 * * *"   # 11:30 AM SGT (Morning job postings)
-    - cron: "0 11 * * *"   # 7:00 PM SGT (Evening job postings)
+    - cron: "0 11 * * *"   # 7:00 PM SGT (Once daily, captures past 24 hours of job postings)
   workflow_dispatch:
 
 defaults:
@@ -16,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       linkedin_queries: ${{ steps.get-queries.outputs.linkedin_queries }}
+      include_careers_future: ${{ steps.get-queries.outputs.include_careers_future }}
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
@@ -25,16 +25,22 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dotenv
-        run: pip install python-dotenv
-
-      - name: Extract search queries from config
-        id: get-queries
+      - name: Install dependencies
         run: |
-          python -c "import config, json; print('linkedin_queries=' + json.dumps(config.LINKEDIN_SEARCH_QUERIES))" >> $GITHUB_OUTPUT
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Extract search queries and sources from Supabase
+        id: get-queries
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python -c "import supabase_utils, config, json; supabase_utils.load_and_apply_app_settings(); l_queries = config.LINKEDIN_SEARCH_QUERIES if 'linkedin' in config.SCRAPING_SOURCES else []; print('linkedin_queries=' + json.dumps(l_queries)); print('include_careers_future=' + str('careers_future' in config.SCRAPING_SOURCES).lower())" >> $GITHUB_OUTPUT
 
   scrape-linkedin:
     needs: prepare-matrix
+    if: ${{ needs.prepare-matrix.outputs.linkedin_queries != '[]' && needs.prepare-matrix.outputs.linkedin_queries != '' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -63,6 +69,8 @@ jobs:
         run: python scraper.py --source linkedin --query "${{ matrix.query }}"
 
   scrape-careers-future:
+    needs: prepare-matrix
+    if: ${{ needs.prepare-matrix.outputs.include_careers_future == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository code

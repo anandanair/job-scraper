@@ -20,6 +20,11 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
   const pathname = usePathname();
 
+  // Hide Navbar completely during setup
+  if (pathname === "/setup" || pathname.startsWith("/setup/")) {
+    return null;
+  }
+
   // Handle scroll effect for navbar backdrop
   useEffect(() => {
     const handleScroll = () => {

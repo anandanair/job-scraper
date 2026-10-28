@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
       canvas: "./src/lib/empty-module.js",
     },
   },
-  serverExternalPackages: ["pdfkit"],
+  serverExternalPackages: ["pdfkit", "pdfjs-dist"],
   /* config options here */
 };
 

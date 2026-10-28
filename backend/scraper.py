@@ -736,9 +736,9 @@ def process_careers_future_query(search_query: str, limit: int = None) -> list:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Multi-source Job Scraper (LinkedIn & CareersFuture)")
     parser.add_argument("--source", choices=["all", "linkedin", "careers_future"], default=None,
-                        help="Specific source to scrape (defaults to config.SCRAPING_SOURCES)")
+                        help="Specific source to scrape (defaults to active sources in Supabase app_settings)")
     parser.add_argument("--query", type=str, default=None,
-                        help="Specific search query to run (defaults to queries in config)")
+                        help="Specific search query to run (defaults to queries in Supabase app_settings)")
     parser.add_argument("--limit", type=int, default=None,
                         help="Maximum jobs to fetch per search query (overrides config)")
     args = parser.parse_args()
