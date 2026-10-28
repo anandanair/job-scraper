@@ -60,10 +60,17 @@ function updateEnvKey(key: string, value: string): void {
  * Returns current setup state from local env and/or Supabase.
  */
 export async function getSetupState(): Promise<SetupState> {
+  const envUrl =
+    readEnvKeyValue("NEXT_PUBLIC_SUPABASE_URL") ||
+    readEnvKeyValue("SUPABASE_URL") ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL;
+
+  const hasSupabase = Boolean(envUrl);
   const envCompleted = readEnvKeyValue("SETUP_COMPLETED") || process.env.SETUP_COMPLETED;
   const envStepStr = readEnvKeyValue("SETUP_STEP") || process.env.SETUP_STEP;
 
-  const isCompleted = envCompleted === "true";
+  const isCompleted = hasSupabase && envCompleted === "true";
   let step: 1 | 2 | 3 | 4 | 5 = 1;
 
   if (envStepStr) {

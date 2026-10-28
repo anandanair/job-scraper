@@ -167,10 +167,16 @@ async function getInitialSetupStatus(): Promise<{
   };
 }
 
-export default async function SetupPage() {
+interface SetupPageProps {
+  searchParams?: Promise<{ force?: string }>;
+}
+
+export default async function SetupPage({ searchParams }: SetupPageProps) {
+  const params = searchParams ? await searchParams : {};
+  const isForced = params?.force === "true";
   const status = await getInitialSetupStatus();
 
-  if (status.isComplete) {
+  if (status.isComplete && !isForced) {
     redirect("/");
   }
 

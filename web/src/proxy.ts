@@ -1,5 +1,39 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import fs from "fs";
+import path from "path";
+
+function isSupabaseConfigured(): boolean {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL) {
+    return true;
+  }
+  try {
+    const isWebCwd =
+      fs.existsSync(path.resolve(process.cwd(), "next.config.ts")) ||
+      fs.existsSync(path.resolve(process.cwd(), "next.config.js"));
+
+    const webEnvPath = isWebCwd
+      ? path.resolve(process.cwd(), ".env.local")
+      : path.resolve(process.cwd(), "web", ".env.local");
+
+    if (fs.existsSync(webEnvPath)) {
+      const content = fs.readFileSync(webEnvPath, "utf-8");
+      return (
+        content.includes("NEXT_PUBLIC_SUPABASE_URL=") &&
+        content.split("\n").some((l) => {
+          const t = l.trim();
+          return (
+            (t.startsWith("NEXT_PUBLIC_SUPABASE_URL=") || t.startsWith("SUPABASE_URL=")) &&
+            (t.split("=")[1]?.replace(/["']/g, "").trim().length ?? 0) > 0
+          );
+        })
+      );
+    }
+  } catch {
+    // Non-fatal fallback
+  }
+  return false;
+}
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -14,10 +48,13 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Check setup completion status via persistent cookie or environment flag
+  // 2. Check setup completion status:
+  // Setup CANNOT be considered complete if Supabase is not configured!
+  const hasSupabase = isSupabaseConfigured();
   const isSetupComplete =
-    request.cookies.get("jobtrack_setup_complete")?.value === "true" ||
-    process.env.SETUP_COMPLETED === "true";
+    hasSupabase &&
+    (request.cookies.get("jobtrack_setup_complete")?.value === "true" ||
+      process.env.SETUP_COMPLETED === "true");
 
   // 3. If setup is NOT completed:
   if (!isSetupComplete) {
@@ -28,15 +65,24 @@ export function proxy(request: NextRequest) {
     // Block all other pages (/, /jobs/*, /resume-studio, /settings, /profile) and redirect to /setup
     const setupUrl = request.nextUrl.clone();
     setupUrl.pathname = "/setup";
-    return NextResponse.redirect(setupUrl);
+    const response = NextResponse.redirect(setupUrl);
+
+    // If an orphan/stale cookie exists while Supabase isn't configured, delete it
+    if (!hasSupabase && request.cookies.has("jobtrack_setup_complete")) {
+      response.cookies.delete("jobtrack_setup_complete");
+    }
+
+    return response;
   }
 
   // 4. If setup IS completed:
-  // Prevent navigating back to /setup (once completed, it's done!)
+  // Prevent navigating back to /setup (unless explicitly forced via query param ?force=true)
   if (pathname === "/setup" || pathname.startsWith("/setup/")) {
-    const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = "/";
-    return NextResponse.redirect(homeUrl);
+    if (!request.nextUrl.searchParams.has("force")) {
+      const homeUrl = request.nextUrl.clone();
+      homeUrl.pathname = "/";
+      return NextResponse.redirect(homeUrl);
+    }
   }
 
   return NextResponse.next();

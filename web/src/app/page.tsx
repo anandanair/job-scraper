@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getCachedDashboardStats, getAppSettings } from "@/lib/supabase/queries";
 import {
   Briefcase,
@@ -65,10 +66,14 @@ function StatCard({
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  const cookieStore = await cookies();
   const hasSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
-  const isSetupComplete = process.env.SETUP_COMPLETED === "true";
+  const isSetupComplete =
+    hasSupabase &&
+    (cookieStore.get("jobtrack_setup_complete")?.value === "true" ||
+      process.env.SETUP_COMPLETED === "true");
 
-  if (!hasSupabase || !isSetupComplete) {
+  if (!isSetupComplete) {
     redirect("/setup");
   }
 
