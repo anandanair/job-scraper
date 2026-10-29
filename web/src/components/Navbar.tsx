@@ -20,23 +20,22 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
   const pathname = usePathname();
 
-  // Hide Navbar completely during setup
-  if (pathname === "/setup" || pathname.startsWith("/setup/")) {
-    return null;
-  }
+  const isSetup = pathname === "/setup" || pathname.startsWith("/setup/");
 
   // Handle scroll effect for navbar backdrop
   useEffect(() => {
+    if (isSetup) return;
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
 
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [isSetup]);
 
   // Close mobile menu when clicking outside
   useEffect(() => {
+    if (isSetup) return;
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (isMenuOpen && !target.closest(".mobile-menu-container")) {
@@ -48,7 +47,12 @@ export default function Navbar() {
       document.addEventListener("click", handleClickOutside);
     }
     return () => document.removeEventListener("click", handleClickOutside);
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isSetup]);
+
+  // Hide Navbar completely during setup
+  if (isSetup) {
+    return null;
+  }
 
   const navItems = [
     { href: "/", icon: <Home size={18} />, text: "Home" },
