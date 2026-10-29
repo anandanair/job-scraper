@@ -29,7 +29,7 @@ const WORKFLOWS = [
     schedule: "Daily at 7:00 PM SGT (11:00 UTC)",
     cron: "0 11 * * *",
     description: "Scrapes LinkedIn & MyCareersFuture for new postings and saves markdown to Supabase.",
-    badge: "Python Engine",
+    badge: "TypeScript Engine",
   },
   {
     id: "score_jobs.yml",

@@ -20,8 +20,8 @@
 
 ```mermaid
 graph TD
-    subgraph ScraperEngine ["Python Scraper Engine (backend/)"]
-        S[scraper.py] -->|HTML to Markdown via markdownify| S_MD[Clean Markdown Job Postings]
+    subgraph ScraperEngine ["TypeScript Scraper Engine (web/src/lib/scraper/)"]
+        S[scrape-jobs.ts] -->|HTML to Markdown via node-html-markdown| S_MD[Clean Markdown Job Postings]
         S -->|Dynamic Settings| DB[(Supabase PostgreSQL)]
     end
 
@@ -33,6 +33,7 @@ graph TD
     end
 
     subgraph BatchWorkers ["TypeScript Automation Workers (web/scripts/)"]
+        W0[scrape-jobs.ts] -->|Collect Postings| DB
         W1[score-jobs.ts] -->|Evaluate Fit 0-100| DB
         W2[customize-resumes.ts] -->|Tailor & Compile PDF| DB
         W3[job-manager.ts] -->|Check Availability & Expire| DB
@@ -44,8 +45,7 @@ graph TD
     end
 
     subgraph Automation ["GitHub Actions"]
-        GH[Cron Workflows] --> S
-        GH --> BatchWorkers
+        GH[Cron Workflows] --> BatchWorkers
     end
 ```
 
@@ -53,14 +53,14 @@ graph TD
 1. **No Python Web Server**:
    - There is **no** Flask, FastAPI, Django, or Python HTTP server in this project.
    - All REST API endpoints and server routes are Next.js Route Handlers located under [`web/src/app/api/`](web/src/app/api/).
-2. **Python is Solely for Scraping**:
-   - The [`backend/`](backend/) directory contains only the web scraper ([`backend/scraper.py`](backend/scraper.py)) and its helper modules ([`backend/supabase_utils.py`](backend/supabase_utils.py), [`backend/config.py`](backend/config.py), [`backend/user_agents.py`](backend/user_agents.py)).
-   - It performs HTML-to-Markdown conversion locally with `markdownify` with zero LLM API cost.
+2. **Scraping Engine in TypeScript (Primary) & Python (Fallback)**:
+   - Primary: Built in TypeScript under [`web/src/lib/scraper/`](web/src/lib/scraper/) and executed via [`web/scripts/scrape-jobs.ts`](web/scripts/scrape-jobs.ts) (`npm run scrape`). It uses `impit` for browser TLS (JA3/JA4) impersonation on LinkedIn, `cheerio` for fast HTML parsing, and `node-html-markdown` for local Markdown conversion.
+   - Fallback: The legacy Python scraper in [`backend/`](backend/) is retained as a working fallback (`npm run scrape:py`).
 3. **TypeScript for Application Logic & Batch Workers**:
    - Job scoring, resume customization, PDF generation, job expiration, and resume parsing are written in TypeScript under [`web/scripts/`](web/scripts/) and [`web/src/lib/`](web/src/lib/).
 4. **Single Source of Truth for Configuration (`app_settings`)**:
    - All user preferences (search queries, locations, LinkedIn filters, scraping sources) and AI settings (provider, model, API keys, RPM limits, budget) are stored in the Supabase **`app_settings`** table.
-   - The Python scraper dynamically fetches these settings at startup via `supabase_utils.load_and_apply_app_settings()`.
+   - The TypeScript scraper dynamically fetches these settings at startup via `loadScraperSettings(supabase)`.
    - The LLM caller in `web/src/lib/llm.ts` reads `app_settings` as the exclusive source of truth for AI configuration and credentials.
 
 ---
@@ -70,11 +70,11 @@ graph TD
 ```
 .
 ├── .github/workflows/          # Automated GitHub Actions
-│   ├── scrape_jobs.yml         # Daily Python job scraper (7:00 PM SGT)
+│   ├── scrape_jobs.yml         # Daily TypeScript job scraper (7:00 PM SGT)
 │   ├── score_jobs.yml          # TypeScript AI job scorer (every 4 hrs)
 │   ├── hourly_resume_customization.yml # TypeScript resume tailor (every 4 hrs)
 │   └── job_manager.yml         # TypeScript job status manager (daily)
-├── backend/                    # Python Job Scraper Engine
+├── backend/                    # Legacy Python Job Scraper Backup
 │   ├── config.py               # Scraper network configs, timeouts, fallback vars
 │   ├── requirements.txt        # Python dependencies (requests, bs4, supabase, markdownify, dotenv)
 │   ├── scraper.py              # Core scraper (LinkedIn & CareersFuture)

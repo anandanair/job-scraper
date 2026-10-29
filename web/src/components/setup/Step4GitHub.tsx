@@ -202,7 +202,7 @@ export function Step4GitHub({
         <p>
           You can also run scrapers locally anytime via{" "}
           <code className="px-1 py-0.5 bg-amber-100 rounded text-[11px] font-mono">
-            python backend/scraper.py
+            npm run scrape
           </code>
           . GitHub Actions allows continuous daily runs in the cloud for free without local machine dependencies.
         </p>

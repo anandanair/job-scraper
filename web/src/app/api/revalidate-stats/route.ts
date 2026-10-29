@@ -3,10 +3,10 @@ import { revalidateTag, revalidatePath } from "next/cache";
 
 /**
  * Endpoint to invalidate the dashboard stats cache.
- * Can be called by backend scripts (e.g., Python job scraper, score_jobs.py)
+ * Can be called by automation scripts (e.g., TypeScript job scraper, score-jobs.ts)
  * or webhooks after new jobs are inserted or updated.
  *
- * Example usage from Python or curl:
+ * Example usage:
  *   POST /api/revalidate-stats
  */
 export async function POST(request: Request) {

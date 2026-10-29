@@ -4,7 +4,7 @@
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-16%20(React%2019)-black.svg)
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)
 ![Supabase](https://img.shields.io/badge/Database-Supabase-emerald.svg)
 ![AI Providers](https://img.shields.io/badge/AI-Gemini%20%7C%20Fireworks%20%7C%20OpenAI%20%7C%20Claude%20%7C%20Groq-purple.svg)
 
@@ -23,7 +23,7 @@
 - **Master Resume Studio**: Dual-mode master resume editor (`Resume Content` + `Design & Style`) with live ATS persona switching, tag chip editors, and 1:1 pixel-calibrated PDF preview with page budget protections.
 - **Universal LLM Engine**: Native support for **Google Gemini** (Gemini 2.5 Flash, 3 Flash Preview), **Fireworks AI**, **OpenAI**, **Anthropic Claude**, and **Groq**, with dynamic settings and quota/RPM controls stored in Supabase.
 - **Automated GitHub Actions Pipeline**: Autonomous scheduled workflows scrape postings, evaluate resume suitability scores (0–100), generate job-tailored PDF resumes, and expire old postings.
-- **Clean Fullstack Stack**: High-performance Next.js 16 (React 19, Tailwind CSS v4) fullstack web application, TypeScript automation workers, and a lightweight Python scraping engine.
+- **Clean Fullstack Stack**: High-performance Next.js 16 (React 19, Tailwind CSS v4) fullstack web application, TypeScript automation workers, and a pure TypeScript scraping engine with native browser TLS impersonation.
 
 ---
 
@@ -31,8 +31,8 @@
 
 ```mermaid
 graph TD
-    subgraph Scraper ["Python Scraper Engine (backend/)"]
-        S[scraper.py] -->|Local Markdownify| S_MD[Clean Markdown Job Postings]
+    subgraph Scraper ["TypeScript Scraper Engine (web/src/lib/scraper/)"]
+        S[scrape-jobs.ts] -->|Local node-html-markdown| S_MD[Clean Markdown Job Postings]
         S -->|Dynamic Settings| DB[(Supabase PostgreSQL)]
     end
 
@@ -61,10 +61,11 @@ graph TD
 1. **Fullstack Web Application (`web/`)**:
    - Contains all user interface pages, REST API Route Handlers (`web/src/app/api/`), universal AI integrations (`web/src/lib/llm.ts`), ATS PDF typesetting (`web/src/lib/pdf.ts`), and scheduled batch tasks (`web/scripts/`).
    - All client-to-server operations run through Next.js route handlers.
-2. **Python Scraping Engine (`backend/`)**:
-   - Solely responsible for scraping job portals (`backend/scraper.py`).
-   - Converts HTML descriptions to Markdown locally using `markdownify` without consuming LLM quotas.
+2. **TypeScript Scraping Engine (`web/src/lib/scraper/` & `web/scripts/scrape-jobs.ts`)**:
+   - Collects job postings from LinkedIn (via guest endpoints with `impit` browser TLS/JA4 impersonation) and CareersFuture (typed REST API).
+   - Converts HTML descriptions to Markdown locally using `node-html-markdown` without consuming LLM quotas.
    - Dynamically loads search preferences directly from Supabase `app_settings`.
+   - *(Note: The legacy Python scraper in `backend/` is preserved as a verified fallback via `npm run scrape:py`)*.
 3. **Single Source of Truth (`app_settings`)**:
    - Search queries, target locations, workplace filters, scraping sources, AI model choices, and rate limits are stored in the Supabase `app_settings` table and configured via the web UI.
 
@@ -72,7 +73,7 @@ graph TD
 
 ## 🚀 Quick Start (1-Click Installer)
 
-The repository provides automated 1-click installers that verify prerequisites (Node.js 20+ LTS, Python 3.10+), install dependencies, start the dev server, and launch the setup wizard.
+The repository provides automated 1-click installers that verify prerequisites (Node.js 20+ LTS), install dependencies, start the dev server, and launch the setup wizard.
 
 ### Windows
 Double-click [`install.bat`](install.bat) or run from PowerShell / Command Prompt:
@@ -103,11 +104,8 @@ cd job-scraper
 
 ### 2. Install Dependencies
 ```bash
-# Install web dependencies (Next.js, React, Tailwind, PDFKit, etc.)
+# Install application dependencies (Next.js, React, Tailwind, Scraper Engine, PDFKit)
 npm run install:web
-
-# Install scraper dependencies (Python 3.10+)
-pip install -r backend/requirements.txt
 ```
 
 ### 3. Setup Supabase Database
@@ -210,9 +208,11 @@ npm run build            # Build Next.js application for production
 npm run start            # Run production Next.js server
 npm run install:web      # Install web application dependencies
 
-# --- Python Scraper ---
-npm run scrape           # Scrape active platforms using settings from Supabase
-python backend/scraper.py --source linkedin --query "Frontend Engineer" --limit 10
+# --- Job Scraper ---
+npm run scrape           # Run TypeScript scraper using settings from Supabase (impit + cheerio)
+npm run scrape:py        # Legacy Python scraper backup
+npm run test:scraper     # Run diagnostic & parity tests on scraping engine
+npm run scrape -- --source linkedin --query "Frontend Engineer" --limit 10
 
 # --- TypeScript Automation Workers ---
 npm run score            # Score unscored jobs against base resume
@@ -228,11 +228,11 @@ npm run parse-resume     # Parse resume.pdf into base_resume table
 ```
 .
 ├── .github/workflows/          # Automated GitHub Actions CI/CD workflows
-│   ├── scrape_jobs.yml         # Daily Python job scraper
+│   ├── scrape_jobs.yml         # Daily TypeScript job scraper
 │   ├── score_jobs.yml          # TypeScript AI job scorer
 │   ├── hourly_resume_customization.yml # TypeScript resume tailor
 │   └── job_manager.yml         # TypeScript job status manager
-├── backend/                    # Python Job Scraper Engine
+├── backend/                    # Legacy Python Scraper Backup
 │   ├── config.py               # Scraper network configs & fallback vars
 │   ├── scraper.py              # Core multi-source scraper (LinkedIn & CareersFuture)
 │   ├── supabase_utils.py       # Supabase client & dynamic app_settings loader

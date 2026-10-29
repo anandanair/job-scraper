@@ -23,22 +23,9 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 echo -e "    Found Node.js $(node -v)"
-
-# 2. Check Python
-echo -e "${BLUE}[*] Checking Python prerequisite...${NC}"
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-elif command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-else
-    echo -e "${RED}[ERROR] Python is not installed or not in PATH!${NC}"
-    echo "Please install Python 3.10+ from: https://www.python.org"
-    exit 1
-fi
-echo -e "    Found $($PYTHON_CMD --version)"
 echo ""
 
-# 3. Check directory
+# 2. Check directory
 if [ ! -f "web/package.json" ]; then
     if [ -f "job-scraper/web/package.json" ]; then
         cd job-scraper
@@ -49,17 +36,12 @@ if [ ! -f "web/package.json" ]; then
     fi
 fi
 
-# 4. Install web dependencies
-echo -e "${BLUE}[*] Step 1/3: Installing web dependencies...${NC}"
+# 3. Install web & scraper dependencies
+echo -e "${BLUE}[*] Step 1/2: Installing dependencies (Next.js, TypeScript Scraper, PDFKit)...${NC}"
 npm --prefix web install
 
-# 5. Install python dependencies
-echo -e "${BLUE}[*] Step 2/3: Installing scraper python packages...${NC}"
-$PYTHON_CMD -m pip install --quiet --upgrade pip || true
-$PYTHON_CMD -m pip install --quiet -r backend/requirements.txt || true
-
-# 6. Launch dev server and open browser
-echo -e "${BLUE}[*] Step 3/3: Starting JobTrack web server on http://localhost:3000...${NC}"
+# 4. Launch dev server and open browser
+echo -e "${BLUE}[*] Step 2/2: Starting JobTrack web server on http://localhost:3000...${NC}"
 npm --prefix web run dev &
 SERVER_PID=$!
 
