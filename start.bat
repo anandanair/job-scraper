@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-title JobTrack Launcher
+title JobTrack (Press Ctrl+C to Stop)
 
 :: Resolve directory containing this script
 set "SCRIPT_DIR=%~dp0"
@@ -21,10 +21,10 @@ if not exist "web\package.json" (
 
 echo ============================================================
 echo       JobTrack: Autonomous Job Scraper ^& AI Studio
-echo                      Daily Launcher
 echo ============================================================
 echo.
-echo [*] Checking Node.js prerequisite...
+
+:: 1. Check Node.js prerequisite
 where node >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js is not found in your PATH!
@@ -33,25 +33,38 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: 2. Auto-Check for updates from GitHub (if Git is installed)
+if exist ".git" (
+    where git >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo [*] Checking for updates from GitHub...
+        git fetch origin main --quiet 2>nul
+        for /f %%i in ('git rev-list HEAD..origin/main --count 2^>nul') do set BEHIND=%%i
+        if defined BEHIND (
+            if !BEHIND! gtr 0 (
+                echo.
+                echo [*] Update available: !BEHIND! new update(s) found on GitHub!
+                echo [*] Pulling latest updates...
+                git pull origin main --quiet
+                echo [*] Updating dependencies...
+                call npm --prefix web install
+                echo [SUCCESS] JobTrack is now updated to the latest version!
+                echo.
+            ) else (
+                echo     JobTrack is up to date.
+                echo.
+            )
+        )
+    )
+)
+
 echo [*] Starting JobTrack web server on http://localhost:3000...
-echo [*] DEV SERVER WINDOW: Keep the server window open while using JobTrack.
+echo [*] Dev server is running in this window (Press Ctrl+C to stop).
 echo.
 
-:: Launch the dev server in a new dedicated window
-start "JobTrack Dev Server" cmd /k "cd /d "%CD%\web" && npm run dev"
+:: Asynchronously open the browser after a 3-second delay without creating a new window
+start /b cmd /c "ping -n 4 127.0.0.1 >nul && start http://localhost:3000"
 
-:: Wait briefly for server startup
-echo [*] Opening JobTrack in your browser...
-ping -n 4 127.0.0.1 >nul
-start http://localhost:3000
-
-echo.
-echo ============================================================
-echo  [SUCCESS] JobTrack is running!
-echo  Web Dashboard: http://localhost:3000
-echo ============================================================
-echo.
-echo You can close this launcher window now.
-timeout /t 5 >nul
-exit /b 0
-
+:: Run the dev server directly in THIS single window
+cd /d "%CD%\web"
+call npm run dev

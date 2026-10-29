@@ -86,24 +86,21 @@ if exist "%DESKTOP_DIR%" (
 
 :: 5. Launch web server and browser
 echo.
-echo [*] Step 3/3: Starting JobTrack web server on http://localhost:3000...
-start "JobTrack Dev Server" cmd /k "cd /d "%CD%\web" && npm run dev"
-
-echo.
 echo ============================================================
-echo  [SUCCESS] JobTrack is starting up!
-echo  Opening http://localhost:3000/setup in your browser...
-echo.
-echo  Tip: In the future, launch JobTrack anytime using:
-echo       1. The 'JobTrack' icon on your Desktop
-echo       2. Double-clicking start.bat in this folder
+echo  [SUCCESS] JobTrack installation is complete!
+echo  Desktop shortcut created: JobTrack
 echo ============================================================
 echo.
+echo [*] Starting JobTrack on http://localhost:3000...
+echo [*] Opening http://localhost:3000/setup in your browser...
+echo [*] Dev server is running in this window (Press Ctrl+C to stop).
+echo.
 
-:: Brief pause to let Next.js initialize before launching browser
-ping -n 4 127.0.0.1 >nul
-start http://localhost:3000/setup
+title JobTrack Server (Press Ctrl+C to stop)
 
-echo Press any key to close this installer window (the dev server will stay open).
-pause >nul
-exit /b 0
+:: Open browser asynchronously without opening a second console window
+start /b cmd /c "ping -n 4 127.0.0.1 >nul && start http://localhost:3000/setup"
+
+:: Run dev server directly in THIS window
+cd /d "%CD%\web"
+call npm run dev

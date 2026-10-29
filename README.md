@@ -126,7 +126,17 @@ Once installed, you never need to re-run the installer or re-install dependencie
 - **Windows**: Double-click the **JobTrack** icon on your Desktop, or double-click **[`start.bat`](start.bat)**.
 - **macOS / Linux**: Run **[`./start.sh`](start.sh)** from the project directory.
 
-The local web server starts instantly and opens **`http://localhost:3000`** in your browser.
+The local web server starts instantly in a single window and opens **`http://localhost:3000`** in your browser.
+
+---
+
+## 🔄 Updating JobTrack
+
+JobTrack stays up to date with zero friction:
+
+- **Automatic on Startup**: Every time you launch via `start.bat` or `./start.sh`, JobTrack automatically checks GitHub for new updates, pulls changes, and refreshes dependencies.
+- **Manual 1-Click Updater**: Double-click **[`update.bat`](update.bat)** (Windows) or run **[`./update.sh`](update.sh)** (macOS/Linux) anytime to pull the latest version.
+- *Note: User settings, AI configurations, and job data reside in your Supabase database and local `.env.local`, which are safely preserved across updates.*
 
 ---
 
@@ -301,8 +311,10 @@ npm run parse-resume     # Parse resume.pdf into base_resume table
 ├── install.bat                 # 1-Click installer for Windows
 ├── install.ps1                 # 1-Line PowerShell installer for Windows
 ├── install.sh                  # 1-Click / 1-Line installer for macOS/Linux
-├── start.bat                   # Instant daily launcher for Windows (opens browser)
-├── start.sh                    # Instant daily launcher for macOS/Linux
+├── start.bat                   # Instant daily launcher with auto-update (Windows)
+├── start.sh                    # Instant daily launcher with auto-update (macOS/Linux)
+├── update.bat                  # Dedicated 1-click updater for Windows
+├── update.sh                   # Dedicated 1-click updater for macOS/Linux
 ├── package.json                # Monorepo root npm scripts
 ├── vercel.json                 # Vercel deployment configuration
 ├── AGENTS.md                   # AI Agent & Pair Programming Protocol

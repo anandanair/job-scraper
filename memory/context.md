@@ -117,8 +117,10 @@ graph TD
 ├── install.bat                 # 1-Click installer for Windows
 ├── install.ps1                 # 1-Line PowerShell installer for Windows
 ├── install.sh                  # 1-Click / 1-Line installer for macOS/Linux
-├── start.bat                   # Instant daily launcher for Windows (desktop shortcut target)
-├── start.sh                    # Instant daily launcher for macOS/Linux
+├── start.bat                   # Instant daily launcher with auto-update (Windows)
+├── start.sh                    # Instant daily launcher with auto-update (macOS/Linux)
+├── update.bat                  # Dedicated 1-click updater for Windows
+├── update.sh                   # Dedicated 1-click updater for macOS/Linux
 ├── package.json                # Root monorepo scripts
 ├── vercel.json                 # Vercel deployment configuration
 ├── AGENTS.md                   # AI Agent operational protocol

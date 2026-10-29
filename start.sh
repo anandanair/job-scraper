@@ -33,24 +33,37 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-echo -e "${BLUE}[*] Starting JobTrack web server on http://localhost:3000...${NC}"
-npm --prefix web run dev &
-SERVER_PID=$!
-
-echo ""
-echo -e "${GREEN}============================================================${NC}"
-echo -e "${GREEN}  [SUCCESS] JobTrack is running! (PID: $SERVER_PID)${NC}"
-echo -e "${GREEN}  Opening http://localhost:3000 in your browser...${NC}"
-echo -e "${GREEN}============================================================${NC}"
-echo ""
-
-sleep 3
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    open "http://localhost:3000" || true
-elif command -v xdg-open &> /dev/null; then
-    xdg-open "http://localhost:3000" || true
+# Auto-check for updates from GitHub
+if [ -d ".git" ] && command -v git &> /dev/null; then
+    echo -e "${BLUE}[*] Checking for updates from GitHub...${NC}"
+    git fetch origin main --quiet 2>/dev/null || true
+    BEHIND=$(git rev-list HEAD..origin/main --count 2>/dev/null || echo 0)
+    if [ "$BEHIND" -gt 0 ]; then
+        echo -e "${GREEN}[*] Found $BEHIND new update(s) on GitHub! Pulling updates...${NC}"
+        git pull origin main --quiet
+        npm --prefix web install
+        echo -e "${GREEN}[SUCCESS] JobTrack is now updated to the latest version!${NC}"
+        echo ""
+    else
+        echo -e "    JobTrack is up to date."
+        echo ""
+    fi
 fi
 
-wait $SERVER_PID
+echo -e "${BLUE}[*] Starting JobTrack web server on http://localhost:3000...${NC}"
+echo -e "    Press Ctrl+C in this terminal to stop the server."
+echo ""
 
+# Open browser asynchronously in background after 3 seconds
+(
+    sleep 3
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        open "http://localhost:3000" || true
+    elif command -v xdg-open &> /dev/null; then
+        xdg-open "http://localhost:3000" || true
+    fi
+) &
+
+# Run dev server directly in the foreground of this terminal
+cd web
+npm run dev

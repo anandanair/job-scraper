@@ -109,21 +109,26 @@ try {
 
 # 5. Start Dev Server & Open Setup Wizard
 Write-Host ""
-Write-Host "[*] Step 3/3: Launching JobTrack dev server..." -ForegroundColor Yellow
-$serverCmd = "/k title JobTrack Dev Server && cd /d `"$webDir`" && npm run dev"
-Start-Process "cmd.exe" -ArgumentList $serverCmd
-
-Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
-Write-Host " [SUCCESS] JobTrack is running!" -ForegroundColor Green
-Write-Host " Opening http://localhost:3000/setup in your browser..." -ForegroundColor Green
-Write-Host ""
-Write-Host " Tip: In the future, launch JobTrack anytime by:" -ForegroundColor White
-Write-Host "   1. Double-clicking the 'JobTrack' shortcut on your Desktop" -ForegroundColor White
-Write-Host "   2. Running $targetDir\start.bat" -ForegroundColor White
+Write-Host " [SUCCESS] JobTrack installation is complete!" -ForegroundColor Green
+Write-Host " A 'JobTrack' shortcut has been added to your Desktop." -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
+Write-Host "[*] Starting JobTrack on http://localhost:3000..." -ForegroundColor Yellow
+Write-Host "    Opening http://localhost:3000/setup in your browser..." -ForegroundColor Cyan
+Write-Host "    Dev server running in this window (Press Ctrl+C to stop)." -ForegroundColor Gray
+Write-Host "------------------------------------------------------------" -ForegroundColor Gray
+Write-Host ""
 
-Start-Sleep -Seconds 4
+# Open browser to setup wizard
 Start-Process "http://localhost:3000/setup"
+
+# Run server directly in this current window (single-window management)
+Push-Location $webDir
+try {
+    $host.UI.RawUI.WindowTitle = "JobTrack Server (Ctrl+C to stop)"
+    cmd.exe /c "npm run dev"
+} finally {
+    Pop-Location
+}
 
