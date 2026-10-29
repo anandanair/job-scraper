@@ -11,6 +11,7 @@ cd /d "%SCRIPT_DIR%"
 if not exist "web\package.json" (
     if exist "job-scraper\web\package.json" (
         cd /d "%SCRIPT_DIR%job-scraper"
+        set "SCRIPT_DIR=%CD%\"
     ) else (
         echo [ERROR] JobTrack files not found!
         echo Please run install.bat first to set up the project.
@@ -33,20 +34,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: 2. If already running on port 3000, just open the browser and exit
-set "PORT_RUNNING="
-for /f "tokens=1" %%p in ('netstat -ano ^| findstr /C:":3000 " 2^>nul') do (
-    set "PORT_RUNNING=1"
-)
-if defined PORT_RUNNING (
-    echo [*] JobTrack server is already active on http://localhost:3000!
-    echo [*] Opening http://localhost:3000 in your browser...
-    start http://localhost:3000
-    timeout /t 3 >nul
-    exit /b 0
-)
-
-:: 3. Auto-Check for updates from GitHub (if Git is installed)
+:: 2. Auto-Check for updates from GitHub (if Git is installed)
 if exist ".git" call :CHECK_UPDATES
 goto :LAUNCH_APP
 
@@ -75,7 +63,7 @@ if "%BEHIND%" gtr "0" (
 goto :eof
 
 :LAUNCH_APP
-echo [*] Starting JobTrack on http://localhost:3000...
+echo [*] Starting JobTrack server on http://localhost:3000...
 echo [*] Opening http://localhost:3000 in your browser...
 echo [*] Keep this window open while using JobTrack.
 echo     (Press Ctrl+C anytime to stop).
@@ -86,7 +74,7 @@ echo.
 start /b cmd /c "ping -n 5 127.0.0.1 >nul && start http://localhost:3000"
 
 :: Run the dev server directly in THIS single window
-cd /d "%CD%\web"
+cd /d "%SCRIPT_DIR%web"
 call npm run dev
 
 if %errorlevel% neq 0 (
