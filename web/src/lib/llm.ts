@@ -469,7 +469,7 @@ ${jobDetails.description || "N/A"}
 Score (0-100):`;
 
   try {
-    const raw = await callLLM({ prompt, temperature: 0.1 });
+    const raw = await callLLM({ prompt, temperature: 0.2 });
     const match = raw.match(/\b\d{1,3}\b/);
     if (!match) return null;
     const score = parseInt(match[0], 10);
@@ -590,7 +590,7 @@ Return valid JSON matching this schema:
   const raw = await callLLM({
     prompt,
     systemPrompt,
-    temperature: 0.2,
+    temperature: 0.5,
     jsonMode: true,
   });
 
@@ -732,7 +732,7 @@ Return valid JSON matching this exact structure:
   const raw = await callLLM({
     prompt,
     systemPrompt,
-    temperature: 0.3,
+    temperature: 0.8,
     jsonMode: true,
   });
 
