@@ -636,48 +636,6 @@ export async function updateCustomizedResumeById(
   return data as Resume | null;
 }
 
-// New function to upload a personalized resume PDF to Supabase Storage
-/**
- * Uploads a personalized resume PDF to Supabase Storage.
- * @param job_id The ID of the job for which the resume is personalized.
- * @param file The PDF file to upload.
- * @returns A promise that resolves to an object containing the public URL of the uploaded file.
- * @throws Will throw an error if the upload fails or the public URL cannot be retrieved.
- */
-export async function uploadPersonalizedResume(
-  fileName: string,
-  file: File,
-): Promise<string> {
-  const supabase = await createSupabaseServerClient();
-  const filePath = fileName;
-
-  console.log("Uploading file to path:", filePath);
-
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from("personalized_resumes") // Updated bucket name
-    .upload(filePath, file, {
-      upsert: true, // Overwrite if file already exists
-    });
-
-  if (uploadError) {
-    console.error("Supabase storage upload error:", uploadError);
-    throw new Error(
-      `Failed to upload personalized resume: ${uploadError.message}`,
-    );
-  }
-
-  if (!uploadData || !uploadData.path) {
-    console.error(
-      "Supabase storage upload error: No path returned despite no error.",
-    );
-    throw new Error(
-      "Failed to upload personalized resume: No path returned from storage.",
-    );
-  }
-
-  return fileName;
-}
-
 /**
  * Retrieves the user profile from the 'base_resume' table.
  * Fetches the latest row as per the backend architecture.

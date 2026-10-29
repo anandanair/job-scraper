@@ -11,7 +11,7 @@
 1. **TypeScript Scraping Engine (`web/src/lib/scraper/` & `web/scripts/scrape-jobs.ts`)**: Collects job listings from LinkedIn (via guest endpoints with `impit` native Chrome TLS/JA3/JA4 fingerprint impersonation) and CareersFuture (typed REST API) into Supabase PostgreSQL with local `node-html-markdown` conversion. *(Note: The legacy Python scraper in `backend/` is preserved as a verified fallback during transition)*.
 2. **Fullstack Next.js Application (`web/`)**: Provides an interactive setup wizard, master resume studio, ATS visual theme designer, job dashboard, and REST API route handlers.
 3. **TypeScript Batch Workers (`web/scripts/`)**: Autonomous worker processes for scraping, AI job scoring, custom resume generation, posting expiration checks, and master resume parsing.
-4. **Supabase Backend**: Hosts application data (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`, `app_settings`, `linkedin_geo_locations`) and object storage buckets (`resumes`, `personalized_resumes`).
+4. **Supabase Backend**: Hosts application data (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`, `app_settings`, `linkedin_geo_locations`). Storage buckets are deprecated in favor of on-demand in-memory PDF streaming.
 5. **GitHub Actions CI/CD (`.github/workflows/`)**: Automates scheduled scraping, scoring, tailoring, and maintenance workflows on cron schedules.
 
 ---
@@ -35,13 +35,9 @@ graph TD
     subgraph BatchWorkers ["TypeScript Automation Workers (web/scripts/)"]
         W0[scrape-jobs.ts] -->|Collect Postings| DB
         W1[score-jobs.ts] -->|Evaluate Fit 0-100| DB
-        W2[customize-resumes.ts] -->|Tailor & Compile PDF| DB
+        W2[customize-resumes.ts] -->|Tailor & Snapshot Theme| DB
         W3[job-manager.ts] -->|Check Availability & Expire| DB
         W4[parse-resume.ts] -->|Parse PDF to JSON| DB
-    end
-
-    subgraph Storage ["Cloud Storage"]
-        BUCKET[(Supabase Storage<br/>resumes & personalized_resumes)]
     end
 
     subgraph Automation ["GitHub Actions"]
@@ -138,7 +134,7 @@ graph TD
 2. **`base_resume`**:
    - Master resume profile parsed from user's master PDF. Fields: `id`, `name`, `email`, `phone`, `location`, `summary`, `skills` (text array), `education`, `experience`, `projects`, `certifications`, `languages`, `links` (JSONB), `parsed_at`.
 3. **`customized_resumes`**:
-   - Job-tailored resume variants. Links to `jobs.job_id` and contains tailored summary, tailored experiences, matched skills, PDF storage URLs (`resume_link`), and generated timestamp.
+   - Job-tailored resume variants. Links to `jobs.job_id` and contains tailored summary, tailored experiences, matched skills, generated timestamp, and `theme_config` (JSONB snapshot of active styling at application time).
 4. **`resume_style_settings`**:
    - ATS theme configurations. Stores font family (`Helvetica`, `Times-Roman`, `Courier`), font scale (`compact`, `normal`, `spacious`), line spacing (`tight`, `normal`, `relaxed`), header layout, section order, margins, and accent colors.
 5. **`app_settings`**:
@@ -149,9 +145,9 @@ graph TD
 6. **`linkedin_geo_locations`**:
    - Pre-populated mapping of global locations to LinkedIn `geoId`s (e.g., Singapore `102454443`, United States `103644278`).
 
-### Storage Buckets (Private)
-- **`resumes`**: Stores uploaded base master resumes (`resume.pdf`).
-- **`personalized_resumes`**: Stores generated ATS-tailored PDFs.
+### Storage Architecture (On-Demand Streaming)
+- **Supabase Storage Buckets (`resumes`, `personalized_resumes`)**: Fully deprecated.
+- **On-Demand PDF Generation**: PDFs are compiled in-memory on demand via PDFKit (`/api/customized_resumes/[id]/pdf` and `/api/generate-resume`) in ~25ms. This ensures a single source of truth in PostgreSQL, zero storage costs/quota usage, no expiring signed URLs, and instant ATS rendering.
 
 ---
 

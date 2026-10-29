@@ -77,69 +77,6 @@ export default function ResumeEditClient({
     });
   };
 
-  // --- PDF generation and Upload logic ---
-  async function generateResumePdf(resumeDataForPdf: Resume) {
-    const {
-      id,
-      created_at,
-      parsed_at,
-      last_updated,
-      resume_link,
-      ...cleanedResumeDataForPdf
-    } = resumeDataForPdf;
-
-    try {
-      // Generate PDF using local API route
-      const pdfResponse = await fetch("/api/generate-resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cleanedResumeDataForPdf),
-      });
-
-      if (!pdfResponse.ok) {
-        const errorData = await pdfResponse.json().catch(() => ({
-          error: "PDF generation failed",
-        }));
-        throw new Error(
-          errorData.error || `Failed to generate PDF: ${pdfResponse.status}`,
-        );
-      }
-
-      // Get the PDF blob from the response
-      const pdfBlob = await pdfResponse.blob();
-
-      // Convert blob to File (for Supabase upload)
-      const fileName = `resume_${job_id}.pdf`;
-      const file = new File([pdfBlob], fileName, { type: "application/pdf" });
-
-      // Upload the file using the existing API endpoint
-      const formDataToUpload = new FormData();
-      formDataToUpload.append("file", file);
-      formDataToUpload.append("fileName", fileName);
-
-      const uploadResponse = await fetch(`/api/customized_resumes/${id}/`, {
-        method: "POST",
-        body: formDataToUpload,
-      });
-
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json().catch(() => ({
-          error: "Upload failed with no JSON response",
-          details: `HTTP status: ${uploadResponse.status}`,
-        }));
-        throw new Error(
-          errorData.error || `Failed to upload PDF: ${errorData.details}`,
-        );
-      }
-
-      const { fileName: uploadedFileName } = await uploadResponse.json();
-      return uploadedFileName;
-    } catch (error) {
-      console.error("Error generating/uploading PDF:", error);
-      throw error;
-    }
-  }
-
   // --- Save Logic ---
   const handleSave = async () => {
     setIsSaving(true);
@@ -176,21 +113,8 @@ export default function ResumeEditClient({
     });
 
     try {
-      // 1. Generate new PDF and upload it to Supabase Storage
-      try {
-        const generatedPdfUrl = await generateResumePdf(formData);
-        if (generatedPdfUrl) {
-          finalUpdateData.resume_link = generatedPdfUrl;
-        }
-      } catch (pdfError) {
-        console.warn(
-          "PDF generation/upload failed. Saving data only.",
-          pdfError,
-        );
-        // Continue saving even if PDF generation fails.
-      }
-
-      // 2. Patch the database record
+      // Patch the database record directly (PDF is compiled on-the-fly when viewed)
+      
       const response = await fetch(`/api/customized_resumes/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

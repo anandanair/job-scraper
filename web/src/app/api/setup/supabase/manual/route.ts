@@ -34,20 +34,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Ensure Storage Buckets exist
-    try {
-      const { data: buckets } = await supabaseClient.storage.listBuckets();
-      const existingBucketNames = (buckets || []).map((b) => b.name);
-
-      if (!existingBucketNames.includes("resumes")) {
-        await supabaseClient.storage.createBucket("resumes", { public: false });
-      }
-      if (!existingBucketNames.includes("personalized_resumes")) {
-        await supabaseClient.storage.createBucket("personalized_resumes", { public: false });
-      }
-    } catch (bucketErr: any) {
-      console.warn("Notice ensuring storage buckets:", bucketErr.message);
-    }
+    // Storage buckets deprecated: PDFs are compiled dynamically on-the-fly in-memory via PDFKit
 
     // 3. Write files & set environment variables
     writeEnvFiles({

@@ -462,6 +462,7 @@ ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "links" "json
 ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "created_at" timestamp with time zone DEFAULT "now"();
 ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "last_updated" timestamp with time zone DEFAULT "now"();
 ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "resume_link" "text";
+ALTER TABLE "public"."customized_resumes" ADD COLUMN IF NOT EXISTS "theme_config" "jsonb";
 
 
 
@@ -694,16 +695,8 @@ GRANT ALL ON TABLE "public"."base_resume" TO "anon";
 GRANT ALL ON TABLE "public"."base_resume" TO "authenticated";
 GRANT ALL ON TABLE "public"."base_resume" TO "service_role";
 
--- --- Storage Setup ---
--- Create the resumes storage bucket for uploading the original resume PDF
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('resumes', 'resumes', false)
-ON CONFLICT (id) DO NOTHING;
-
--- Create the personalized_resumes storage bucket if it doesn't exist
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('personalized_resumes', 'personalized_resumes', false)
-ON CONFLICT (id) DO NOTHING;
+-- --- Storage Setup (Deprecated) ---
+-- PDFs are compiled dynamically on-the-fly in-memory via PDFKit (no object storage buckets required)
 
 -- --- Resume Style Settings Table ---
 CREATE TABLE IF NOT EXISTS "public"."resume_style_settings" (

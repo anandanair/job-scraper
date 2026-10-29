@@ -1,6 +1,5 @@
 import CustomPdfViewer from "@/components/CustomPdfViewer";
 import { getCustomizedResumeById } from "@/lib/supabase/queries";
-import { getSignedUrl } from "@/lib/supabase/storage";
 import { Resume } from "@/types";
 import { notFound } from "next/navigation";
 
@@ -16,32 +15,21 @@ export default async function ResumeView({ params }: Params) {
 
     if (!resume_data) return notFound();
 
-    let signedUrl = "";
-    let downloadFileName = "";
-    if (resume_data.resume_link) {
-      // The resume_link now stores the file name, e.g., 'resume_123.pdf'
-      // These are stored in 'personalized_resumes' bucket.
-      const storagePath = resume_data.resume_link;
-      downloadFileName = storagePath.split("/").pop() || "";
-      try {
-        signedUrl = await getSignedUrl(storagePath);
-      } catch (err) {
-        console.error("Failed to get signed URL for resume:", err);
-      }
-    } else if (resume_data.name) {
-      downloadFileName = `${resume_data.name.trim().replace(/\s+/g, "_")}_resume.pdf`;
-    }
+    // Stream on-the-fly dynamically via PDFKit (no Supabase Storage bucket needed)
+    const streamingPdfUrl = `/api/customized_resumes/${id}/pdf`;
+    const rawName = resume_data.name?.trim().replace(/\s+/g, "_") || "resume";
+    const downloadFileName = `${rawName}_resume.pdf`;
 
     return (
       <CustomPdfViewer
-        fileUrl={signedUrl}
+        fileUrl={streamingPdfUrl}
         jobId={job_id}
         resumeId={id}
         fileName={downloadFileName}
       />
     );
   } catch (error) {
-    console.error("Error getting resume:", error);
+    console.error("Error getting customized resume:", error);
   }
 
   return (

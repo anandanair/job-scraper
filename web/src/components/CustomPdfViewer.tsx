@@ -126,11 +126,12 @@ export default function CustomPdfViewer({
       if (!res.ok) {
         throw new Error(data.error || data.details || "Failed to re-apply style");
       }
-      if (data.signedUrl) {
-        const urlWithTimestamp = `${data.signedUrl}&t=${Date.now()}`;
-        setEffectiveFileUrl(urlWithTimestamp);
-        setIsLoading(true);
-      }
+      const streamUrl = data.pdfUrl || `/api/customized_resumes/${resumeId}/pdf`;
+      const urlWithTimestamp = `${streamUrl}?t=${Date.now()}`;
+      setEffectiveFileUrl(urlWithTimestamp);
+      setIsLoading(true);
+      setNumPages(null);
+      setPageNumber(1);
     } catch (err: any) {
       console.error("Error re-applying style:", err);
       alert(err.message || "Failed to re-apply style");

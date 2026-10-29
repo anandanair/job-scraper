@@ -232,7 +232,7 @@ export function Step1Database({
         throw new Error(data.error || "Database configuration failed.");
       }
 
-      setDbConfigStatus("Creating storage buckets (resumes, personalized_resumes)...");
+      setDbConfigStatus("Verifying database schema...");
       await new Promise((resolve) => setTimeout(resolve, 600));
 
       setDbConfigStatus("Writing .env.local configuration file...");
@@ -336,7 +336,7 @@ export function Step1Database({
         throw new Error(configData.error || "Database configuration failed.");
       }
 
-      setDbConfigStatus("Setting up storage buckets (resumes, personalized_resumes)...");
+      setDbConfigStatus("Configuring database environment...");
       await new Promise((resolve) => setTimeout(resolve, 600));
 
       setDbConfigStatus("Writing .env.local configuration file...");
@@ -466,7 +466,7 @@ export function Step1Database({
             <div>
               <p className="font-bold text-sm text-emerald-950">Database Already Configured &amp; Verified!</p>
               <p className="text-emerald-800 text-[11px] mt-0.5">
-                Connected to Supabase {connectedSupabaseUrl ? `(${connectedSupabaseUrl})` : ""}. All required database tables and storage buckets are already initialized.
+                Connected to Supabase {connectedSupabaseUrl ? `(${connectedSupabaseUrl})` : ""}. All required database tables and triggers are already initialized.
               </p>
             </div>
           </div>
@@ -833,8 +833,8 @@ export function Step1Database({
                         </p>
                         <p className="text-[11px] leading-relaxed opacity-90">
                           {isJobtrackProjectSelected
-                            ? "Ready to connect. We will verify database tables, ensure storage buckets, and configure your local environment."
-                            : "This project will be initialized with JobTrack database tables, RPC functions, and storage buckets."}
+                            ? "Ready to connect. We will verify database tables and configure your local environment."
+                            : "This project will be initialized with JobTrack database tables and RPC functions."}
                         </p>
                         <div className="flex items-center gap-2 pt-1 font-mono text-[10px]">
                           <span className="bg-white/80 px-2 py-0.5 rounded border border-slate-200">
@@ -883,7 +883,7 @@ export function Step1Database({
                       )}
                     </button>
                     <p className="text-[11px] text-slate-500 text-center mt-2">
-                      Retrieves API keys, applies database schema &amp; triggers, creates storage buckets, and writes .env.local
+                      Retrieves API keys, applies database schema &amp; triggers, and writes .env.local
                     </p>
                   </div>
                 </div>
@@ -961,7 +961,7 @@ export function Step1Database({
                     <p className="text-[11px] text-slate-500 text-center mt-2">
                       {selectedOrgId && selectedOrgId !== "__CREATE_NEW_ORG__"
                         ? `Provisions "jobtrack" inside "${organizations.find((o) => o.id === selectedOrgId)?.name || "selected organization"}" on Supabase Free Tier`
-                        : "Provisions project on Supabase Free Tier, applies SQL schema & sets up storage buckets"}
+                        : "Provisions project on Supabase Free Tier and applies SQL schema"}
                     </p>
                   </div>
                 </div>

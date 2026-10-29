@@ -10,7 +10,6 @@ if (fs.existsSync(rootEnv)) dotenv.config({ path: rootEnv });
 
 import { createSupabaseStaticClient } from "../src/utils/supabase/server";
 import { customizeResumeWithLLM, formatResumeToText, scoreJobWithResume } from "../src/lib/llm";
-import { buildPdfBuffer } from "../src/lib/pdf";
 import { getActiveResumeStyle } from "../src/lib/supabase/queries";
 import { Resume } from "../src/types";
 
@@ -77,7 +76,7 @@ async function main() {
     process.exit(1);
   }
 
-  // 2. Fetch active resume style
+  // 2. Fetch active resume style for theme snapshotting
   const activeStyle = await getActiveResumeStyle();
 
   // 3. Query top scored jobs lacking customized resumes
@@ -116,28 +115,10 @@ async function main() {
         description: job.description,
       });
 
-      // Step B: Build PDF buffer using active style
-      console.log("  Rendering PDF buffer via PDFKit...");
-      const pdfBuffer = await buildPdfBuffer(customizedData, activeStyle);
-
-      // Step C: Upload PDF to Supabase Storage
-      const destinationPath = `resume_${job.job_id}.pdf`;
-      const { error: uploadError } = await supabase.storage
-        .from("personalized_resumes")
-        .upload(destinationPath, pdfBuffer, {
-          contentType: "application/pdf",
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error(`  ✗ Storage upload error for ${job.job_id}:`, uploadError.message);
-        continue;
-      }
-
-      // Step D: Insert into customized_resumes table
+      // Step B: Insert into customized_resumes table (Single Source of Truth with Theme Snapshot)
       const dataToInsert = {
         ...customizedData,
-        resume_link: destinationPath,
+        theme_config: activeStyle,
       };
 
       const { data: insertedResume, error: insertError } = await supabase
@@ -152,20 +133,21 @@ async function main() {
       }
 
       const customizedResumeId = insertedResume.id;
+      const resumeStreamingUrl = `/api/customized_resumes/${customizedResumeId}/pdf`;
 
-      // Step E: Update job record
+      // Step C: Update job record
       await supabase
         .from("jobs")
         .update({
           customized_resume_id: customizedResumeId,
-          resume_link: destinationPath,
+          resume_link: resumeStreamingUrl,
           status: "resume_generated",
         })
         .eq("job_id", job.job_id);
 
-      console.log(`  ✓ Customized resume PDF saved and linked to job ${job.job_id}.`);
+      console.log(`  ✓ Customized resume saved and linked to job ${job.job_id} (ID: ${customizedResumeId}).`);
 
-      // Step F: Stage 3: Re-score job with newly customized resume (The Evaluator)
+      // Step D: Stage 3: Re-score job with newly customized resume (The Evaluator)
       console.log("  Stage 3/3: Re-scoring job fit with customized resume (The Evaluator)...");
       try {
         const tailoredText = formatResumeToText(customizedData);

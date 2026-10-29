@@ -99,21 +99,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 4. Ensure Storage Buckets via Service Role Client
-    const supabaseClient = createClient(supabaseUrl, serviceRoleKey);
-    try {
-      const { data: buckets } = await supabaseClient.storage.listBuckets();
-      const existingBucketNames = (buckets || []).map((b) => b.name);
-
-      if (!existingBucketNames.includes("resumes")) {
-        await supabaseClient.storage.createBucket("resumes", { public: false });
-      }
-      if (!existingBucketNames.includes("personalized_resumes")) {
-        await supabaseClient.storage.createBucket("personalized_resumes", { public: false });
-      }
-    } catch (bucketErr: any) {
-      console.warn("Notice ensuring storage buckets:", bucketErr.message);
-    }
+    // Storage buckets deprecated: PDFs are compiled dynamically on-the-fly in-memory via PDFKit
 
     // 4. Update app_settings directly in the database via the Management API
     try {
@@ -145,7 +131,7 @@ export async function POST(req: Request) {
       success: true,
       projectRef,
       supabaseUrl,
-      message: "Database schema applied and storage buckets created successfully.",
+      message: "Database schema applied successfully.",
     });
   } catch (error: any) {
     console.error("Error in /api/setup/supabase/configure:", error);

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getCustomizedResumeById, getActiveResumeStyle } from "@/lib/supabase/queries";
-import { createSupabaseStaticClient } from "@/utils/supabase/server";
-import { buildPdfBuffer } from "@/lib/pdf";
-import { getSignedUrl } from "@/lib/supabase/storage";
+import {
+  getCustomizedResumeById,
+  getActiveResumeStyle,
+  updateCustomizedResumeById,
+} from "@/lib/supabase/queries";
 
 export async function POST(
   request: Request,
@@ -21,39 +22,20 @@ export async function POST(
 
     const activeStyle = await getActiveResumeStyle();
 
-    const {
-      id: _id,
-      created_at: _ca,
-      parsed_at: _pa,
-      last_updated: _lu,
-      resume_link: _rl,
-      ...cleanData
-    } = resumeData;
+    // Update customized resume's theme snapshot to the active style
+    await updateCustomizedResumeById(id, {
+      theme_config: activeStyle,
+    });
 
-    const pdfBuffer = await buildPdfBuffer(cleanData, activeStyle);
-
-    const storagePath = resumeData.resume_link || `resume_${id}.pdf`;
-    const supabase = createSupabaseStaticClient();
-
-    const { error: uploadError } = await supabase.storage
-      .from("personalized_resumes")
-      .upload(storagePath, pdfBuffer, {
-        contentType: "application/pdf",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error("Storage upload error during re-style:", uploadError);
-      return NextResponse.json(
-        { error: "Failed to upload updated PDF", details: uploadError.message },
-        { status: 500 }
-      );
-    }
-
-    const newSignedUrl = await getSignedUrl(storagePath);
+    const pdfUrl = `/api/customized_resumes/${id}/pdf`;
 
     return NextResponse.json(
-      { success: true, signedUrl: newSignedUrl, storagePath },
+      {
+        success: true,
+        pdfUrl,
+        theme_config: activeStyle,
+        message: "Active style reapplied successfully.",
+      },
       { status: 200 }
     );
   } catch (error: any) {

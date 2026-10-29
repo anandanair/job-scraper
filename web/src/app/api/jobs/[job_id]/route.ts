@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { updateJobById } from "@/lib/supabase/queries"; // Adjust path as needed
+import {
+  updateJobById,
+  getJobById,
+  getCustomizedResumeById,
+  updateCustomizedResumeById,
+  getActiveResumeStyle,
+} from "@/lib/supabase/queries";
 import { Job } from "@/types";
 
 // Handler for PATCH requests to update a job
@@ -32,6 +38,26 @@ export async function PATCH(
         { error: `Job with ID ${job_id} not found or update failed` },
         { status: 404 }
       );
+    }
+
+    // If job is being marked as applied, lock/snapshot the active theme configuration
+    if (updates.status === "applied") {
+      try {
+        const currentJob = await getJobById(job_id);
+        if (currentJob?.customized_resume_id) {
+          const customResume = await getCustomizedResumeById(currentJob.customized_resume_id);
+          if (customResume && !customResume.theme_config) {
+            const activeStyle = await getActiveResumeStyle();
+            if (activeStyle) {
+              await updateCustomizedResumeById(currentJob.customized_resume_id, {
+                theme_config: activeStyle,
+              });
+            }
+          }
+        }
+      } catch (snapshotErr) {
+        console.warn("Notice: Failed to snapshot theme_config on apply:", snapshotErr);
+      }
     }
 
     // Invalidate dashboard stats cache so UI counters refresh immediately

@@ -52,15 +52,14 @@ graph TD
 
     subgraph Workers ["TypeScript Batch Workers (web/scripts/)"]
         W1[score-jobs.ts] -->|Evaluate Fit 0-100| DB
-        W2[customize-resumes.ts] -->|Tailor & Compile PDF| DB
+        W2[customize-resumes.ts] -->|Tailor & Snapshot Theme| DB
         W3[job-manager.ts] -->|Check Availability| DB
         W4[parse-resume.ts] -->|Parse PDF to JSON| DB
     end
 
-    subgraph Cloud ["Automation & Storage"]
+    subgraph Cloud ["Automation"]
         GH[GitHub Actions CI/CD] -->|Cron Schedules| Workers
         GH -->|Cron Schedule| S
-        BUCKET[(Supabase Storage<br/>resumes & personalized_resumes)]
     end
 ```
 
@@ -160,7 +159,7 @@ npm run install:web
 1. Create a free project at [Supabase](https://supabase.com).
 2. Go to the **SQL Editor** (`>_` icon) in your Supabase dashboard.
 3. Open [`supabase_setup/init.sql`](supabase_setup/init.sql), paste its entire contents, and click **Run**.
-   - *This creates all tables (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`, `app_settings`, `linkedin_geo_locations`), indexes, triggers, and private storage buckets (`resumes`, `personalized_resumes`).*
+   - *This creates all tables (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`, `app_settings`, `linkedin_geo_locations`), indexes, and triggers (PDFs are streamed dynamically on-the-fly via PDFKit, requiring 0 storage buckets).*
 
 ### 4. Configure Environment Variables
 Create a `web/.env.local` file (only Supabase credentials required):

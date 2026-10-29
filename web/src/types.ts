@@ -78,6 +78,7 @@ export interface Resume {
   parsed_at: string;
   last_updated?: string; // Optional field for last update timestamp
   resume_link?: string; // Optional field for resume link ur
+  theme_config?: ResumeThemeConfig | null; // Optional snapshot of resume theme settings
 }
 
 // --- Multi-Stage Resume Tailoring Types ---

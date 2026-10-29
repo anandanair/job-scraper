@@ -5,7 +5,7 @@ import { DEFAULT_THEME_CONFIG } from "@/lib/resume-presets";
 // The API receives a resume data object without technical metadata fields
 export type ResumeInput = Omit<
   Resume,
-  "id" | "created_at" | "parsed_at" | "last_updated" | "resume_link"
+  "id" | "created_at" | "parsed_at" | "last_updated" | "resume_link" | "theme_config"
 >;
 
 // Letter size in points: 8.5" x 11"

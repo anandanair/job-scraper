@@ -12,7 +12,6 @@ import {
   formatResumeToText,
   scoreJobWithResume,
 } from "@/lib/llm";
-import { buildPdfBuffer } from "@/lib/pdf";
 
 export async function POST(
   request: Request,
@@ -27,24 +26,27 @@ export async function POST(
       );
     }
 
-    // 1. Fetch Job
+    // 1. Fetch job
     const job = await getJobById(job_id);
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    // 2. Fetch Master Base Resume
+    // 2. Fetch baseline master profile
     const baseResume = await getUserProfileByEmail();
     if (!baseResume) {
       return NextResponse.json(
-        { error: "No base resume found. Please configure your profile first." },
+        {
+          error:
+            "No base resume profile found. Please upload/create one in Resume Studio.",
+        },
         { status: 400 },
       );
     }
 
-    // 3. Tailor resume content using AI multi-stage pipeline
+    // 3. Tailor resume content using Multi-Stage Agentic Pipeline (Strategist + Copywriter + Healer)
     console.log(
-      `[API /customize-resume] Starting multi-stage resume customization for job ${job_id}...`,
+      `[API /customize-resume] Tailoring resume for job ${job_id} ("${job.job_title}")...`,
     );
     const customizedData = await customizeResumeWithLLM(baseResume, {
       job_title: job.job_title,
@@ -53,36 +55,14 @@ export async function POST(
       description: job.description,
     });
 
-    // 4. Build PDF buffer using active saved resume style
+    // 4. Fetch active saved resume style for theme snapshotting
     const activeStyle = await getActiveResumeStyle();
-    const pdfBuffer = await buildPdfBuffer(customizedData, activeStyle);
-
-    // 5. Upload PDF to Supabase Storage (personalized_resumes bucket)
-    const destinationPath = `resume_${job_id}.pdf`;
     const supabase = createSupabaseStaticClient();
 
-    const { error: uploadError } = await supabase.storage
-      .from("personalized_resumes")
-      .upload(destinationPath, pdfBuffer, {
-        contentType: "application/pdf",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error("Storage upload error:", uploadError);
-      return NextResponse.json(
-        {
-          error: "Failed to upload resume to storage",
-          details: uploadError.message,
-        },
-        { status: 500 },
-      );
-    }
-
-    // 6. Save Customized Resume into Supabase table
+    // 5. Save Customized Resume into Supabase table (Single Source of Truth, no storage bucket required)
     const dataToInsert = {
       ...customizedData,
-      resume_link: destinationPath,
+      theme_config: activeStyle,
     };
 
     const { data: insertedResume, error: insertError } = await supabase
@@ -103,8 +83,9 @@ export async function POST(
     }
 
     const customizedResumeId = insertedResume.id;
+    const resumeStreamingUrl = `/api/customized_resumes/${customizedResumeId}/pdf`;
 
-    // 7. Stage 3: Re-score the job with the newly customized resume immediately (The Evaluator)
+    // 6. Stage 3: Re-score the job with the newly customized resume immediately (The Evaluator)
     console.log(
       `[API /customize-resume] Stage 3: Evaluating customized resume against job ${job_id}...`,
     );
@@ -118,12 +99,18 @@ export async function POST(
         level: job.level,
         description: job.description,
       });
-    } catch (e) {
-      console.warn("Auto-rescore after customization failed:", e);
+      console.log(
+        `[API /customize-resume] Custom resume rescore for ${job_id}: ${newScore}/100`,
+      );
+    } catch (evalErr: any) {
+      console.warn(
+        `[API /customize-resume] Notice: Rescoring with customized resume failed, keeping prior score:`,
+        evalErr.message,
+      );
     }
 
-    // 8. Update Job record in Supabase
-    const jobUpdates: any = {
+    // 7. Update Job Record with custom resume ID and new score
+    const jobUpdates: Record<string, any> = {
       customized_resume_id: customizedResumeId,
     };
     if (newScore !== null) {
@@ -133,7 +120,7 @@ export async function POST(
 
     await updateJobById(job_id, jobUpdates);
 
-    // 9. Revalidate tags and paths
+    // 8. Revalidate tags and paths
     try {
       revalidateTag("dashboard-stats", "default");
       revalidatePath("/");
@@ -147,7 +134,7 @@ export async function POST(
         success: true,
         job_id,
         customized_resume_id: customizedResumeId,
-        resume_link: destinationPath,
+        resume_link: resumeStreamingUrl,
         resume_score: newScore,
         resume_score_stage:
           newScore !== null ? "custom" : job.resume_score_stage,

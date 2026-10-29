@@ -18,36 +18,27 @@ async function main() {
   const supabase = createSupabaseStaticClient();
   let pdfBuffer: Buffer | null = null;
 
-  // 1. Try to download resume.pdf from Supabase Storage
-  console.log("Checking Supabase Storage bucket 'resumes' for resume.pdf...");
-  const { data, error } = await supabase.storage.from("resumes").download("resume.pdf");
-
-  if (!error && data) {
-    console.log("✓ Successfully downloaded resume.pdf from Supabase Storage.");
-    pdfBuffer = Buffer.from(await data.arrayBuffer());
-  } else {
-    // 2. Fallback to local resume.pdf
-    const localCandidates = [
-      path.resolve(process.cwd(), "resume.pdf"),
-      path.resolve(process.cwd(), "..", "resume.pdf"),
-      path.resolve(process.cwd(), "..", "backend", "resume.pdf"),
-    ];
-    for (const cand of localCandidates) {
-      if (fs.existsSync(cand)) {
-        console.log(`Found local resume file at: ${cand}`);
-        pdfBuffer = fs.readFileSync(cand);
-        break;
-      }
+  // 1. Search for local resume.pdf candidates
+  const localCandidates = [
+    path.resolve(process.cwd(), "resume.pdf"),
+    path.resolve(process.cwd(), "..", "resume.pdf"),
+    path.resolve(process.cwd(), "..", "backend", "resume.pdf"),
+  ];
+  for (const cand of localCandidates) {
+    if (fs.existsSync(cand)) {
+      console.log(`✓ Found local resume file at: ${cand}`);
+      pdfBuffer = fs.readFileSync(cand);
+      break;
     }
   }
 
   if (!pdfBuffer) {
-    console.error("ERROR: Could not find resume.pdf in Supabase Storage or locally.");
-    console.error("Please upload your resume in the web Setup Wizard or Supabase Storage dashboard.");
+    console.error("ERROR: Could not find resume.pdf locally.");
+    console.error("Please place a resume.pdf in the repository root or upload your resume in the web Setup Wizard / Resume Studio.");
     process.exit(1);
   }
 
-  // 3. Parse with AI
+  // 2. Parse with AI
   console.log("Extracting text, links, and parsing structured data with AI...");
   const parsed = await parseResumePdf(pdfBuffer);
 
@@ -58,12 +49,12 @@ async function main() {
   console.log(`  Experience: ${parsed.experience?.length || 0} roles extracted`);
   console.log(`  Projects: ${parsed.projects?.length || 0} projects extracted`);
 
-  // 4. Upsert to Supabase base_resume table
+  // 3. Upsert to Supabase base_resume table
   console.log("Saving structured resume to Supabase 'base_resume' table...");
   await upsertBaseResume(parsed);
   console.log("✓ Successfully saved parsed resume to Supabase database.");
 
-  // 5. Also save a local JSON copy (for fallback/inspection)
+  // 4. Also save a local JSON copy (for fallback/inspection)
   const jsonPath = path.resolve(process.cwd(), "..", "resume.json");
   fs.writeFileSync(jsonPath, JSON.stringify(parsed, null, 2), "utf-8");
   console.log(`✓ Saved copy to: ${jsonPath}`);
