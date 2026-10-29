@@ -56,12 +56,42 @@ export async function POST(req: Request) {
       serviceRoleKey,
     });
 
-    await saveSetupStep(2);
+    // 4. Verify all core database tables exist
+    const checkTable = async (tableName: string) => {
+      const { error } = await supabaseClient.from(tableName).select("*").limit(1);
+      return !error || error.code === "PGRST116";
+    };
+
+    const [hasJobs, hasAppSettings, hasBaseResume, hasStyles] = await Promise.all([
+      checkTable("jobs"),
+      checkTable("app_settings"),
+      checkTable("base_resume"),
+      checkTable("resume_style_settings"),
+    ]);
+
+    const missingTables = Object.entries({
+      jobs: hasJobs,
+      app_settings: hasAppSettings,
+      base_resume: hasBaseResume,
+      resume_style_settings: hasStyles,
+    })
+      .filter(([_, exists]) => !exists)
+      .map(([name]) => name);
+
+    const allTablesExist = missingTables.length === 0;
+
+    if (allTablesExist) {
+      await saveSetupStep(2);
+    }
 
     return NextResponse.json({
       success: true,
       supabaseUrl,
-      message: "Connected and credentials saved successfully.",
+      missingTables,
+      allTablesExist,
+      message: allTablesExist
+        ? "Connected and credentials saved successfully."
+        : "Connected, but some database tables are missing. Please run the setup SQL schema.",
     });
   } catch (error: any) {
     console.error("Error in /api/setup/supabase/manual:", error);

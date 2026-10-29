@@ -13,6 +13,7 @@ async function getInitialSetupStatus(): Promise<{
   supabaseConnected: boolean;
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
+  initialMissingTables?: string[];
   hasAiKey: boolean;
   aiApiKey?: string;
   savedModel?: string;
@@ -70,9 +71,33 @@ async function getInitialSetupStatus(): Promise<{
 
   try {
     const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
-    const { error: jobsErr } = await supabase.from("jobs").select("job_id").limit(1);
-    if (!jobsErr) {
-      // Database connected! Step 1 is done
+
+    // Verify all core database tables exist before considering Step 1 complete
+    const checkTable = async (tableName: string) => {
+      const { error } = await supabase.from(tableName).select("*").limit(1);
+      return !error || error.code === "PGRST116";
+    };
+
+    const [hasJobs, hasAppSettings, hasBaseResume, hasStyles] = await Promise.all([
+      checkTable("jobs"),
+      checkTable("app_settings"),
+      checkTable("base_resume"),
+      checkTable("resume_style_settings"),
+    ]);
+
+    const missingTables = Object.entries({
+      jobs: hasJobs,
+      app_settings: hasAppSettings,
+      base_resume: hasBaseResume,
+      resume_style_settings: hasStyles,
+    })
+      .filter(([_, exists]) => !exists)
+      .map(([name]) => name);
+
+    const allCoreTablesExist = missingTables.length === 0;
+
+    if (allCoreTablesExist) {
+      // Database connected and verified! Step 1 is done
       const { data: settings } = await supabase
         .from("app_settings")
         .select("*")
@@ -80,8 +105,16 @@ async function getInitialSetupStatus(): Promise<{
         .limit(1)
         .single();
 
-      const effectiveAiKey = settings?.llm_api_key || "";
-      const hasAiKey = Boolean(effectiveAiKey && effectiveAiKey.trim().length > 0);
+      // Pre-fill existing API key from app_settings or fallback to legacy process.env for convenience
+      const legacyAiKey =
+        process.env.GEMINI_API_KEY ||
+        process.env.LLM_API_KEY ||
+        process.env.OPENAI_API_KEY ||
+        process.env.ANTHROPIC_API_KEY ||
+        "";
+
+      const effectiveAiKey = settings?.llm_api_key || legacyAiKey;
+      const hasAiKey = Boolean(settings?.llm_api_key && settings.llm_api_key.trim().length > 0);
       const savedModel = settings?.llm_model || "gemini-3.8-flash";
       const savedProvider = settings?.llm_provider || "gemini";
       const savedTier = (settings?.llm_tier as "free" | "paid") || "free";
@@ -145,6 +178,18 @@ async function getInitialSetupStatus(): Promise<{
         savedSettings: (settings as AppSettings) || null,
         isComplete: false,
       };
+    } else {
+      // Core tables missing: stay on Step 1 to allow running schema migration
+      return {
+        initialStep: 1,
+        supabaseConnected: false,
+        supabaseUrl: url,
+        supabaseServiceRoleKey: serviceKey,
+        initialMissingTables: missingTables,
+        hasAiKey: false,
+        savedSettings: null,
+        isComplete: false,
+      };
     }
   } catch (err) {
     console.warn("Failed to check Supabase in SetupPage:", err);
@@ -180,6 +225,7 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
       initialSupabaseConnected={status.supabaseConnected}
       initialSupabaseUrl={status.supabaseUrl}
       initialSupabaseServiceRoleKey={status.supabaseServiceRoleKey}
+      initialMissingTables={status.initialMissingTables}
       initialAiConnected={status.hasAiKey}
       initialAiApiKey={status.aiApiKey}
       initialAiModel={status.savedModel}

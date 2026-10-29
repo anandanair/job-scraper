@@ -15,6 +15,7 @@ interface SetupWizardProps {
   initialSupabaseConnected?: boolean;
   initialSupabaseUrl?: string;
   initialSupabaseServiceRoleKey?: string;
+  initialMissingTables?: string[];
   initialAiConnected?: boolean;
   initialAiApiKey?: string;
   initialAiModel?: string;
@@ -28,6 +29,7 @@ export default function SetupWizard({
   initialSupabaseConnected = false,
   initialSupabaseUrl = "",
   initialSupabaseServiceRoleKey = "",
+  initialMissingTables = [],
   initialAiConnected = false,
   initialAiApiKey = "",
   initialAiModel,
@@ -39,6 +41,7 @@ export default function SetupWizard({
   const [supabaseConnected, setSupabaseConnected] = useState(initialSupabaseConnected);
   const [connectedSupabaseUrl, setConnectedSupabaseUrl] = useState(initialSupabaseUrl);
   const [connectedServiceRoleKey, setConnectedServiceRoleKey] = useState(initialSupabaseServiceRoleKey);
+  const [missingTables, setMissingTables] = useState<string[]>(initialMissingTables);
   const [aiConnected, setAiConnected] = useState(initialAiConnected);
   const [savedSettings, setSavedSettings] = useState<AppSettings | null>(initialSettings);
 
@@ -91,8 +94,15 @@ export default function SetupWizard({
     fetch("/api/setup/status")
       .then((res) => res.json())
       .then((data) => {
-        if (data && data.supabaseConnected) {
+        if (data && data.missingTables && data.missingTables.length > 0) {
+          setMissingTables(data.missingTables);
+          setSupabaseConnected(false);
+          setCurrentStep(1);
+          if (data.supabaseUrl) setConnectedSupabaseUrl(data.supabaseUrl);
+          if (data.supabaseServiceRoleKey) setConnectedServiceRoleKey(data.supabaseServiceRoleKey);
+        } else if (data && data.supabaseConnected) {
           setSupabaseConnected(true);
+          setMissingTables([]);
           if (data.supabaseUrl) setConnectedSupabaseUrl(data.supabaseUrl);
           if (data.supabaseServiceRoleKey) setConnectedServiceRoleKey(data.supabaseServiceRoleKey);
           if (data.hasAiKey) setAiConnected(true);
@@ -229,8 +239,11 @@ export default function SetupWizard({
             <Step1Database
               supabaseConnected={supabaseConnected}
               connectedSupabaseUrl={connectedSupabaseUrl}
+              connectedServiceRoleKey={connectedServiceRoleKey}
+              initialMissingTables={missingTables}
               onConnected={(url) => {
                 setSupabaseConnected(true);
+                setMissingTables([]);
                 if (url) setConnectedSupabaseUrl(url);
               }}
               onNextStep={() => handleStepTransition(2)}

@@ -39,6 +39,8 @@ const REGION_OPTIONS = [
 interface Step1DatabaseProps {
   supabaseConnected: boolean;
   connectedSupabaseUrl: string;
+  connectedServiceRoleKey?: string;
+  initialMissingTables?: string[];
   onConnected: (url: string) => void;
   onNextStep: () => void;
 }
@@ -46,10 +48,15 @@ interface Step1DatabaseProps {
 export function Step1Database({
   supabaseConnected,
   connectedSupabaseUrl,
+  connectedServiceRoleKey = "",
+  initialMissingTables = [],
   onConnected,
   onNextStep,
 }: Step1DatabaseProps) {
-  const [step1Mode, setStep1Mode] = useState<"token" | "direct">("token");
+  const hasInitialMissing = initialMissingTables.length > 0;
+  const [step1Mode, setStep1Mode] = useState<"token" | "direct">(
+    hasInitialMissing ? "direct" : "token"
+  );
   const [patToken, setPatToken] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("ap-southeast-1");
   const [isFetchingProjects, setIsFetchingProjects] = useState(false);
@@ -135,14 +142,26 @@ export function Step1Database({
   }, [patToken]);
 
   // Direct keys state
-  const [manualUrl, setManualUrl] = useState("");
-  const [manualServiceKey, setManualServiceKey] = useState("");
+  const [manualUrl, setManualUrl] = useState(connectedSupabaseUrl || "");
+  const [manualServiceKey, setManualServiceKey] = useState(connectedServiceRoleKey || "");
   const [manualAnonKey, setManualAnonKey] = useState("");
   const [isManualSaving, setIsManualSaving] = useState(false);
-  const [manualConnected, setManualConnected] = useState(false);
-  const [missingTables, setMissingTables] = useState<string[]>([]);
+  const [manualConnected, setManualConnected] = useState(
+    Boolean(connectedSupabaseUrl && hasInitialMissing)
+  );
+  const [missingTables, setMissingTables] = useState<string[]>(initialMissingTables);
   const [isVerifyingTables, setIsVerifyingTables] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+
+  useEffect(() => {
+    if (initialMissingTables && initialMissingTables.length > 0) {
+      setMissingTables(initialMissingTables);
+      setManualConnected(true);
+      setStep1Mode("direct");
+      if (connectedSupabaseUrl) setManualUrl(connectedSupabaseUrl);
+      if (connectedServiceRoleKey) setManualServiceKey(connectedServiceRoleKey);
+    }
+  }, [initialMissingTables, connectedSupabaseUrl, connectedServiceRoleKey]);
 
   // Handlers: Token Magic Setup
   const handleAutoSetupDatabase = async () => {
@@ -512,6 +531,19 @@ export function Step1Database({
           <div>
             <p className="font-semibold">Setup Notice</p>
             <p className="mt-0.5">{step1Error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Schema Migration Notice for Existing Users */}
+      {hasInitialMissing && !supabaseConnected && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-3 shadow-sm">
+          <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-sm text-amber-950">Database Schema Update Required</p>
+            <p className="text-amber-800 text-[11px] mt-0.5">
+              Your Supabase credentials are connected, but some required database tables are missing from earlier versions ({missingTables.join(", ")}). Please run the SQL schema below in Direct Keys mode, or use 1-Click Auto-Setup to upgrade your database automatically.
+            </p>
           </div>
         </div>
       )}

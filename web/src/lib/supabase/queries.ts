@@ -1228,29 +1228,18 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
   const supabase = createSupabaseStaticClient();
   const current = await getAppSettings();
 
+  const targetId = current?.id || "00000000-0000-0000-0000-000000000001";
   const payload = {
     ...settings,
+    id: targetId,
     updated_at: new Date().toISOString(),
   };
 
-  let result;
-  if (current?.id) {
-    result = await supabase
-      .from("app_settings")
-      .update(payload)
-      .eq("id", current.id)
-      .select()
-      .single();
-  } else {
-    result = await supabase
-      .from("app_settings")
-      .insert({
-        ...payload,
-        id: "00000000-0000-0000-0000-000000000001",
-      })
-      .select()
-      .single();
-  }
+  const result = await supabase
+    .from("app_settings")
+    .upsert(payload, { onConflict: "id" })
+    .select()
+    .single();
 
   if (result.error) {
     if (!result.error.message?.includes("fetch failed")) {

@@ -43,6 +43,7 @@ export async function GET() {
       return NextResponse.json({
         step: 1,
         supabaseConnected: false,
+        missingTables: [],
         hasAiKey: false,
         hasResume: false,
         isComplete: false,
@@ -51,6 +52,7 @@ export async function GET() {
 
     // 2. Validate Supabase connection and verify tables exist
     let supabaseConnected = false;
+    let missingTables: string[] = [];
     let hasAiKey = false;
     let hasResume = false;
     let savedSettings: any = null;
@@ -60,9 +62,31 @@ export async function GET() {
         auth: { persistSession: false },
       });
 
-      // Verify that tables exist by checking jobs table
-      const { error: jobsErr } = await supabase.from("jobs").select("job_id").limit(1);
-      if (!jobsErr) {
+      // Verify that all core database tables exist
+      const checkTable = async (tableName: string) => {
+        const { error } = await supabase.from(tableName).select("*").limit(1);
+        return !error || error.code === "PGRST116";
+      };
+
+      const [hasJobs, hasAppSettings, hasBaseResume, hasStyles] = await Promise.all([
+        checkTable("jobs"),
+        checkTable("app_settings"),
+        checkTable("base_resume"),
+        checkTable("resume_style_settings"),
+      ]);
+
+      missingTables = Object.entries({
+        jobs: hasJobs,
+        app_settings: hasAppSettings,
+        base_resume: hasBaseResume,
+        resume_style_settings: hasStyles,
+      })
+        .filter(([_, exists]) => !exists)
+        .map(([name]) => name);
+
+      const allCoreTablesExist = missingTables.length === 0;
+
+      if (allCoreTablesExist) {
         supabaseConnected = true;
 
         // Check app_settings for AI Key and preferences
@@ -134,6 +158,7 @@ export async function GET() {
     return NextResponse.json({
       step: pendingStep,
       supabaseConnected,
+      missingTables,
       supabaseUrl: url,
       supabaseServiceRoleKey: serviceKey,
       hasAiKey,
