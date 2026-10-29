@@ -1,0 +1,230 @@
+# JobTrack: System Architecture & Technical Context
+
+> **Single Source of Truth for AI Coding Agents and Developers**  
+> *Last Updated: October 2026*
+
+---
+
+## 1. System Overview
+
+**JobTrack** is an autonomous job discovery, AI suitability evaluation, resume customization, and ATS typesetting platform. It consists of:
+1. **Python Scraping Engine (`backend/`)**: Periodically collects job listings from LinkedIn and CareersFuture into a Supabase PostgreSQL database.
+2. **Fullstack Next.js Application (`web/`)**: Provides an interactive setup wizard, master resume studio, ATS visual theme designer, job dashboard, and REST API route handlers.
+3. **TypeScript Batch Workers (`web/scripts/`)**: Autonomous worker processes for AI job scoring, custom resume generation, posting expiration checks, and master resume parsing.
+4. **Supabase Backend**: Hosts application data (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`, `app_settings`, `linkedin_geo_locations`) and object storage buckets (`resumes`, `personalized_resumes`).
+5. **GitHub Actions CI/CD (`.github/workflows/`)**: Automates scheduled scraping, scoring, tailoring, and maintenance workflows on cron schedules.
+
+---
+
+## 2. Architectural Boundaries & Component Roles
+
+```mermaid
+graph TD
+    subgraph ScraperEngine ["Python Scraper Engine (backend/)"]
+        S[scraper.py] -->|HTML to Markdown via markdownify| S_MD[Clean Markdown Job Postings]
+        S -->|Dynamic Settings| DB[(Supabase PostgreSQL)]
+    end
+
+    subgraph FullstackWebApp ["Fullstack Next.js App (web/)"]
+        UI[Next.js 16 App Router UI] -->|App Pages| Pages["/setup, /settings, /resume-studio, /jobs"]
+        API[API Route Handlers] -->|/api/*| DB
+        LLM[Universal LLM Engine<br/>web/src/lib/llm.ts] -->|Gemini / Fireworks / OpenAI / Claude / Groq| AI_OPS[Scoring & Tailoring]
+        PDF[ATS Typesetting Engine<br/>web/src/lib/pdf.ts] -->|PDFKit 1:1 Engine| RES_PDF[ATS PDF Resumes]
+    end
+
+    subgraph BatchWorkers ["TypeScript Automation Workers (web/scripts/)"]
+        W1[score-jobs.ts] -->|Evaluate Fit 0-100| DB
+        W2[customize-resumes.ts] -->|Tailor & Compile PDF| DB
+        W3[job-manager.ts] -->|Check Availability & Expire| DB
+        W4[parse-resume.ts] -->|Parse PDF to JSON| DB
+    end
+
+    subgraph Storage ["Cloud Storage"]
+        BUCKET[(Supabase Storage<br/>resumes & personalized_resumes)]
+    end
+
+    subgraph Automation ["GitHub Actions"]
+        GH[Cron Workflows] --> S
+        GH --> BatchWorkers
+    end
+```
+
+### Critical Boundaries
+1. **No Python Web Server**:
+   - There is **no** Flask, FastAPI, Django, or Python HTTP server in this project.
+   - All REST API endpoints and server routes are Next.js Route Handlers located under [`web/src/app/api/`](web/src/app/api/).
+2. **Python is Solely for Scraping**:
+   - The [`backend/`](backend/) directory contains only the web scraper ([`backend/scraper.py`](backend/scraper.py)) and its helper modules ([`backend/supabase_utils.py`](backend/supabase_utils.py), [`backend/config.py`](backend/config.py), [`backend/user_agents.py`](backend/user_agents.py)).
+   - It performs HTML-to-Markdown conversion locally with `markdownify` with zero LLM API cost.
+3. **TypeScript for Application Logic & Batch Workers**:
+   - Job scoring, resume customization, PDF generation, job expiration, and resume parsing are written in TypeScript under [`web/scripts/`](web/scripts/) and [`web/src/lib/`](web/src/lib/).
+4. **Single Source of Truth for Configuration (`app_settings`)**:
+   - All user preferences (search queries, locations, LinkedIn filters, scraping sources) and AI settings (provider, model, API keys, RPM limits, budget) are stored in the Supabase **`app_settings`** table.
+   - The Python scraper dynamically fetches these settings at startup via `supabase_utils.load_and_apply_app_settings()`.
+   - The LLM caller in `web/src/lib/llm.ts` reads `app_settings` first, falling back to environment variables.
+
+---
+
+## 3. Directory Layout
+
+```
+.
+├── .github/workflows/          # Automated GitHub Actions
+│   ├── scrape_jobs.yml         # Daily Python job scraper (7:00 PM SGT)
+│   ├── score_jobs.yml          # TypeScript AI job scorer (every 4 hrs)
+│   ├── hourly_resume_customization.yml # TypeScript resume tailor (every 4 hrs)
+│   └── job_manager.yml         # TypeScript job status manager (daily)
+├── backend/                    # Python Job Scraper Engine
+│   ├── config.py               # Scraper network configs, timeouts, fallback vars
+│   ├── requirements.txt        # Python dependencies (requests, bs4, supabase, markdownify, dotenv)
+│   ├── scraper.py              # Core scraper (LinkedIn & CareersFuture)
+│   ├── supabase_utils.py       # Supabase client & dynamic app_settings loader
+│   └── user_agents.py          # Browser user agent rotation pool
+├── memory/                     # AI & Engineering Knowledge Base
+│   ├── context.md              # Living technical architecture and conventions (this file)
+│   ├── progress_latest.md      # Active monthly changelog and task tracker
+│   └── archive/                # Monthly archived progress logs
+├── supabase_setup/             # Database SQL Schemas & Migrations
+│   ├── init.sql                # Complete initial schema, RPCs, storage buckets
+│   ├── add_app_settings.sql    # App settings schema reference
+│   └── resume_style_settings.sql # Resume style schema reference
+├── web/                        # Next.js 16 Fullstack App & Automation Workers
+│   ├── scripts/                # TypeScript batch worker scripts (run via tsx)
+│   │   ├── customize-resumes.ts# Resume customization batch worker
+│   │   ├── job-manager.ts      # Job expiration & active status checker
+│   │   ├── parse-resume.ts     # Resume PDF parser
+│   │   └── score-jobs.ts       # Job scoring batch worker
+│   ├── src/
+│   │   ├── app/                # App Router (Pages & REST API route handlers)
+│   │   │   ├── api/            # Server-side API endpoints
+│   │   │   │   ├── base-resume/       # Base resume CRUD
+│   │   │   │   ├── customized_resumes/# Tailored resume endpoints
+│   │   │   │   ├── jobs/              # Job actions, rescore, customize
+│   │   │   │   ├── resume-style/      # ATS style configuration
+│   │   │   │   ├── settings/          # App settings & LLM test
+│   │   │   │   └── setup/             # Setup wizard endpoints
+│   │   │   ├── jobs/           # Job dashboard views (new, top-matches, applied, [id])
+│   │   │   ├── resume-studio/  # Master Dual-Mode Resume Studio
+│   │   │   ├── resume-style/   # ATS visual theme designer
+│   │   │   ├── settings/       # AI provider & job preferences configuration
+│   │   │   └── setup/          # 5-Step interactive onboarding wizard
+│   │   ├── components/         # React components organized by feature
+│   │   ├── lib/                # Core business logic (llm.ts, pdf.ts, resumeParser.ts, etc.)
+│   │   ├── utils/supabase/     # Supabase client/server initializers
+│   │   └── types.ts            # Shared TypeScript interfaces & types
+│   ├── package.json            # Web application dependencies & worker scripts
+│   └── tsconfig.json
+├── install.bat                 # 1-Click installer for Windows
+├── install.sh                  # 1-Click installer for macOS/Linux
+├── package.json                # Root monorepo scripts
+├── vercel.json                 # Vercel deployment configuration
+├── AGENTS.md                   # AI Agent operational protocol
+├── CLAUDE.md                   # Claude Code lightweight pointer
+└── README.md                   # Complete human-facing documentation
+```
+
+---
+
+## 4. Database Schema (Supabase)
+
+### Tables
+1. **`jobs`**:
+   - Scraped postings with `job_id`, `company`, `job_title`, `level`, `location`, `description` (Markdown), `status`, `is_active`, `resume_score`, `provider` (`linkedin` or `careers_future`), `is_interested`, `customized_resume_id`, `scraped_at`, `last_checked`.
+2. **`base_resume`**:
+   - Master resume profile parsed from user's master PDF. Fields: `id`, `name`, `email`, `phone`, `location`, `summary`, `skills` (text array), `education`, `experience`, `projects`, `certifications`, `languages`, `links` (JSONB), `parsed_at`.
+3. **`customized_resumes`**:
+   - Job-tailored resume variants. Links to `jobs.job_id` and contains tailored summary, tailored experiences, matched skills, PDF storage URLs (`resume_link`), and generated timestamp.
+4. **`resume_style_settings`**:
+   - ATS theme configurations. Stores font family (`Helvetica`, `Times-Roman`, `Courier`), font scale (`compact`, `normal`, `spacious`), line spacing (`tight`, `normal`, `relaxed`), header layout, section order, margins, and accent colors.
+5. **`app_settings`**:
+   - Single-row table storing global application preferences:
+     - AI provider (`gemini`, `fireworks`, `openai`, `anthropic`, `groq`), model name, API key, RPM rate limits, daily budget.
+     - Search preferences: LinkedIn queries, GeoID, job type, date posted, CareersFuture queries, categories, active platforms.
+     - Onboarding status: `setup_step`, `setup_completed`.
+6. **`linkedin_geo_locations`**:
+   - Pre-populated mapping of global locations to LinkedIn `geoId`s (e.g., Singapore `102454443`, United States `103644278`).
+
+### Storage Buckets (Private)
+- **`resumes`**: Stores uploaded base master resumes (`resume.pdf`).
+- **`personalized_resumes`**: Stores generated ATS-tailored PDFs.
+
+---
+
+## 5. Technology Stack & Key Libraries
+
+| Area | Technologies |
+| :--- | :--- |
+| **Frontend UI** | Next.js 16 (App Router), React 19, Tailwind CSS v4, Lucide React |
+| **PDF Generation** | PDFKit (server-side 1:1 typesetting), React-PDF (client preview) |
+| **Database & Auth** | Supabase (PostgreSQL, Row Level Security, Storage Buckets, `@supabase/ssr`) |
+| **Job Scraper** | Python 3.10+, Requests, BeautifulSoup4, Markdownify, Supabase Python SDK |
+| **AI LLM Engine** | Universal caller supporting Google Gemini, Fireworks AI, OpenAI, Anthropic, Groq |
+| **Security & Secrets** | Tweetsodium (libsodium sealed-box encryption for GitHub Actions secrets) |
+| **CLI Execution** | `tsx` for TypeScript worker execution without separate build steps |
+
+---
+
+## 6. Universal LLM Engine (`web/src/lib/llm.ts`)
+
+- Dynamically selects provider and model from `app_settings` in Supabase.
+- Supports:
+  - **Google Gemini**: Gemini 2.5 Flash, Gemini 3 Flash Preview
+  - **Fireworks AI**: Llama 3 models, DeepSeek models
+  - **OpenAI**: GPT-4o, GPT-4o-mini
+  - **Anthropic**: Claude 3.5 Sonnet, Claude 3.5 Haiku
+  - **Groq**: Llama 3.3 70B, Mixtral
+- Respects `llm_max_rpm` and `llm_request_delay_seconds` to prevent quota exhaustion.
+- Fallback chain: Supabase `app_settings.llm_api_key` → Environment variables (`LLM_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.).
+
+---
+
+## 7. ATS PDF Typesetting Engine (`web/src/lib/pdf.ts`)
+
+- Generates 1:1 pixel-accurate ATS-compliant PDFs using **PDFKit**.
+- **ATS Rules Enforced**:
+  - Pure text layer readable by automated applicant tracking parsers.
+  - Standard system fonts: `Helvetica`, `Times-Roman`, `Courier`.
+  - Widow and orphan prevention: Heading kept with at least the first block of content across page boundaries.
+  - Abbreviation preservation: Prevents incorrect sentence splitting for `e.g.`, `i.e.`, `Ph.D.`, `U.S.`.
+  - Dynamic page budgeting: Configurable typography scales (`compact`, `normal`, `spacious`) and margins to fit 1-page or 2-page targets.
+
+---
+
+## 8. Development & Operational Commands
+
+All commands are executed from the repository root:
+
+```bash
+# --- Web Application ---
+npm run dev              # Start Next.js development server (http://localhost:3000)
+npm run build            # Build Next.js application for production
+npm run start            # Run production Next.js server
+npm run install:web      # Install web dependencies (npm --prefix web install)
+
+# --- Python Scraper ---
+npm run scrape           # Scrape active platforms using settings from Supabase
+python backend/scraper.py --source linkedin --query "Frontend Engineer" --limit 10
+
+# --- TypeScript Automation Workers ---
+npm run score            # Evaluate unscored jobs against master resume (0-100 score)
+npm run customize        # Tailor custom resumes for top matches (score >= 70)
+npm run manage           # Verify job availability & expire listings >30 days
+npm run parse-resume     # Parse master resume.pdf into base_resume table
+```
+
+---
+
+## 9. Code Conventions & Rules for Changes
+
+1. **Path Aliases**: In `web/`, use `@/*` to map to `web/src/*`.
+2. **Components**:
+   - Place components in `web/src/components/<feature>/`.
+   - Client components must include `'use client';` at the top.
+3. **Route Handlers**:
+   - Endpoints belong in `web/src/app/api/<route>/route.ts`.
+   - Return standard `NextResponse.json(...)`.
+   - Use `createSupabaseServerClient()` or `createSupabaseStaticClient()` from `@/utils/supabase/server`.
+4. **Environment Variables**:
+   - `web/.env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `LLM_API_KEY`.
+   - `backend/.env` (or root `.env`): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+

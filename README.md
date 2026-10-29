@@ -8,26 +8,26 @@
 ![Supabase](https://img.shields.io/badge/Database-Supabase-emerald.svg)
 ![AI Providers](https://img.shields.io/badge/AI-Gemini%20%7C%20Fireworks%20%7C%20OpenAI%20%7C%20Claude%20%7C%20Groq-purple.svg)
 
-**A complete, unified monorepo for autonomous multi-platform job hunting, AI resume tailoring, and ATS typesetting.**
+**An autonomous multi-platform job hunting, AI resume tailoring, and ATS typesetting platform.**
 
-[Quick Start](#-quick-start-1-click-installer) • [Architecture](#-monorepo-architecture) • [Features](#-core-features) • [Setup Wizard](#-setup-wizard-flow) • [CLI & Commands](#-commands--scripts) • [AI Instructions](AGENTS.md)
+[Quick Start](#-quick-start-1-click-installer) • [Architecture](#-architecture) • [Features](#-core-features) • [Setup Wizard](#-setup-wizard-flow-setup) • [CLI & Commands](#-commands--scripts) • [AI Instructions](AGENTS.md)
 
 </div>
 
 ---
 
-## 🌟 Highlights
+## 🌟 Core Features
 
 - **Multi-Platform Scraper**: Resilient, rate-limited scraping for **LinkedIn** and **CareersFuture** with rotating user-agents, automatic exponential backoffs, and local HTML-to-Markdown conversion (zero LLM overhead).
 - **Interactive 5-Step Setup Wizard**: Set up Supabase, test AI model credentials, configure target locations and job queries, upload and parse your resume, and auto-provision GitHub Actions secrets in minutes.
 - **Master Resume Studio**: Dual-mode master resume editor (`Resume Content` + `Design & Style`) with live ATS persona switching, tag chip editors, and 1:1 pixel-calibrated PDF preview with page budget protections.
 - **Universal LLM Engine**: Native support for **Google Gemini** (Gemini 2.5 Flash, 3 Flash Preview), **Fireworks AI**, **OpenAI**, **Anthropic Claude**, and **Groq**, with dynamic settings and quota/RPM controls stored in Supabase.
 - **Automated GitHub Actions Pipeline**: Autonomous scheduled workflows scrape postings, evaluate resume suitability scores (0–100), generate job-tailored PDF resumes, and expire old postings.
-- **Unified Monorepo**: Frontend and backend are merged into a single cohesive repository—combining a lightweight Python scraper with a fullstack Next.js 16 application and TypeScript batch workers.
+- **Clean Fullstack Stack**: High-performance Next.js 16 (React 19, Tailwind CSS v4) fullstack web application, TypeScript automation workers, and a lightweight Python scraping engine.
 
 ---
 
-## 🏗 Monorepo Architecture
+## 🏗 Architecture
 
 ```mermaid
 graph TD
@@ -39,12 +39,12 @@ graph TD
     subgraph WebApp ["Fullstack Web Application (web/)"]
         UI[Next.js 16 UI] -->|App Router| Pages["/setup, /settings, /resume-studio, /jobs"]
         API[API Route Handlers] -->|/api/*| DB
-        LLM[Universal LLM Engine<br/>web/src/lib/llm.ts] -->|Gemini / Fireworks / OpenAI / Claude| AI_OPS[Scoring & Tailoring]
+        LLM[Universal LLM Engine<br/>web/src/lib/llm.ts] -->|Gemini / Fireworks / OpenAI / Claude / Groq| AI_OPS[Scoring & Tailoring]
         PDF[ATS Typesetting Engine<br/>web/src/lib/pdf.ts] -->|PDFKit 1:1 Engine| RES_PDF[ATS PDF Resumes]
     end
 
     subgraph Workers ["TypeScript Batch Workers (web/scripts/)"]
-        W1[score-jobs.ts] -->|Evaluate Fit| DB
+        W1[score-jobs.ts] -->|Evaluate Fit 0-100| DB
         W2[customize-resumes.ts] -->|Tailor & Compile PDF| DB
         W3[job-manager.ts] -->|Check Availability| DB
         W4[parse-resume.ts] -->|Parse PDF to JSON| DB
@@ -57,10 +57,10 @@ graph TD
     end
 ```
 
-### Key Architectural Boundaries
-1. **Fullstack Next.js App (`web/`)**:
-   - Contains all web pages, REST API Route Handlers (`web/src/app/api/`), AI integrations (`web/src/lib/llm.ts`), ATS PDF generation (`web/src/lib/pdf.ts`), and scheduled batch tasks (`web/scripts/`).
-   - **There is no separate Python REST API server (no FastAPI or Flask).** All client-to-server operations run through Next.js route handlers.
+### System Boundaries
+1. **Fullstack Web Application (`web/`)**:
+   - Contains all user interface pages, REST API Route Handlers (`web/src/app/api/`), universal AI integrations (`web/src/lib/llm.ts`), ATS PDF typesetting (`web/src/lib/pdf.ts`), and scheduled batch tasks (`web/scripts/`).
+   - All client-to-server operations run through Next.js route handlers.
 2. **Python Scraping Engine (`backend/`)**:
    - Solely responsible for scraping job portals (`backend/scraper.py`).
    - Converts HTML descriptions to Markdown locally using `markdownify` without consuming LLM quotas.
@@ -72,7 +72,7 @@ graph TD
 
 ## 🚀 Quick Start (1-Click Installer)
 
-The repository provides automated 1-click installers that verify prerequisites (Node.js 24 LTS recommended, Python 3.10+), install dependencies, start the dev server, and launch the setup wizard.
+The repository provides automated 1-click installers that verify prerequisites (Node.js 20+ LTS, Python 3.10+), install dependencies, start the dev server, and launch the setup wizard.
 
 ### Windows
 Double-click [`install.bat`](install.bat) or run from PowerShell / Command Prompt:
@@ -214,7 +214,7 @@ npm run install:web      # Install web application dependencies
 npm run scrape           # Scrape active platforms using settings from Supabase
 python backend/scraper.py --source linkedin --query "Frontend Engineer" --limit 10
 
-# --- TypeScript Batch Automation Workers ---
+# --- TypeScript Automation Workers ---
 npm run score            # Score unscored jobs against base resume
 npm run customize        # Tailor custom resumes for top-matching jobs
 npm run manage           # Verify job availability and expire stale postings
@@ -227,7 +227,7 @@ npm run parse-resume     # Parse resume.pdf into base_resume table
 
 ```
 .
-├── .github/workflows/          # Automated GitHub Actions
+├── .github/workflows/          # Automated GitHub Actions CI/CD workflows
 │   ├── scrape_jobs.yml         # Daily Python job scraper
 │   ├── score_jobs.yml          # TypeScript AI job scorer
 │   ├── hourly_resume_customization.yml # TypeScript resume tailor
@@ -237,8 +237,11 @@ npm run parse-resume     # Parse resume.pdf into base_resume table
 │   ├── scraper.py              # Core multi-source scraper (LinkedIn & CareersFuture)
 │   ├── supabase_utils.py       # Supabase client & dynamic app_settings loader
 │   ├── user_agents.py          # User-Agent rotation pool
-│   ├── requirements.txt        # Minimal Python dependencies
-│   └── README.md               # Backend documentation
+│   └── requirements.txt        # Minimal Python dependencies
+├── memory/                     # Project Memory & Agent Knowledge Base
+│   ├── context.md              # Living technical architecture, schema & APIs
+│   ├── progress_latest.md      # Running monthly work log & progress tracker
+│   └── archive/                # Historical monthly progress logs
 ├── supabase_setup/             # Database SQL Migrations
 │   ├── init.sql                # Complete initial schema, RPCs, and storage buckets
 │   ├── add_app_settings.sql    # App settings schema reference
@@ -256,15 +259,13 @@ npm run parse-resume     # Parse resume.pdf into base_resume table
 │   │   ├── utils/supabase/     # Supabase server & client initializers
 │   │   └── types.ts            # Shared TypeScript interfaces & types
 │   ├── package.json            # Web dependencies & scripts
-│   ├── tsconfig.json
-│   └── README.md               # Web documentation
+│   └── tsconfig.json
 ├── install.bat                 # 1-Click installer for Windows
 ├── install.sh                  # 1-Click installer for macOS/Linux
 ├── package.json                # Monorepo root npm scripts
 ├── vercel.json                 # Vercel deployment configuration
-├── AGENTS.md                   # AI Agent & Pair Programming Guidelines
+├── AGENTS.md                   # AI Agent & Pair Programming Protocol
 ├── CLAUDE.md                   # Claude Code instructions
-├── .cursorrules                # Cursor IDE rules
 ├── README.md                   # Project documentation
 └── LICENSE                     # MIT License
 ```
@@ -273,17 +274,10 @@ npm run parse-resume     # Parse resume.pdf into base_resume table
 
 ## 🤖 Instructions for AI Coding Agents
 
-If you are working with an AI coding assistant (Cursor, Claude Code, GitHub Copilot, Antigravity, etc.), please refer to:
-- [`AGENTS.md`](AGENTS.md) — Universal architectural rules, boundaries, and checklists.
-- [`CLAUDE.md`](CLAUDE.md) — Claude Code specific instructions and commands.
-- [`.cursorrules`](.cursorrules) — Cursor IDE guidance.
-- [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — Copilot context.
-
-> [!IMPORTANT]
-> **Monorepo Reminder**:
-> - Job scoring, resume customization, PDF generation, and resume parsing are **TypeScript modules in `web/`**, not Python scripts.
-> - The Python backend is solely for web scraping (`backend/scraper.py`).
-> - There is no Python web server or REST API; all server endpoints are Next.js Route Handlers (`web/src/app/api/`).
+If you are an AI coding assistant (Antigravity, Cursor, Claude Code, GitHub Copilot, Codex, etc.) working on this project:
+- Refer to [`AGENTS.md`](AGENTS.md) for the operational protocol and core guardrails.
+- Read [`memory/context.md`](memory/context.md) for the single source of truth on architecture, APIs, schema, and tech stack details.
+- Log completed work in [`memory/progress_latest.md`](memory/progress_latest.md).
 
 ---
 
