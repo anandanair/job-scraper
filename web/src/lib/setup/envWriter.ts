@@ -61,11 +61,12 @@ export function writeEnvFiles(vars: EnvVariables) {
     // Ignore if root path not writable
   }
 
-  // Update in-memory environment variables for immediate effect
-  process.env.NEXT_PUBLIC_SUPABASE_URL = vars.supabaseUrl;
-  process.env.SUPABASE_URL = vars.supabaseUrl;
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = effectiveAnonKey;
-  process.env.SUPABASE_SERVICE_ROLE_KEY = vars.serviceRoleKey;
+  // Update in-memory environment variables for immediate effect (using dynamic keys to prevent Webpack DefinePlugin inlining)
+  const envMap: Record<string, string | undefined> = process.env;
+  envMap[["NEXT_PUBLIC", "SUPABASE_URL"].join("_")] = vars.supabaseUrl;
+  envMap.SUPABASE_URL = vars.supabaseUrl;
+  envMap[["NEXT_PUBLIC", "SUPABASE_ANON_KEY"].join("_")] = effectiveAnonKey;
+  envMap.SUPABASE_SERVICE_ROLE_KEY = vars.serviceRoleKey;
 
   // Clear any legacy in-memory LLM overrides so app_settings remains single source of truth
   delete process.env.LLM_API_KEY;

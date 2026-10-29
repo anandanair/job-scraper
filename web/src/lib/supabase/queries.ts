@@ -34,44 +34,48 @@ export async function getTopScoredJobs(
   searchQuery?: string, // Optional search query
 ): Promise<Job[]> {
   const supabase = await createSupabaseServerClient();
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-  const rpcParams: any = {
-    p_page_number: page,
-    p_page_size: pageSize,
-    p_provider: provider || null,
-    p_min_score: minScore,
-    p_max_score: maxScore,
-    p_search_query: searchQuery || null, // Add search query to RPC params
-  };
+  let query = supabase
+    .from("jobs")
+    .select("*, customized_resumes(id, resume_link)")
+    .eq("is_active", true)
+    .eq("status", "new")
+    .eq("job_state", "new")
+    .not("resume_score", "is", null)
+    .gte("resume_score", minScore)
+    .lte("resume_score", maxScore);
 
-  // Determine the string value for p_is_interested_option
-  let interestOption: string | undefined = undefined;
+  if (provider) {
+    query = query.eq("provider", provider);
+  }
+
   if (isInterested === true) {
-    interestOption = "true";
+    query = query.is("is_interested", true);
   } else if (isInterested === false) {
-    interestOption = "false";
+    query = query.is("is_interested", false);
   } else if (isInterested === null) {
-    interestOption = "null_value";
-  }
-  // If isInterested is undefined (meaning 'all'), interestOption remains undefined,
-  // and p_is_interested_option will not be added to rpcParams,
-  // so the RPC function will use its default 'all'.
-
-  if (interestOption !== undefined) {
-    rpcParams.p_is_interested_option = interestOption;
+    query = query.is("is_interested", null);
+  } else {
+    // Default: show null or true
+    query = query.or("is_interested.is.null,is_interested.eq.true");
   }
 
-  const response = await supabase.rpc(
-    "get_top_scored_jobs_custom_sort",
-    rpcParams,
-  );
+  if (searchQuery) {
+    query = query.or(
+      `job_title.ilike.%${searchQuery}%,company.ilike.%${searchQuery}%`,
+    );
+  }
 
-  // The existing handleResponse function can be used if it expects { data, error }
-  // and data is the array of jobs.
-  // If rpc() returns data directly in response.data without an outer data property, adjust accordingly.
-  // Assuming supabase.rpc returns { data: Job[], error: PostgrestError | null }
+  query = query
+    .order("resume_score", { ascending: false })
+    .order("scraped_at", { ascending: false })
+    .range(from, to);
+
+  const response = await query;
   const data = await handleResponse(response);
-  return data ?? []; // Return empty array if data is null/undefined
+  return data ?? [];
 }
 
 // New function to get the count of top scored jobs
@@ -91,6 +95,7 @@ export async function getTopScoredJobsCount(
     .eq("is_active", true)
     .eq("status", "new")
     .eq("job_state", "new")
+    .not("resume_score", "is", null)
     .gte("resume_score", minScore) // Apply minScore filter
     .lte("resume_score", maxScore); // Apply maxScore filter
 
@@ -100,33 +105,28 @@ export async function getTopScoredJobsCount(
   }
 
   // Add interest filter if specified
-  // undefined means 'all' (no filter on is_interested)
-  // null means 'is_interested IS NULL' (not marked)
-  // true means 'is_interested IS TRUE'
-  // false means 'is_interested IS FALSE'
   if (isInterested === true) {
     query = query.is("is_interested", true);
   } else if (isInterested === false) {
     query = query.is("is_interested", false);
   } else if (isInterested === null) {
     query = query.is("is_interested", null);
+  } else {
+    query = query.or("is_interested.is.null,is_interested.eq.true");
   }
-  // If isInterested is undefined, no additional filter is applied for interest status.
 
   // Add search query filter if specified
   if (searchQuery) {
-    // Assuming you want to search in 'job_title' and 'company' fields
-    // Adjust the fields and logic as per your database schema and search requirements
     query = query.or(
       `job_title.ilike.%${searchQuery}%,company.ilike.%${searchQuery}%`,
-    ); // Changed 'role' to 'job_title'
+    );
   }
 
   const { count, error } = await query;
 
   if (error) {
-    console.error("Supabase count error:", error.message || "Unknown error"); // Added a fallback for empty error message
-    throw new Error(error.message || "Failed to get job count"); // Added a fallback for empty error message
+    console.error("Supabase count error:", error.message || "Unknown error");
+    throw new Error(error.message || "Failed to get job count");
   }
 
   return count ?? 0; // Return the count or 0 if null
@@ -185,9 +185,8 @@ export async function getNewJobs(
     );
   }
 
-  // Order by highest resume_score first, unscored (NULL) last, then newest scraped_at
+  // Order strictly by newest scraped_at first (pure intake feed)
   query = query
-    .order("resume_score", { ascending: false, nullsFirst: false })
     .order("scraped_at", { ascending: false })
     .range(from, to);
 
@@ -250,6 +249,162 @@ export async function getAllActiveJobsCount(
   }
 
   return count ?? 0; // Return the count or 0 if null
+}
+
+// Function to get jobs with custom resumes generated (Tailored & Ready)
+export async function getTailoredJobs(
+  page: number = 1,
+  pageSize: number = 10,
+  provider?: string,
+  minScore?: number,
+  maxScore?: number,
+  isInterested?: boolean | null,
+  searchQuery?: string,
+): Promise<Job[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from("jobs")
+    .select("*, customized_resumes(id, resume_link)")
+    .eq("is_active", true)
+    .eq("status", "new")
+    .eq("job_state", "new")
+    .not("customized_resume_id", "is", null);
+
+  if (minScore !== undefined) {
+    query = query.gte("resume_score", minScore);
+  }
+  if (maxScore !== undefined) {
+    query = query.lte("resume_score", maxScore);
+  }
+  if (provider) {
+    query = query.eq("provider", provider);
+  }
+
+  if (isInterested === true) {
+    query = query.is("is_interested", true);
+  } else if (isInterested === false) {
+    query = query.is("is_interested", false);
+  } else if (isInterested === null) {
+    query = query.is("is_interested", null);
+  } else {
+    query = query.or("is_interested.is.null,is_interested.eq.true");
+  }
+
+  if (searchQuery) {
+    query = query.or(
+      `job_title.ilike.%${searchQuery}%,company.ilike.%${searchQuery}%`,
+    );
+  }
+
+  query = query
+    .order("resume_score", { ascending: false })
+    .order("scraped_at", { ascending: false })
+    .range(from, to);
+
+  const response = await query;
+  return handleResponse(response);
+}
+
+// Function to get the count of jobs with custom resumes generated
+export async function getTailoredJobsCount(
+  provider?: string,
+  minScore?: number,
+  maxScore?: number,
+  isInterested?: boolean | null,
+  searchQuery?: string,
+): Promise<number> {
+  const supabase = await createSupabaseServerClient();
+
+  let query = supabase
+    .from("jobs")
+    .select("*", { count: "exact", head: true })
+    .eq("is_active", true)
+    .eq("status", "new")
+    .eq("job_state", "new")
+    .not("customized_resume_id", "is", null);
+
+  if (minScore !== undefined) {
+    query = query.gte("resume_score", minScore);
+  }
+  if (maxScore !== undefined) {
+    query = query.lte("resume_score", maxScore);
+  }
+  if (provider) {
+    query = query.eq("provider", provider);
+  }
+
+  if (isInterested === true) {
+    query = query.is("is_interested", true);
+  } else if (isInterested === false) {
+    query = query.is("is_interested", false);
+  } else if (isInterested === null) {
+    query = query.is("is_interested", null);
+  } else {
+    query = query.or("is_interested.is.null,is_interested.eq.true");
+  }
+
+  if (searchQuery) {
+    query = query.or(
+      `job_title.ilike.%${searchQuery}%,company.ilike.%${searchQuery}%`,
+    );
+  }
+
+  const { count, error } = await query;
+
+  if (error) {
+    console.error("Supabase count error (tailored jobs):", error);
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
+}
+
+export interface JobsTabCounts {
+  newCount: number;
+  matchesCount: number;
+  tailoredCount: number;
+}
+
+// Helper to fetch live counts for all 3 Jobs Hub tabs in parallel
+export async function getJobsTabCounts(): Promise<JobsTabCounts> {
+  const supabase = await createSupabaseServerClient();
+
+  const [newRes, matchesRes, tailoredRes] = await Promise.all([
+    supabase
+      .from("jobs")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true)
+      .eq("status", "new")
+      .eq("job_state", "new")
+      .or("is_interested.is.null,is_interested.eq.true"),
+    supabase
+      .from("jobs")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true)
+      .eq("status", "new")
+      .eq("job_state", "new")
+      .not("resume_score", "is", null)
+      .gte("resume_score", 50)
+      .or("is_interested.is.null,is_interested.eq.true"),
+    supabase
+      .from("jobs")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true)
+      .eq("status", "new")
+      .eq("job_state", "new")
+      .not("customized_resume_id", "is", null)
+      .or("is_interested.is.null,is_interested.eq.true"),
+  ]);
+
+  return {
+    newCount: newRes.count ?? 0,
+    matchesCount: matchesRes.count ?? 0,
+    tailoredCount: tailoredRes.count ?? 0,
+  };
 }
 
 export async function getAppliedJobs(

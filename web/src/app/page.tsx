@@ -227,7 +227,7 @@ export default async function Home() {
       title: "Custom Resumes",
       value: customResumeJobsCount,
       icon: <FileText size={20} />,
-      href: "/",
+      href: "/jobs/tailored",
       description: "Jobs with a generated custom resume.",
       color: "bg-emerald-500",
     },

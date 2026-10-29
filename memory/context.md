@@ -103,7 +103,7 @@ graph TD
 │   │   │   │   ├── resume-style/      # ATS style configuration
 │   │   │   │   ├── settings/          # App settings & LLM test
 │   │   │   │   └── setup/             # Setup wizard endpoints
-│   │   │   ├── jobs/           # Job dashboard views (new, top-matches, applied, [id])
+│   │   │   ├── jobs/           # Job dashboard views (new, top-matches, tailored, applied, [id])
 │   │   │   ├── resume-studio/  # Master Dual-Mode Resume Studio
 │   │   │   ├── resume-style/   # ATS visual theme designer
 │   │   │   ├── settings/       # AI provider & job preferences configuration

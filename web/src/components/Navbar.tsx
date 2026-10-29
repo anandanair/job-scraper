@@ -56,14 +56,22 @@ export default function Navbar() {
 
   const navItems = [
     { href: "/", icon: <Home size={18} />, text: "Home" },
-    { href: "/jobs/top-matches", icon: <Star size={18} />, text: "Matches" },
-    { href: "/jobs/new", icon: <Zap size={18} />, text: "New" },
+    { href: "/jobs/new", icon: <Briefcase size={18} />, text: "Jobs" },
     { href: "/jobs/applied", icon: <CheckSquare size={18} />, text: "Applied" },
     { href: "/resume-studio", icon: <Sparkles size={18} />, text: "Resume Studio" },
     { href: "/settings", icon: <Settings size={18} />, text: "Settings" },
   ];
 
   const isItemActive = (href: string) => {
+    if (href === "/jobs/new") {
+      return (
+        (pathname.startsWith("/jobs") && !pathname.startsWith("/jobs/applied")) ||
+        pathname === "/jobs"
+      );
+    }
+    if (href === "/jobs/applied") {
+      return pathname.startsWith("/jobs/applied");
+    }
     if (href === "/resume-studio") {
       return (
         pathname.startsWith("/resume-studio") ||

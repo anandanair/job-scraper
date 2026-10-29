@@ -24,12 +24,18 @@ interface TopMatchesListProps {
   jobs: Job[];
   currentPage: number;
   totalPages: number;
+  title?: string;
+  emptyTitle?: string;
+  emptyMessage?: string;
 }
 
 export default function TopMatchesList({
   jobs,
   currentPage,
   totalPages,
+  title = "Job Matches",
+  emptyTitle = "No jobs found",
+  emptyMessage = "No jobs found for this view. Try adjusting your search or checking back later.",
 }: TopMatchesListProps) {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null); // Initialize as null
   const [isUpdating, setIsUpdating] = useState(false);
@@ -280,12 +286,12 @@ export default function TopMatchesList({
     }
   };
 
-  // Function to determine badge color based on resume score
+  // Function to determine badge color based on resume score (0 - 100)
   const getScoreBadgeColor = (score: number) => {
-    if (score >= 0.8) return "bg-green-100 text-green-800 border-green-300";
-    if (score >= 0.6) return "bg-blue-100 text-blue-800 border-blue-300";
-    if (score >= 0.4) return "bg-yellow-100 text-yellow-800 border-yellow-300";
-    return "bg-gray-100 text-gray-800 border-gray-300";
+    if (score >= 80) return "bg-emerald-100 text-emerald-800 border-emerald-300";
+    if (score >= 60) return "bg-blue-100 text-blue-800 border-blue-300";
+    if (score >= 40) return "bg-amber-100 text-amber-800 border-amber-300";
+    return "bg-rose-100 text-rose-800 border-rose-300";
   };
 
   // Placeholder for empty state
@@ -294,11 +300,8 @@ export default function TopMatchesList({
       <div className="bg-gray-100 p-6 rounded-full mb-4">
         <BuildingIcon className="h-12 w-12 text-gray-400" />
       </div>
-      <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
-      <p className="text-gray-500 max-w-sm">
-        No top-matched jobs found for this page. Try adjusting your search or
-        checking back later.
-      </p>
+      <h3 className="text-lg font-medium text-gray-900 mb-2">{emptyTitle}</h3>
+      <p className="text-gray-500 max-w-sm">{emptyMessage}</p>
     </div>
   );
 
@@ -307,7 +310,7 @@ export default function TopMatchesList({
       {/* Left Column: Job List */}
       <div className="w-full md:w-1/3 bg-white border-r border-gray-100 flex flex-col">
         <div className="p-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-800">Job Matches</h2>
+          <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
           <p className="text-sm text-gray-500">
             {jobs.length} {jobs.length === 1 ? "result" : "results"} found
           </p>
@@ -349,14 +352,14 @@ export default function TopMatchesList({
                       </div>
                     </div>
 
-                    {job.resume_score !== undefined && job.resume_score !== null && (
+                    {job.resume_score !== undefined && job.resume_score !== null ? (
                       <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
                         <div
                           className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getScoreBadgeColor(
                             job.resume_score,
                           )}`}
                         >
-                          {job.resume_score}
+                          {job.resume_score}%
                         </div>
                         {job.resume_score_stage === "custom" ? (
                           <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded whitespace-nowrap">
@@ -367,6 +370,12 @@ export default function TopMatchesList({
                             📄 Base
                           </span>
                         ) : null}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+                        <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          ⏳ Pending
+                        </span>
                       </div>
                     )}
                   </div>
