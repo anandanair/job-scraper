@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { writeEnvFiles } from "@/lib/setup/envWriter";
 import { updateAppSettings } from "@/lib/supabase/queries";
 import { markSetupComplete } from "@/lib/setup/setupState";
 
@@ -16,33 +15,38 @@ export async function POST(req: Request) {
 
     const {
       llmApiKey,
-      llmModel = "gemini-3.8-flash",
-      llmProvider = "gemini",
-      llmTier = "free",
-      llmMaxRpm = 10,
-      llmRequestDelaySeconds = 8,
+      llmModel,
+      llmProvider,
+      llmTier,
+      llmMaxRpm,
+      llmRequestDelaySeconds,
       linkedinSearchQueries,
       linkedinLocation,
     } = body;
 
-    // 1. Update app_settings in Supabase if values provided
+    // 1. Update app_settings in Supabase (Single Source of Truth)
+    // Only update configuration fields if explicitly passed; NEVER overwrite with hardcoded defaults!
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const updatePayload: any = {
         setup_completed: true,
         setup_step: 5,
       };
 
-      if (llmProvider) updatePayload.llm_provider = llmProvider;
-      if (llmModel) updatePayload.llm_model = llmModel;
-      if (llmTier) updatePayload.llm_tier = llmTier;
-      if (llmMaxRpm) updatePayload.llm_max_rpm = Number(llmMaxRpm) || 10;
-      if (llmRequestDelaySeconds) updatePayload.llm_request_delay_seconds = Number(llmRequestDelaySeconds) || 8;
-      if (llmApiKey) updatePayload.llm_api_key = llmApiKey;
+      if (llmProvider && typeof llmProvider === "string") updatePayload.llm_provider = llmProvider;
+      if (llmModel && typeof llmModel === "string") updatePayload.llm_model = llmModel;
+      if (llmTier && typeof llmTier === "string") updatePayload.llm_tier = llmTier;
+      if (llmMaxRpm !== undefined && llmMaxRpm !== null) updatePayload.llm_max_rpm = Number(llmMaxRpm);
+      if (llmRequestDelaySeconds !== undefined && llmRequestDelaySeconds !== null) {
+        updatePayload.llm_request_delay_seconds = Number(llmRequestDelaySeconds);
+      }
+      if (llmApiKey && typeof llmApiKey === "string" && llmApiKey.trim().length > 0) {
+        updatePayload.llm_api_key = llmApiKey.trim();
+      }
       if (Array.isArray(linkedinSearchQueries) && linkedinSearchQueries.length >= 3) {
         updatePayload.linkedin_search_queries = linkedinSearchQueries;
         updatePayload.careers_future_search_queries = linkedinSearchQueries;
       }
-      if (linkedinLocation) {
+      if (linkedinLocation && typeof linkedinLocation === "string") {
         updatePayload.linkedin_location = linkedinLocation;
       }
 
@@ -53,7 +57,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Persist setup completion to local .env and state
+    // 2. Mark setup complete in-memory and database
     await markSetupComplete();
 
     // 3. Return response with persistent authentication cookie

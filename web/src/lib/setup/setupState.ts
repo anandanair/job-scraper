@@ -35,29 +35,9 @@ function readEnvKeyValue(key: string): string | null {
   return null;
 }
 
-function updateEnvKey(key: string, value: string): void {
-  const envPath = getWebEnvPath();
-  if (!fs.existsSync(envPath)) return;
-
-  try {
-    let content = fs.readFileSync(envPath, "utf-8");
-    const regex = new RegExp(`^${key}=.*$`, "m");
-    const newLine = `${key}="${value}"`;
-
-    if (regex.test(content)) {
-      content = content.replace(regex, newLine);
-    } else {
-      content = content.trimEnd() + "\n" + newLine + "\n";
-    }
-
-    fs.writeFileSync(envPath, content, "utf-8");
-  } catch (err) {
-    console.warn(`Error updating ${key} in env:`, err);
-  }
-}
-
 /**
- * Returns current setup state from local env and/or Supabase.
+ * Returns current setup state with Supabase app_settings as the Single Source of Truth,
+ * gracefully falling back to in-memory environment variables if offline.
  */
 export async function getSetupState(): Promise<SetupState> {
   const envUrl =
@@ -67,20 +47,11 @@ export async function getSetupState(): Promise<SetupState> {
     process.env.SUPABASE_URL;
 
   const hasSupabase = Boolean(envUrl);
-  const envCompleted = readEnvKeyValue("SETUP_COMPLETED") || process.env.SETUP_COMPLETED;
-  const envStepStr = readEnvKeyValue("SETUP_STEP") || process.env.SETUP_STEP;
-
-  const isCompleted = hasSupabase && envCompleted === "true";
-  let step: 1 | 2 | 3 | 4 | 5 = 1;
-
-  if (envStepStr) {
-    const parsed = parseInt(envStepStr, 10);
-    if (parsed >= 1 && parsed <= 5) {
-      step = parsed as 1 | 2 | 3 | 4 | 5;
-    }
+  if (!hasSupabase) {
+    return { step: 1, isCompleted: false };
   }
 
-  // Also query Supabase app_settings if available to complement
+  // 1. Authoritative check: Supabase app_settings table
   try {
     const settings = await getAppSettings();
     if (settings) {
@@ -89,8 +60,8 @@ export async function getSetupState(): Promise<SetupState> {
       }
       if ((settings as any).setup_step) {
         const dbStep = (settings as any).setup_step;
-        if (dbStep >= 1 && dbStep <= 5 && dbStep > step) {
-          step = dbStep as 1 | 2 | 3 | 4 | 5;
+        if (dbStep >= 1 && dbStep <= 5) {
+          return { step: dbStep as 1 | 2 | 3 | 4 | 5, isCompleted: false };
         }
       }
     }
@@ -98,15 +69,26 @@ export async function getSetupState(): Promise<SetupState> {
     // Ignore db read issues during early setup
   }
 
-  return { step, isCompleted };
+  // 2. In-memory process fallback
+  const envCompleted = process.env.SETUP_COMPLETED === "true";
+  let step: 1 | 2 | 3 | 4 | 5 = 1;
+  const envStepStr = process.env.SETUP_STEP;
+  if (envStepStr) {
+    const parsed = parseInt(envStepStr, 10);
+    if (parsed >= 1 && parsed <= 5) {
+      step = parsed as 1 | 2 | 3 | 4 | 5;
+    }
+  }
+
+  return { step, isCompleted: envCompleted };
 }
 
 /**
- * Saves active setup step to .env.local and attempts to sync to Supabase.
+ * Saves active setup step directly to Supabase app_settings table (Single Source of Truth).
+ * Does NOT touch .env files to prevent Next.js dev server hot-restarts.
  */
 export async function saveSetupStep(step: 1 | 2 | 3 | 4 | 5): Promise<void> {
   process.env.SETUP_STEP = String(step);
-  updateEnvKey("SETUP_STEP", String(step));
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -116,11 +98,10 @@ export async function saveSetupStep(step: 1 | 2 | 3 | 4 | 5): Promise<void> {
       break;
     } catch (err: any) {
       if (attempt < 3 && err.message?.includes("fetch failed")) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 800));
       } else if (attempt === 3) {
-        // Graceful: column might not exist in older Supabase schemas or DNS still warming up
         if (!err.message?.includes("fetch failed")) {
-          console.warn("Notice: Could not persist setup_step to Supabase table (saved to local env):", err.message);
+          console.warn("Notice: Could not persist setup_step to Supabase table:", err.message);
         }
       }
     }
@@ -128,14 +109,12 @@ export async function saveSetupStep(step: 1 | 2 | 3 | 4 | 5): Promise<void> {
 }
 
 /**
- * Marks setup completely finished in .env.local and attempts to sync to Supabase.
+ * Marks setup completely finished in Supabase app_settings table (Single Source of Truth).
+ * Does NOT touch .env files to ensure seamless, instant dashboard launch.
  */
 export async function markSetupComplete(): Promise<void> {
   process.env.SETUP_COMPLETED = "true";
   process.env.SETUP_STEP = "5";
-
-  updateEnvKey("SETUP_COMPLETED", "true");
-  updateEnvKey("SETUP_STEP", "5");
 
   try {
     await updateAppSettings({
@@ -143,6 +122,6 @@ export async function markSetupComplete(): Promise<void> {
       setup_completed: true,
     } as any);
   } catch (err: any) {
-    console.warn("Notice: Could not persist setup_completed to Supabase table (saved to local env):", err.message);
+    console.warn("Notice: Could not persist setup_completed to Supabase table:", err.message);
   }
 }

@@ -40,7 +40,7 @@ function getEnvCredentials() {
 
 function detectGitRemote(): { owner?: string; repo?: string; isUpstream: boolean } {
   try {
-    // 1. Check if configured in environment or .env.local first (e.g. from Step 5 fork)
+    // 1. Check if configured in environment first (e.g. from Step 5 fork)
     let envOwner = process.env.GITHUB_REPO_OWNER;
     let envRepo = process.env.GITHUB_REPO_NAME;
 
@@ -344,28 +344,8 @@ export async function POST(req: Request) {
       console.warn("Notice dispatching initial scraper run:", e);
     }
 
-    // 8. Persist target owner to local env so the dashboard always links to the forked repository
+    // 8. Persist target owner to memory so the dashboard links to the forked repository
     try {
-      const isWebCwd = fs.existsSync(path.resolve(process.cwd(), "next.config.ts")) || 
-                       fs.existsSync(path.resolve(process.cwd(), "next.config.js"));
-      const webEnvPath = isWebCwd 
-        ? path.resolve(process.cwd(), ".env.local")
-        : path.resolve(process.cwd(), "web", ".env.local");
-
-      if (fs.existsSync(webEnvPath)) {
-        let envContent = fs.readFileSync(webEnvPath, "utf-8");
-        if (envContent.includes("GITHUB_REPO_OWNER=")) {
-          envContent = envContent.replace(/GITHUB_REPO_OWNER=.*/g, `GITHUB_REPO_OWNER="${targetOwner}"`);
-        } else {
-          envContent += `\nGITHUB_REPO_OWNER="${targetOwner}"`;
-        }
-        if (envContent.includes("GITHUB_REPO_NAME=")) {
-          envContent = envContent.replace(/GITHUB_REPO_NAME=.*/g, `GITHUB_REPO_NAME="${targetRepo}"`);
-        } else {
-          envContent += `\nGITHUB_REPO_NAME="${targetRepo}"`;
-        }
-        fs.writeFileSync(webEnvPath, envContent.trim() + "\n", "utf-8");
-      }
       process.env.GITHUB_REPO_OWNER = targetOwner;
       process.env.GITHUB_REPO_NAME = targetRepo;
     } catch (e) {

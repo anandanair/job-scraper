@@ -50,6 +50,8 @@ export default function SetupWizard({
     tier: "free" | "paid";
     maxRpm: number;
     requestDelaySeconds: number;
+    jobsPerDay: number;
+    resumesPerDay: number;
   }>({
     apiKey: initialAiApiKey || "",
     model: initialAiModel || "gemini-3.8-flash",
@@ -57,6 +59,12 @@ export default function SetupWizard({
     tier: initialAiTier || "free",
     maxRpm: 4,
     requestDelaySeconds: 15,
+    jobsPerDay:
+      (initialSettings?.max_jobs_per_search?.daily_jobs as number) ||
+      (initialSettings?.jobs_to_score_per_run ? initialSettings.jobs_to_score_per_run * 6 : 10),
+    resumesPerDay:
+      (initialSettings?.max_jobs_per_search?.daily_resumes as number) ||
+      (initialSettings?.jobs_to_customize_per_run ? initialSettings.jobs_to_customize_per_run * 6 : 2),
   });
 
   const [preferencesSaved, setPreferencesSaved] = useState(false);
@@ -89,7 +97,31 @@ export default function SetupWizard({
           if (data.supabaseServiceRoleKey) setConnectedServiceRoleKey(data.supabaseServiceRoleKey);
           if (data.hasAiKey) setAiConnected(true);
           if (data.hasPreferences) setPreferencesSaved(true);
-          if (data.savedSettings) setSavedSettings(data.savedSettings);
+          if (data.savedSettings) {
+            setSavedSettings(data.savedSettings);
+            const s = data.savedSettings;
+            setAiConfig((prev) => ({
+              ...prev,
+              apiKey: s.llm_api_key || prev.apiKey,
+              model: s.llm_model || prev.model,
+              provider: s.llm_provider || prev.provider,
+              tier: s.llm_tier || prev.tier,
+              maxRpm: s.llm_max_rpm || prev.maxRpm,
+              requestDelaySeconds: s.llm_request_delay_seconds || prev.requestDelaySeconds,
+              jobsPerDay:
+                typeof s.max_jobs_per_search?.daily_jobs === "number"
+                  ? s.max_jobs_per_search.daily_jobs
+                  : s.jobs_to_score_per_run
+                  ? s.jobs_to_score_per_run * 6
+                  : prev.jobsPerDay,
+              resumesPerDay:
+                typeof s.max_jobs_per_search?.daily_resumes === "number"
+                  ? s.max_jobs_per_search.daily_resumes
+                  : s.jobs_to_customize_per_run
+                  ? s.jobs_to_customize_per_run * 6
+                  : prev.resumesPerDay,
+            }));
+          }
 
           if (data.step && data.step > 1) {
             setCurrentStep(data.step as 1 | 2 | 3 | 4 | 5);
@@ -213,6 +245,8 @@ export default function SetupWizard({
               savedModel={aiConfig.model}
               savedProvider={aiConfig.provider}
               savedTier={aiConfig.tier}
+              savedJobsPerDay={aiConfig.jobsPerDay}
+              savedResumesPerDay={aiConfig.resumesPerDay}
               onBack={() => setCurrentStep(1)}
               onNextStep={() => handleStepTransition(3)}
               onSuccess={(data) => {
@@ -249,6 +283,8 @@ export default function SetupWizard({
               llmModel={aiConfig.model}
               llmTier={aiConfig.tier}
               llmProvider={aiConfig.provider}
+              initialJobsPerDay={aiConfig.jobsPerDay}
+              initialResumesPerDay={aiConfig.resumesPerDay}
             />
           )}
         </div>

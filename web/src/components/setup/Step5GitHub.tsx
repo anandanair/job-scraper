@@ -41,6 +41,8 @@ interface Step5GitHubProps {
   llmModel?: string;
   llmTier?: "free" | "paid";
   llmProvider?: string;
+  initialJobsPerDay?: number;
+  initialResumesPerDay?: number;
 }
 
 interface GitRepoInfo {
@@ -61,6 +63,8 @@ export function Step5GitHub({
   llmModel = "gemini-3.8-flash",
   llmTier = "free",
   llmProvider = "gemini",
+  initialJobsPerDay,
+  initialResumesPerDay,
 }: Step5GitHubProps) {
   // --- Setup Mode State ---
   const [setupMode, setSetupMode] = useState<"auto" | "manual">("auto");
@@ -91,9 +95,9 @@ export function Step5GitHub({
   const maxFreeRpd = activeModelDef.freeRpd || 500;
 
   // --- Daily Volume Sliders ---
-  // Defaults: 12 jobs/day (2 jobs/run over 6 runs) & 2 resumes/day (1 resume every other run)
-  const [jobsPerDay, setJobsPerDay] = useState(12);
-  const [resumesPerDay, setResumesPerDay] = useState(2);
+  // Defaults to initial values from Step 2 or 10 jobs/day & 2 resumes/day
+  const [jobsPerDay, setJobsPerDay] = useState(() => initialJobsPerDay || 10);
+  const [resumesPerDay, setResumesPerDay] = useState(() => initialResumesPerDay || 2);
 
   // Computed batch limits per run (both run every 4 hours = 6 runs/day)
   const jobsPerRun = Math.max(1, Math.ceil(jobsPerDay / 6));
@@ -138,26 +142,39 @@ export function Step5GitHub({
       .then((data) => {
         if (data?.settings) {
           const s = data.settings;
-          if (s.jobs_to_score_per_run) {
+          if (typeof s.max_jobs_per_search?.daily_jobs === "number") {
+            setJobsPerDay(s.max_jobs_per_search.daily_jobs);
+          } else if (s.jobs_to_score_per_run && !initialJobsPerDay) {
             setJobsPerDay(s.jobs_to_score_per_run * 6);
           }
-          if (s.jobs_to_customize_per_run) {
+          if (typeof s.max_jobs_per_search?.daily_resumes === "number") {
+            setResumesPerDay(s.max_jobs_per_search.daily_resumes);
+          } else if (s.jobs_to_customize_per_run && !initialResumesPerDay) {
             setResumesPerDay(s.jobs_to_customize_per_run * 6);
           }
         }
       })
       .catch(() => {});
-  }, []);
+  }, [initialJobsPerDay, initialResumesPerDay]);
 
   // Save batch limits to Supabase
   const persistBatchLimits = async (scoreBatch: number, customizeBatch: number) => {
     try {
+      const currentRes = await fetch("/api/settings");
+      const currentData = currentRes.ok ? await currentRes.json() : null;
+      const existingSettings = currentData?.settings || {};
+
       await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           jobs_to_score_per_run: scoreBatch,
           jobs_to_customize_per_run: customizeBatch,
+          max_jobs_per_search: {
+            ...(existingSettings.max_jobs_per_search || {}),
+            daily_jobs: jobsPerDay,
+            daily_resumes: resumesPerDay,
+          },
         }),
       });
     } catch (err) {

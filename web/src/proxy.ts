@@ -49,42 +49,41 @@ export function proxy(request: NextRequest) {
   }
 
   // 2. Check setup completion status:
-  // Setup CANNOT be considered complete if Supabase is not configured!
   const hasSupabase = isSupabaseConfigured();
-  const isSetupComplete =
-    hasSupabase &&
-    (request.cookies.get("jobtrack_setup_complete")?.value === "true" ||
-      process.env.SETUP_COMPLETED === "true");
 
-  // 3. If setup is NOT completed:
-  if (!isSetupComplete) {
-    // Allow setup page itself
+  // If Supabase is not configured at all, redirect to /setup
+  if (!hasSupabase) {
     if (pathname === "/setup" || pathname.startsWith("/setup/")) {
       return NextResponse.next();
     }
-    // Block all other pages (/, /jobs/*, /resume-studio, /settings, /profile) and redirect to /setup
     const setupUrl = request.nextUrl.clone();
     setupUrl.pathname = "/setup";
     const response = NextResponse.redirect(setupUrl);
-
-    // If an orphan/stale cookie exists while Supabase isn't configured, delete it
-    if (!hasSupabase && request.cookies.has("jobtrack_setup_complete")) {
+    if (request.cookies.has("jobtrack_setup_complete")) {
       response.cookies.delete("jobtrack_setup_complete");
     }
-
     return response;
   }
 
-  // 4. If setup IS completed:
-  // Prevent navigating back to /setup (unless explicitly forced via query param ?force=true)
-  if (pathname === "/setup" || pathname.startsWith("/setup/")) {
-    if (!request.nextUrl.searchParams.has("force")) {
-      const homeUrl = request.nextUrl.clone();
-      homeUrl.pathname = "/";
-      return NextResponse.redirect(homeUrl);
+  const isSetupComplete =
+    request.cookies.get("jobtrack_setup_complete")?.value === "true" ||
+    process.env.SETUP_COMPLETED === "true";
+
+  // If cookie or process.env confirms completion:
+  if (isSetupComplete) {
+    // Prevent navigating back to /setup (unless explicitly forced via ?force=true)
+    if (pathname === "/setup" || pathname.startsWith("/setup/")) {
+      if (!request.nextUrl.searchParams.has("force")) {
+        const homeUrl = request.nextUrl.clone();
+        homeUrl.pathname = "/";
+        return NextResponse.redirect(homeUrl);
+      }
     }
+    return NextResponse.next();
   }
 
+  // If cookie is not present yet, but Supabase IS configured:
+  // Allow the request to pass to server components (which verify against app_settings in Supabase)
   return NextResponse.next();
 }
 

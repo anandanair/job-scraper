@@ -28,6 +28,8 @@ interface Step2AiEngineProps {
   savedModel?: string;
   savedProvider?: string;
   savedTier?: "free" | "paid";
+  savedJobsPerDay?: number;
+  savedResumesPerDay?: number;
   onBack: () => void;
   onNextStep: () => void;
   onSuccess: (data: {
@@ -37,6 +39,8 @@ interface Step2AiEngineProps {
     tier: "free" | "paid";
     maxRpm: number;
     requestDelaySeconds: number;
+    jobsPerDay: number;
+    resumesPerDay: number;
   }) => void;
 }
 
@@ -47,6 +51,8 @@ export function Step2AiEngine({
   savedModel,
   savedProvider,
   savedTier = "free",
+  savedJobsPerDay,
+  savedResumesPerDay,
   onBack,
   onNextStep,
   onSuccess,
@@ -62,8 +68,8 @@ export function Step2AiEngine({
 
   // Stable volume sliders: Initialized once to 10 jobs + 2 resumes (16 calls/day)
   // They DO NOT reset when switching models or toggling Free/Paid!
-  const [calcJobsPerDay, setCalcJobsPerDay] = useState(10);
-  const [calcResumesPerDay, setCalcResumesPerDay] = useState(2);
+  const [calcJobsPerDay, setCalcJobsPerDay] = useState(() => savedJobsPerDay || 10);
+  const [calcResumesPerDay, setCalcResumesPerDay] = useState(() => savedResumesPerDay || 2);
 
   // Testing & saving state
   const [isTestingAi, setIsTestingAi] = useState(false);
@@ -100,9 +106,49 @@ export function Step2AiEngine({
 
   // Test and save immediately
   const handleTestAndSaveAi = async () => {
-    // If already configured and user didn't enter a new key, simply advance to Step 3
+    const activeModel = isCustomModel ? customModelInput.trim() : selectedModel.id;
+    const activeProvider = isCustomModel ? "custom" : selectedModel.provider;
+    const activeRpm = isCustomModel
+      ? 60
+      : effectiveTier === "free"
+      ? selectedModel.recommendedFreeRpm
+      : 60;
+    const activeDelay = isCustomModel
+      ? 1
+      : effectiveTier === "free"
+      ? selectedModel.recommendedFreeDelaySeconds
+      : 1;
+
+    // If already configured and user didn't enter a new key, update settings and advance
     if (aiConnected && !aiApiKey.trim() && !isCustomModel) {
-      onNextStep();
+      try {
+        await fetch("/api/setup/ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: activeModel,
+            provider: activeProvider,
+            tier: effectiveTier,
+            maxRpm: activeRpm,
+            requestDelaySeconds: activeDelay,
+            jobsPerDay: calcJobsPerDay,
+            resumesPerDay: calcResumesPerDay,
+          }),
+        });
+      } catch (err) {
+        console.warn("Could not sync AI settings:", err);
+      }
+
+      onSuccess({
+        apiKey: "",
+        model: activeModel,
+        provider: activeProvider,
+        tier: effectiveTier,
+        maxRpm: activeRpm,
+        requestDelaySeconds: activeDelay,
+        jobsPerDay: calcJobsPerDay,
+        resumesPerDay: calcResumesPerDay,
+      });
       return;
     }
 
@@ -118,19 +164,6 @@ export function Step2AiEngine({
     setStep2Error(null);
     setIsTestingAi(true);
     setTestLatencyMs(null);
-
-    const activeModel = isCustomModel ? customModelInput.trim() : selectedModel.id;
-    const activeProvider = isCustomModel ? "custom" : selectedModel.provider;
-    const activeRpm = isCustomModel
-      ? 60
-      : effectiveTier === "free"
-      ? selectedModel.recommendedFreeRpm
-      : 60;
-    const activeDelay = isCustomModel
-      ? 1
-      : effectiveTier === "free"
-      ? selectedModel.recommendedFreeDelaySeconds
-      : 1;
 
     try {
       // 1. Perform lightweight ping test
@@ -151,7 +184,7 @@ export function Step2AiEngine({
 
       setTestLatencyMs(testData.latencyMs || 250);
 
-      // 2. Immediately persist AI configuration to Supabase app_settings & env files!
+      // 2. Immediately persist AI configuration to Supabase app_settings!
       const saveRes = await fetch("/api/setup/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,6 +195,8 @@ export function Step2AiEngine({
           tier: effectiveTier,
           maxRpm: activeRpm,
           requestDelaySeconds: activeDelay,
+          jobsPerDay: calcJobsPerDay,
+          resumesPerDay: calcResumesPerDay,
         }),
       });
 
@@ -180,9 +215,11 @@ export function Step2AiEngine({
         tier: effectiveTier,
         maxRpm: activeRpm,
         requestDelaySeconds: activeDelay,
+        jobsPerDay: calcJobsPerDay,
+        resumesPerDay: calcResumesPerDay,
       });
     } catch (err: any) {
-      setStep2Error(err.message);
+      setStep2Error(err.message || "Failed to connect to AI provider.");
     } finally {
       setIsTestingAi(false);
     }

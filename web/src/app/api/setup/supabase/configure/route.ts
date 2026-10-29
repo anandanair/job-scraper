@@ -134,12 +134,11 @@ export async function POST(req: Request) {
       // Non-fatal control plane update
     }
 
-    // 5. Write .env.local and backend/.env files
+    // 5. Write .env.local and backend/.env files (Database credentials ONLY)
     writeEnvFiles({
       supabaseUrl,
       anonKey,
       serviceRoleKey,
-      setupStep: 2,
     });
 
     process.env.SETUP_STEP = "2";

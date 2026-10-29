@@ -68,14 +68,14 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const cookieStore = await cookies();
   const hasSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
-  const isSetupComplete =
-    hasSupabase &&
-    (cookieStore.get("jobtrack_setup_complete")?.value === "true" ||
-      process.env.SETUP_COMPLETED === "true");
 
-  if (!isSetupComplete) {
+  if (!hasSupabase) {
     redirect("/setup");
   }
+
+  let isSetupComplete =
+    cookieStore.get("jobtrack_setup_complete")?.value === "true" ||
+    process.env.SETUP_COMPLETED === "true";
 
   // Get server's current local date in YYYY-MM-DD format
   const now = new Date(); // Current date/time in server's local timezone
@@ -104,17 +104,22 @@ export default async function Home() {
   let appSettings: any = null;
 
   try {
-    const hasSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
-    if (hasSupabase) {
-      const [resStats, resSettings] = await Promise.all([
-        getCachedDashboardStats(localToday),
-        getAppSettings(),
-      ]);
-      statsData = resStats;
-      appSettings = resSettings;
+    const [resStats, resSettings] = await Promise.all([
+      getCachedDashboardStats(localToday),
+      getAppSettings(),
+    ]);
+    statsData = resStats;
+    appSettings = resSettings;
+
+    if (appSettings?.setup_completed === true) {
+      isSetupComplete = true;
     }
   } catch (err: any) {
     console.warn("Initial dashboard stats fetch notice:", err.message);
+  }
+
+  if (!isSetupComplete) {
+    redirect("/setup");
   }
 
   const {
