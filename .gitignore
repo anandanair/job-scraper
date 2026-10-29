@@ -1,25 +1,13 @@
-# --- Python & Virtual Environment ---
-.venv/
-venv/
-__pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-*.log
+# --- Local Resumes & Output Files ---
 resume.pdf
 resume.json
-backend/resume.pdf
-backend/resume.json
 /customized_resumes/
-/backend/customized_resumes/
 customized_resume_*.pdf
-backend/customized_resume_*.pdf
+*.log
 
 # --- Environment & Secrets ---
 .env
 .env.*
-backend/.env
-backend/.env.*
 !.env.example
 web/.env.local
 web/.env*.local

@@ -71,7 +71,7 @@ graph TD
    - Collects job postings from LinkedIn (via guest endpoints with `impit` browser TLS/JA4 impersonation) and CareersFuture (typed REST API).
    - Converts HTML descriptions to Markdown locally using `node-html-markdown` without consuming LLM quotas.
    - Dynamically loads search preferences directly from Supabase `app_settings`.
-   - *(Note: The legacy Python scraper in `backend/` is preserved as a verified fallback via `npm run scrape:py`)*.
+   - Eliminates Python runtime requirements, virtual environments, and pip packages completely.
 3. **Single Source of Truth (`app_settings`)**:
    - Search queries, target locations, workplace filters, scraping sources, AI model choices, and rate limits are stored in the Supabase `app_settings` table and configured via the web UI.
 
@@ -170,7 +170,7 @@ SUPABASE_SERVICE_ROLE_KEY="sb_secret_..."
 ```
 *(Note: All AI provider settings, API keys, search queries, and rate limits are managed in the Supabase `app_settings` table and configured via the interactive Setup Wizard or Settings UI.)*
 
-Create a `backend/.env` file (or root `.env`):
+Create an optional root `.env` file (if running workers from root outside web/):
 ```env
 SUPABASE_URL="https://<YOUR_PROJECT_ID>.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="sb_secret_..."
@@ -257,7 +257,6 @@ npm run install:web      # Install web application dependencies
 
 # --- Job Scraper ---
 npm run scrape           # Run TypeScript scraper using settings from Supabase (impit + cheerio)
-npm run scrape:py        # Legacy Python scraper backup
 npm run test:scraper     # Run diagnostic & parity tests on scraping engine
 npm run scrape -- --source linkedin --query "Frontend Engineer" --limit 10
 
@@ -279,12 +278,6 @@ npm run parse-resume     # Parse resume.pdf into base_resume table
 │   ├── score_jobs.yml          # TypeScript AI job scorer
 │   ├── hourly_resume_customization.yml # TypeScript resume tailor
 │   └── job_manager.yml         # TypeScript job status manager
-├── backend/                    # Legacy Python Scraper Backup
-│   ├── config.py               # Scraper network configs & fallback vars
-│   ├── scraper.py              # Core multi-source scraper (LinkedIn & CareersFuture)
-│   ├── supabase_utils.py       # Supabase client & dynamic app_settings loader
-│   ├── user_agents.py          # User-Agent rotation pool
-│   └── requirements.txt        # Minimal Python dependencies
 ├── memory/                     # Project Memory & Agent Knowledge Base
 │   ├── context.md              # Living technical architecture, schema & APIs
 │   ├── progress_latest.md      # Running monthly work log & progress tracker

@@ -5,11 +5,9 @@ import dotenv from "dotenv";
 // 1. Load env files across monorepo locations
 const webEnv = path.resolve(process.cwd(), ".env.local");
 const rootEnv = path.resolve(process.cwd(), "..", ".env");
-const backendEnv = path.resolve(process.cwd(), "..", "backend", ".env");
 
 if (fs.existsSync(webEnv)) dotenv.config({ path: webEnv });
 if (fs.existsSync(rootEnv)) dotenv.config({ path: rootEnv });
-if (fs.existsSync(backendEnv)) dotenv.config({ path: backendEnv });
 
 import { createSupabaseStaticClient } from "../src/utils/supabase/server";
 import {

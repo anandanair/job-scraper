@@ -120,7 +120,7 @@ export async function POST(req: Request) {
       // Non-fatal control plane update
     }
 
-    // 5. Write .env.local and backend/.env files (Database credentials ONLY)
+    // 5. Write .env.local and root .env files (Database credentials ONLY)
     writeEnvFiles({
       supabaseUrl,
       anonKey,

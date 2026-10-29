@@ -22,7 +22,6 @@ async function main() {
   const localCandidates = [
     path.resolve(process.cwd(), "resume.pdf"),
     path.resolve(process.cwd(), "..", "resume.pdf"),
-    path.resolve(process.cwd(), "..", "backend", "resume.pdf"),
   ];
   for (const cand of localCandidates) {
     if (fs.existsSync(cand)) {

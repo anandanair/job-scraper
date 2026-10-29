@@ -12,7 +12,7 @@ function readEnvKeyFromDisk(key: string): string {
 
     const candidatePaths = [
       isWebCwd ? path.resolve(process.cwd(), ".env.local") : path.resolve(process.cwd(), "web", ".env.local"),
-      isWebCwd ? path.resolve(process.cwd(), "..", "backend", ".env") : path.resolve(process.cwd(), "backend", ".env"),
+
       isWebCwd ? path.resolve(process.cwd(), "..", ".env") : path.resolve(process.cwd(), ".env"),
     ];
 

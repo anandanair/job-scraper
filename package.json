@@ -8,7 +8,6 @@
     "start": "npm --prefix web run start",
     "install:web": "npm --prefix web install",
     "scrape": "npm --prefix web run scrape",
-    "scrape:py": "python backend/scraper.py",
     "test:scraper": "npm --prefix web run test:scraper",
     "score": "npm --prefix web run score",
     "customize": "npm --prefix web run customize",

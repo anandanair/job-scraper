@@ -8,7 +8,7 @@
 ## 1. System Overview
 
 **JobTrack** is an autonomous job discovery, AI suitability evaluation, resume customization, and ATS typesetting platform. It consists of:
-1. **TypeScript Scraping Engine (`web/src/lib/scraper/` & `web/scripts/scrape-jobs.ts`)**: Collects job listings from LinkedIn (via guest endpoints with `impit` native Chrome TLS/JA3/JA4 fingerprint impersonation) and CareersFuture (typed REST API) into Supabase PostgreSQL with local `node-html-markdown` conversion. *(Note: The legacy Python scraper in `backend/` is preserved as a verified fallback during transition)*.
+1. **TypeScript Scraping Engine (`web/src/lib/scraper/` & `web/scripts/scrape-jobs.ts`)**: Collects job listings from LinkedIn (via guest endpoints with `impit` native Chrome TLS/JA3/JA4 fingerprint impersonation) and CareersFuture (typed REST API) into Supabase PostgreSQL with local `node-html-markdown` conversion. Eliminates Python runtimes and pip dependencies completely.
 2. **Fullstack Next.js Application (`web/`)**: Provides an interactive setup wizard, master resume studio, ATS visual theme designer, job dashboard, and REST API route handlers.
 3. **TypeScript Batch Workers (`web/scripts/`)**: Autonomous worker processes for scraping, AI job scoring, custom resume generation, posting expiration checks, and master resume parsing.
 4. **Supabase Backend**: Hosts application data (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`, `app_settings`, `linkedin_geo_locations`). Storage buckets are deprecated in favor of on-demand in-memory PDF streaming.
@@ -49,9 +49,9 @@ graph TD
 1. **No Python Web Server**:
    - There is **no** Flask, FastAPI, Django, or Python HTTP server in this project.
    - All REST API endpoints and server routes are Next.js Route Handlers located under [`web/src/app/api/`](web/src/app/api/).
-2. **Scraping Engine in TypeScript (Primary) & Python (Fallback)**:
-   - Primary: Built in TypeScript under [`web/src/lib/scraper/`](web/src/lib/scraper/) and executed via [`web/scripts/scrape-jobs.ts`](web/scripts/scrape-jobs.ts) (`npm run scrape`). It uses `impit` for browser TLS (JA3/JA4) impersonation on LinkedIn, `cheerio` for fast HTML parsing, and `node-html-markdown` for local Markdown conversion.
-   - Fallback: The legacy Python scraper in [`backend/`](backend/) is retained as a working fallback (`npm run scrape:py`).
+2. **Scraping Engine 100% in TypeScript**:
+   - Built in TypeScript under [`web/src/lib/scraper/`](web/src/lib/scraper/) and executed via [`web/scripts/scrape-jobs.ts`](web/scripts/scrape-jobs.ts) (`npm run scrape`). It uses `impit` for browser TLS (JA3/JA4) impersonation on LinkedIn, `cheerio` for fast HTML parsing, and `node-html-markdown` for local Markdown conversion with zero LLM API cost.
+   - The project is fully unified in TypeScript with zero Python dependencies.
 3. **TypeScript for Application Logic & Batch Workers**:
    - Job scoring, resume customization, PDF generation, job expiration, and resume parsing are written in TypeScript under [`web/scripts/`](web/scripts/) and [`web/src/lib/`](web/src/lib/).
 4. **Single Source of Truth for Configuration (`app_settings`)**:
@@ -70,12 +70,6 @@ graph TD
 │   ├── score_jobs.yml          # TypeScript AI job scorer (every 4 hrs)
 │   ├── hourly_resume_customization.yml # TypeScript resume tailor (every 4 hrs)
 │   └── job_manager.yml         # TypeScript job status manager (daily)
-├── backend/                    # Legacy Python Job Scraper Backup
-│   ├── config.py               # Scraper network configs, timeouts, fallback vars
-│   ├── requirements.txt        # Python dependencies (requests, bs4, supabase, markdownify, dotenv)
-│   ├── scraper.py              # Core scraper (LinkedIn & CareersFuture)
-│   ├── supabase_utils.py       # Supabase client & dynamic app_settings loader
-│   └── user_agents.py          # Browser user agent rotation pool
 ├── memory/                     # AI & Engineering Knowledge Base
 │   ├── context.md              # Living technical architecture and conventions (this file)
 │   ├── progress_latest.md      # Active monthly changelog and task tracker
@@ -158,8 +152,7 @@ graph TD
 | **Frontend UI** | Next.js 16 (App Router), React 19, Tailwind CSS v4, Lucide React |
 | **PDF Generation** | PDFKit (server-side 1:1 typesetting), React-PDF (client preview) |
 | **Database & Auth** | Supabase (PostgreSQL, Row Level Security, Storage Buckets, `@supabase/ssr`) |
-| **Job Scraper (Primary)** | TypeScript, `impit` (Rust TLS/JA4 impersonation), `cheerio`, `node-html-markdown` |
-| **Job Scraper (Backup)** | Python 3.10+, Requests, BeautifulSoup4, Markdownify, Supabase Python SDK |
+| **Job Scraper** | TypeScript, `impit` (Rust TLS/JA4 impersonation), `cheerio`, `node-html-markdown` |
 | **AI LLM Engine** | Universal caller supporting Google Gemini, Fireworks AI, OpenAI, Anthropic, Groq |
 | **Security & Secrets** | Tweetsodium (libsodium sealed-box encryption for GitHub Actions secrets) |
 | **CLI Execution** | `tsx` for TypeScript worker execution without separate build steps |
@@ -211,7 +204,6 @@ npm run install:web      # Install web dependencies (npm --prefix web install)
 
 # --- Job Scraper ---
 npm run scrape           # Run TypeScript scraper using settings from Supabase (impit + cheerio)
-npm run scrape:py        # Legacy Python scraper backup
 npm run test:scraper     # Run diagnostic and live parity tests on scraping engine
 npm run scrape -- --source linkedin --query "Frontend Engineer" --limit 10
 
@@ -235,6 +227,5 @@ npm run parse-resume     # Parse master resume.pdf into base_resume table
    - Return standard `NextResponse.json(...)`.
    - Use `createSupabaseServerClient()` or `createSupabaseStaticClient()` from `@/utils/supabase/server`.
 4. **Environment Variables**:
-   - `web/.env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
-   - `backend/.env` (or root `.env`): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+   - `web/.env.local` (or root `.env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 
