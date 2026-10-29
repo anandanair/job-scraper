@@ -125,57 +125,81 @@ async function main() {
     );
     const perQueryLimit = Math.min(
       SAFE_MAX_SCRAPE_PER_SOURCE,
-      cli.limit ?? (cli.query ? dailyTarget : (settings.maxJobsPerSearch.linkedin ?? 5))
+      cli.limit ?? (settings.maxJobsPerSearch.linkedin ?? 5)
     );
 
     if (queries.length === 0) {
       console.log("ℹ️ No LinkedIn search queries configured. Set queries in Settings or pass --query.");
     }
 
-    let totalLinkedinScrapedThisRun = 0;
-
-    for (let i = 0; i < queries.length; i++) {
-      if (totalLinkedinScrapedThisRun >= dailyTarget) {
-        console.log(`[LinkedIn] Reached daily safety limit of ${totalLinkedinScrapedThisRun}/${dailyTarget} jobs. Halting further queries.`);
-        break;
+    // Check how many jobs for this provider have already been scraped today
+    let alreadyScrapedToday = 0;
+    try {
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const { count, error } = await supabase
+        .from("jobs")
+        .select("job_id", { count: "exact", head: true })
+        .eq("provider", "linkedin")
+        .gte("scraped_at", todayStart.toISOString());
+      if (!error && typeof count === "number") {
+        alreadyScrapedToday = count;
       }
+    } catch {
+      // Non-fatal fallback
+    }
 
-      const query = queries[i];
-      const remainingQuota = dailyTarget - totalLinkedinScrapedThisRun;
-      const queryLimit = Math.min(perQueryLimit, remainingQuota);
+    const remainingDailyTarget = Math.max(0, dailyTarget - alreadyScrapedToday);
+    console.log(`[LinkedIn] Daily cap: ${dailyTarget} jobs | Already scraped today: ${alreadyScrapedToday} | Remaining quota for today: ${remainingDailyTarget}`);
 
-      console.log(`\n------------------------------------------------------------`);
-      console.log(`[LinkedIn] Processing Query (${i + 1}/${queries.length}): "${query}" (Limit: ${queryLimit}, Daily Cap: ${dailyTarget})`);
-      console.log(`------------------------------------------------------------`);
+    if (remainingDailyTarget <= 0) {
+      console.log(`[LinkedIn] Daily safety limit of ${dailyTarget} jobs already reached today. Halting LinkedIn scraping.`);
+    } else {
+      let totalLinkedinScrapedThisRun = 0;
 
-      const scrapedJobs = await processLinkedInQuery(
-        query,
-        settings.linkedinConfig.location,
-        supabase,
-        settings.linkedinConfig,
-        queryLimit
-      );
-
-      if (scrapedJobs.length > 0) {
-        totalLinkedinScrapedThisRun += scrapedJobs.length;
-        if (!cli.dryRun) {
-          const savedCount = await saveJobsToSupabase(supabase, scrapedJobs);
-          totalNewJobsSaved += savedCount;
-        } else {
-          console.log(`[Dry-Run] Extracted ${scrapedJobs.length} LinkedIn jobs for "${query}":`);
-          scrapedJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+      for (let i = 0; i < queries.length; i++) {
+        if (totalLinkedinScrapedThisRun >= remainingDailyTarget) {
+          console.log(`[LinkedIn] Reached daily safety limit of ${totalLinkedinScrapedThisRun}/${remainingDailyTarget} jobs. Halting further queries.`);
+          break;
         }
-      } else {
-        console.log(`[LinkedIn] No new jobs fetched for query "${query}".`);
-      }
 
-      if (i < queries.length - 1 && totalLinkedinScrapedThisRun < dailyTarget) {
-        const queryDelay = randomBetween(
-          settings.linkedinConfig.searchQueryMinDelay,
-          settings.linkedinConfig.searchQueryMaxDelay
+        const query = queries[i];
+        const remainingQuota = remainingDailyTarget - totalLinkedinScrapedThisRun;
+        const queryLimit = Math.min(perQueryLimit, remainingQuota);
+
+        console.log(`\n------------------------------------------------------------`);
+        console.log(`[LinkedIn] Processing Query (${i + 1}/${queries.length}): "${query}" (Limit: ${queryLimit}, Daily Cap: ${dailyTarget}, Remaining Quota: ${remainingQuota})`);
+        console.log(`------------------------------------------------------------`);
+
+        const scrapedJobs = await processLinkedInQuery(
+          query,
+          settings.linkedinConfig.location,
+          supabase,
+          settings.linkedinConfig,
+          queryLimit
         );
-        console.log(`[LinkedIn] Waiting ${queryDelay.toFixed(2)}s before next query...`);
-        await sleep(queryDelay * 1000);
+
+        if (scrapedJobs.length > 0) {
+          totalLinkedinScrapedThisRun += scrapedJobs.length;
+          if (!cli.dryRun) {
+            const savedCount = await saveJobsToSupabase(supabase, scrapedJobs);
+            totalNewJobsSaved += savedCount;
+          } else {
+            console.log(`[Dry-Run] Extracted ${scrapedJobs.length} LinkedIn jobs for "${query}":`);
+            scrapedJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+          }
+        } else {
+          console.log(`[LinkedIn] No new jobs fetched for query "${query}".`);
+        }
+
+        if (i < queries.length - 1 && totalLinkedinScrapedThisRun < remainingDailyTarget) {
+          const queryDelay = randomBetween(
+            settings.linkedinConfig.searchQueryMinDelay,
+            settings.linkedinConfig.searchQueryMaxDelay
+          );
+          console.log(`[LinkedIn] Waiting ${queryDelay.toFixed(2)}s before next query...`);
+          await sleep(queryDelay * 1000);
+        }
       }
     }
   } else {
@@ -192,53 +216,77 @@ async function main() {
     );
     const perQueryLimit = Math.min(
       SAFE_MAX_SCRAPE_PER_SOURCE,
-      cli.limit ?? (cli.query ? dailyTarget : (settings.maxJobsPerSearch.careers_future ?? 5))
+      cli.limit ?? (settings.maxJobsPerSearch.careers_future ?? 5)
     );
 
     if (queries.length === 0) {
       console.log("ℹ️ No CareersFuture search queries configured. Set queries in Settings or pass --query.");
     }
 
-    let totalCfScrapedThisRun = 0;
-
-    for (let i = 0; i < queries.length; i++) {
-      if (totalCfScrapedThisRun >= dailyTarget) {
-        console.log(`[CareersFuture] Reached daily safety limit of ${totalCfScrapedThisRun}/${dailyTarget} jobs. Halting further queries.`);
-        break;
+    // Check how many jobs for this provider have already been scraped today
+    let alreadyScrapedToday = 0;
+    try {
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const { count, error } = await supabase
+        .from("jobs")
+        .select("job_id", { count: "exact", head: true })
+        .eq("provider", "careers_future")
+        .gte("scraped_at", todayStart.toISOString());
+      if (!error && typeof count === "number") {
+        alreadyScrapedToday = count;
       }
+    } catch {
+      // Non-fatal fallback
+    }
 
-      const query = queries[i];
-      const remainingQuota = dailyTarget - totalCfScrapedThisRun;
-      const queryLimit = Math.min(perQueryLimit, remainingQuota);
+    const remainingDailyTarget = Math.max(0, dailyTarget - alreadyScrapedToday);
+    console.log(`[CareersFuture] Daily cap: ${dailyTarget} jobs | Already scraped today: ${alreadyScrapedToday} | Remaining quota for today: ${remainingDailyTarget}`);
 
-      console.log(`\n------------------------------------------------------------`);
-      console.log(`[CareersFuture] Processing Query (${i + 1}/${queries.length}): "${query}" (Limit: ${queryLimit}, Daily Cap: ${dailyTarget})`);
-      console.log(`------------------------------------------------------------`);
+    if (remainingDailyTarget <= 0) {
+      console.log(`[CareersFuture] Daily safety limit of ${dailyTarget} jobs already reached today. Halting CareersFuture scraping.`);
+    } else {
+      let totalCfScrapedThisRun = 0;
 
-      const scrapedJobs = await processCareersFutureQuery(
-        query,
-        supabase,
-        settings.careersFutureConfig,
-        queryLimit
-      );
-
-      if (scrapedJobs.length > 0) {
-        totalCfScrapedThisRun += scrapedJobs.length;
-        if (!cli.dryRun) {
-          const savedCount = await saveJobsToSupabase(supabase, scrapedJobs);
-          totalNewJobsSaved += savedCount;
-        } else {
-          console.log(`[Dry-Run] Extracted ${scrapedJobs.length} CareersFuture jobs for "${query}":`);
-          scrapedJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+      for (let i = 0; i < queries.length; i++) {
+        if (totalCfScrapedThisRun >= remainingDailyTarget) {
+          console.log(`[CareersFuture] Reached daily safety limit of ${totalCfScrapedThisRun}/${remainingDailyTarget} jobs. Halting further queries.`);
+          break;
         }
-      } else {
-        console.log(`[CareersFuture] No new jobs fetched for query "${query}".`);
-      }
 
-      if (i < queries.length - 1 && totalCfScrapedThisRun < dailyTarget) {
-        const queryDelay = randomBetween(5.0, 10.0);
-        console.log(`[CareersFuture] Waiting ${queryDelay.toFixed(2)}s before next query...`);
-        await sleep(queryDelay * 1000);
+        const query = queries[i];
+        const remainingQuota = remainingDailyTarget - totalCfScrapedThisRun;
+        const queryLimit = Math.min(perQueryLimit, remainingQuota);
+
+        console.log(`\n------------------------------------------------------------`);
+        console.log(`[CareersFuture] Processing Query (${i + 1}/${queries.length}): "${query}" (Limit: ${queryLimit}, Daily Cap: ${dailyTarget}, Remaining Quota: ${remainingQuota})`);
+        console.log(`------------------------------------------------------------`);
+
+        const scrapedJobs = await processCareersFutureQuery(
+          query,
+          supabase,
+          settings.careersFutureConfig,
+          queryLimit
+        );
+
+        if (scrapedJobs.length > 0) {
+          totalCfScrapedThisRun += scrapedJobs.length;
+          if (!cli.dryRun) {
+            const savedCount = await saveJobsToSupabase(supabase, scrapedJobs);
+            totalNewJobsSaved += savedCount;
+          } else {
+            console.log(`[Dry-Run] Extracted ${scrapedJobs.length} CareersFuture jobs for "${query}":`);
+            scrapedJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+          }
+        } else {
+          console.log(`[CareersFuture] No new jobs fetched for query "${query}".`);
+        }
+
+        if (i < queries.length - 1 && totalCfScrapedThisRun < remainingDailyTarget) {
+          const queryDelay = randomBetween(5.0, 10.0);
+          console.log(`[CareersFuture] Waiting ${queryDelay.toFixed(2)}s before next query...`);
+          await sleep(queryDelay * 1000);
+        }
       }
     }
   } else {

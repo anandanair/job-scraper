@@ -1157,14 +1157,27 @@ export async function saveActiveResumeStyle(
 }
 
 /**
- * Updates an existing resume style persona by ID (without changing its active status).
+ * Updates an existing resume style persona by ID (optionally activating it).
  */
 export async function updateResumeStyleById(
   id: string,
   themeConfig: ResumeThemeConfig,
-  name?: string
+  name?: string,
+  makeActive?: boolean
 ): Promise<ResumeStyleSetting> {
   const supabase = createSupabaseStaticClient();
+
+  if (makeActive) {
+    try {
+      await supabase
+        .from("resume_style_settings")
+        .update({ is_active: false })
+        .eq("is_active", true);
+    } catch (err) {
+      console.warn("Warning deactivating previous style settings:", err);
+    }
+  }
+
   const updatePayload: any = {
     theme_config: themeConfig,
     preset: themeConfig.preset || "custom",
@@ -1172,6 +1185,9 @@ export async function updateResumeStyleById(
   };
   if (name) {
     updatePayload.name = name;
+  }
+  if (typeof makeActive === "boolean") {
+    updatePayload.is_active = makeActive;
   }
 
   const { data, error } = await supabase

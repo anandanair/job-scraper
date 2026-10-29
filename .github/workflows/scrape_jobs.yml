@@ -10,7 +10,7 @@ jobs:
   prepare-matrix:
     runs-on: ubuntu-latest
     outputs:
-      linkedin_queries: ${{ steps.get-queries.outputs.linkedin_queries }}
+      include_linkedin: ${{ steps.get-queries.outputs.include_linkedin }}
       include_careers_future: ${{ steps.get-queries.outputs.include_careers_future }}
     steps:
       - name: Checkout repository code
@@ -40,10 +40,10 @@ jobs:
             async function main() {
               const supabase = createSupabaseStaticClient();
               const settings = await loadScraperSettings(supabase);
-              const lQueries = settings.scrapingSources.includes('linkedin') ? settings.linkedinQueries : [];
-              const hasCf = settings.scrapingSources.includes('careers_future');
+              const hasLinkedin = settings.scrapingSources.includes('linkedin') && settings.linkedinQueries.length > 0;
+              const hasCf = settings.scrapingSources.includes('careers_future') && (settings.careersFutureQueries.length > 0 || settings.linkedinQueries.length > 0);
               const out = [
-                'linkedin_queries=' + JSON.stringify(lQueries),
+                'include_linkedin=' + String(hasLinkedin),
                 'include_careers_future=' + String(hasCf)
               ].join('\n');
               if (process.env.GITHUB_OUTPUT) {
@@ -57,14 +57,8 @@ jobs:
 
   scrape-linkedin:
     needs: prepare-matrix
-    if: ${{ needs.prepare-matrix.outputs.linkedin_queries != '[]' && needs.prepare-matrix.outputs.linkedin_queries != '' }}
+    if: ${{ needs.prepare-matrix.outputs.include_linkedin == 'true' }}
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      max-parallel: 2 # Limits concurrent workers hitting LinkedIn and Supabase
-      matrix:
-        query: ${{ fromJson(needs.prepare-matrix.outputs.linkedin_queries) }}
-
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
@@ -79,12 +73,12 @@ jobs:
       - name: Install dependencies
         run: npm --prefix web install
 
-      - name: Run LinkedIn scraper for query
+      - name: Run LinkedIn scraper
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: npm run scrape -- --source linkedin --query "${{ matrix.query }}"
+        run: npm run scrape -- --source linkedin
 
   scrape-careers-future:
     needs: prepare-matrix

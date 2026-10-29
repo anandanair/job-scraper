@@ -186,6 +186,8 @@ export default function ResumeStudioClient({
   const [newPresetName, setNewPresetName] = useState("");
   const [isSavingPreset, setIsSavingPreset] = useState(false);
 
+  const selectedPersona = savedPresets.find((p) => p.id === selectedPersonaId);
+
   // UI status
   const [isSavingAll, setIsSavingAll] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -383,7 +385,9 @@ export default function ResumeStudioClient({
     setTheme(cloned);
     baselineThemeRef.current = JSON.parse(JSON.stringify(cloned));
     setToast({
-      message: `Loaded persona "${sp.name}" into Live View.`,
+      message: sp.is_active
+        ? `Loaded active default persona "${sp.name}" into Live View.`
+        : `Loaded persona "${sp.name}" into Live View.`,
       type: "success",
     });
   };
@@ -408,7 +412,7 @@ export default function ResumeStudioClient({
           }))
         );
         setToast({
-          message: `Persona "${presetRecord.name}" is now the active default!`,
+          message: `✓ Persona "${presetRecord.name}" is now the active default!`,
           type: "success",
         });
       }
@@ -840,7 +844,7 @@ export default function ResumeStudioClient({
           {activeTab === "style" && (
             <div className="space-y-4">
               {/* Saved Personas & Custom Profiles */}
-              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-3">
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
                 <div className="flex items-center justify-between text-gray-900 font-semibold">
                   <div className="flex items-center gap-2">
                     <Bookmark className="w-4 h-4 text-violet-600" />
@@ -856,7 +860,7 @@ export default function ResumeStudioClient({
 
                 {/* List of Saved Personas */}
                 {savedPresets.length > 0 && (
-                  <div className="space-y-2 pt-1 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                  <div className="space-y-2.5 pt-1 max-h-80 overflow-y-auto custom-scrollbar pr-1">
                     {savedPresets.map((sp) => {
                       const isActive = sp.is_active;
                       const isSelected = selectedPersonaId === sp.id;
@@ -864,43 +868,76 @@ export default function ResumeStudioClient({
                         <div
                           key={sp.id}
                           onClick={() => handleSelectPersona(sp)}
-                          className={`p-3 rounded-xl border text-xs transition-all cursor-pointer ${
-                            isSelected
-                              ? "border-violet-600 bg-violet-50/80 ring-2 ring-violet-500/30 shadow-xs"
-                              : "border-gray-200 hover:border-violet-300 hover:bg-gray-50/80 bg-white"
+                          className={`p-3.5 rounded-xl border text-xs transition-all cursor-pointer ${
+                            isActive
+                              ? "border-emerald-300 bg-emerald-50/25 shadow-xs ring-1 ring-emerald-400/40"
+                              : isSelected
+                              ? "border-violet-400 bg-violet-50/40 shadow-xs ring-1 ring-violet-400/30"
+                              : "border-gray-200 hover:border-gray-300 hover:bg-gray-50/80 bg-white"
                           }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 min-w-0 mr-2 flex-wrap">
-                              <span className="font-semibold text-gray-900 truncate">
-                                {sp.name}
-                              </span>
-                              {isActive && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-600 text-white rounded-md shrink-0 flex items-center gap-1">
-                                  <Check className="w-2.5 h-2.5" />
-                                  Active Default
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-gray-900 text-sm truncate">
+                                  {sp.name}
                                 </span>
-                              )}
-                              {isSelected && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-violet-600 text-white rounded-md shrink-0">
-                                  Live View
+                                {isActive && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white shadow-xs">
+                                    <Check className="w-3 h-3 stroke-[2.5]" />
+                                    <span>Active Default</span>
+                                  </span>
+                                )}
+                                {isSelected && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-100 text-violet-700 border border-violet-200">
+                                    Live View
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="mt-1.5 flex items-center gap-2 text-[11px] text-gray-500">
+                                <span className="capitalize font-medium text-gray-600">
+                                  {sp.preset}
                                 </span>
-                              )}
+                                {sp.theme_config?.typography?.fontFamily && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-gray-400 capitalize">
+                                      {sp.theme_config.typography.fontFamily}
+                                    </span>
+                                  </>
+                                )}
+                                {sp.theme_config?.colors?.primary && (
+                                  <>
+                                    <span>•</span>
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full inline-block border border-gray-300 shadow-2xs"
+                                      style={{ backgroundColor: sp.theme_config.colors.primary }}
+                                      title={sp.theme_config.colors.primary}
+                                    />
+                                  </>
+                                )}
+                              </div>
                             </div>
 
                             <div
-                              className="flex items-center gap-1.5 shrink-0"
+                              className="flex items-center gap-2 shrink-0"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {!isActive && (
+                              {!isActive ? (
                                 <button
                                   type="button"
                                   onClick={(e) => handleActivateSavedPreset(sp, e)}
-                                  className="px-2 py-1 text-[11px] font-semibold text-emerald-700 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg transition-colors"
-                                  title="Set as global active default for AI job generation"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 shadow-xs hover:shadow transition-all cursor-pointer"
+                                  title="Set this persona as active default for job resumes & Re-apply Style"
                                 >
-                                  Set as Active
+                                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                  <span>Set as Active</span>
                                 </button>
+                              ) : (
+                                <div className="text-[11px] font-medium text-emerald-700 bg-emerald-100/90 px-2.5 py-1 rounded-lg border border-emerald-300/60 select-none">
+                                  Active Default
+                                </div>
                               )}
                               <button
                                 type="button"
@@ -908,19 +945,12 @@ export default function ResumeStudioClient({
                                   e.stopPropagation();
                                   if (sp.id) handleDeleteSavedPreset(sp.id, sp.name, e);
                                 }}
-                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                                 title="Delete Persona"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
-                          </div>
-
-                          <div className="mt-1 flex items-center justify-between text-[11px] text-gray-400">
-                            <span>Preset: {sp.preset}</span>
-                            <span className="text-[10px] font-medium text-violet-600">
-                              {isSelected ? "● Selected & Live" : "Click to view & edit"}
-                            </span>
                           </div>
                         </div>
                       );

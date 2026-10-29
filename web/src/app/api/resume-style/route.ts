@@ -60,7 +60,7 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      const updated = await updateResumeStyleById(id, themeConfig, name);
+      const updated = await updateResumeStyleById(id, themeConfig, name, makeActive);
       return NextResponse.json(
         { success: true, record: updated, themeConfig: updated.theme_config },
         { status: 200 }

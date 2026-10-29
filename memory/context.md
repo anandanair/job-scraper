@@ -173,8 +173,8 @@ graph TD
 - Respects `llm_max_rpm` and `llm_request_delay_seconds` to prevent quota exhaustion.
 - Automated HTTP 429 / quota exponential backoff retry inside `callLLM`.
 - **Multi-Stage Resume Tailoring Pipeline (3-Call Agentic Flow)**:
-  - **Stage 1 (The Strategist)**: `curateResumeStrategy` analyzes target role pain points, curates 8-15 matching skills, selects 1-3 best projects, defines anti-hallucination forbidden list, and creates role-by-role guidance.
-  - **Stage 2 (The Copywriter)**: `writeTailoredResumeContent` crafts executive-grade ATS copy adhering to Google's XYZ formula (*Accomplished X as measured by Y by doing Z*) with active verbs, while preserving 100% of historical timeline (companies, titles, dates).
+  - **Stage 1 (The Strategist)**: `curateResumeStrategy` analyzes target role pain points, curates 8-15 matching skills, selects 1-3 best projects, defines anti-hallucination forbidden list, and creates role-by-role guidance without referencing hiring company names or third-person narration.
+  - **Stage 2 (The Copywriter)**: `writeTailoredResumeContent` crafts executive-grade ATS copy adhering to Google's XYZ formula (*Accomplished X as measured by Y by doing Z*) with active verbs, strictly in first-person implied resume syntax (no third person, no company name mentions), while preserving 100% of historical timeline (companies, titles, dates).
   - **Stage 2.5 (Deterministic Code Validation - 0 LLM Cost)**: `validateAndHealResume` verifies timeline integrity, caps projects at 3 for 2-page ATS ceiling, and self-heals non-tailored sections.
   - **Stage 3 (The Evaluator / Rescorer)**: `scoreJobWithResume` rescores job suitability against the tailored resume and marks `resume_score_stage = 'custom'`.
 - Single source of truth: Supabase `app_settings.llm_api_key` (environment variables strictly contain Supabase connection keys only).

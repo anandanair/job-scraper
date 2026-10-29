@@ -14,7 +14,10 @@ interface CallLLMOptions {
  * Universal LLM caller with automated exponential backoff on rate limits (HTTP 429 / quota).
  * Uses the Supabase app_settings table as the single source of truth for AI configuration.
  */
-export async function callLLM(options: CallLLMOptions, maxRetries = 3): Promise<string> {
+export async function callLLM(
+  options: CallLLMOptions,
+  maxRetries = 3,
+): Promise<string> {
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
@@ -31,14 +34,18 @@ export async function callLLM(options: CallLLMOptions, maxRetries = 3): Promise<
 
       if (isRateLimit && attempt < maxRetries) {
         const backoffMs = attempt * 2500;
-        console.warn(`[callLLM] Rate limit encountered (${msg.slice(0, 80)}). Retrying in ${backoffMs}ms (attempt ${attempt}/${maxRetries})...`);
+        console.warn(
+          `[callLLM] Rate limit encountered (${msg.slice(0, 80)}). Retrying in ${backoffMs}ms (attempt ${attempt}/${maxRetries})...`,
+        );
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
         continue;
       }
       throw err;
     }
   }
-  throw new Error("callLLM: Maximum retries exceeded due to rate limits or API errors.");
+  throw new Error(
+    "callLLM: Maximum retries exceeded due to rate limits or API errors.",
+  );
 }
 
 async function executeCallLLM({
@@ -82,7 +89,7 @@ async function executeCallLLM({
 
   if (!apiKey) {
     throw new Error(
-      "LLM API key not configured. Please configure your AI provider and API key in Settings or complete the Setup Wizard."
+      "LLM API key not configured. Please configure your AI provider and API key in Settings or complete the Setup Wizard.",
     );
   }
 
@@ -156,14 +163,17 @@ async function executeCallLLM({
       payload.response_format = { type: "json_object" };
     }
 
-    const res = await fetch("https://api.fireworks.ai/inference/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+    const res = await fetch(
+      "https://api.fireworks.ai/inference/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
+    );
 
     if (!res.ok) {
       const errText = await res.text();
@@ -225,7 +235,10 @@ async function executeCallLLM({
   ];
 
   // If a specific gemini model was configured, try it first, then fall back to stable models
-  const configuredModel = model.replace(/^gemini\//, "").replace(/^google\//, "").trim();
+  const configuredModel = model
+    .replace(/^gemini\//, "")
+    .replace(/^google\//, "")
+    .trim();
   const isGeneric =
     !configuredModel ||
     configuredModel === "gemini" ||
@@ -235,7 +248,10 @@ async function executeCallLLM({
 
   const modelsToTry = isGeneric
     ? modernGeminiFallbacks
-    : [configuredModel, ...modernGeminiFallbacks.filter((m) => m !== configuredModel)];
+    : [
+        configuredModel,
+        ...modernGeminiFallbacks.filter((m) => m !== configuredModel),
+      ];
 
   let lastError: Error | null = null;
 
@@ -247,7 +263,9 @@ async function executeCallLLM({
       const parts: any[] = [];
 
       if (systemPrompt) {
-        parts.push({ text: `System Instructions:\n${systemPrompt}\n\nUser Request:\n` });
+        parts.push({
+          text: `System Instructions:\n${systemPrompt}\n\nUser Request:\n`,
+        });
       }
       parts.push({ text: prompt });
       contents.push({ parts });
@@ -272,7 +290,9 @@ async function executeCallLLM({
 
       if (!res.ok) {
         const errText = await res.text();
-        throw new Error(`Gemini error for model ${m} (${res.status}): ${errText}`);
+        throw new Error(
+          `Gemini error for model ${m} (${res.status}): ${errText}`,
+        );
       }
 
       const data = await res.json();
@@ -282,7 +302,10 @@ async function executeCallLLM({
       }
     } catch (err: any) {
       lastError = err;
-      if (err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED")) {
+      if (
+        err.message?.includes("429") ||
+        err.message?.includes("RESOURCE_EXHAUSTED")
+      ) {
         // Break early on rate limit so exponential backoff retry kicks in
         break;
       }
@@ -397,31 +420,53 @@ export function formatResumeToText(resumeData: any): string {
 }
 
 /**
- * Scores a job against a resume text using the exact prompt from score_jobs.py.
+ * Replaces occurrences of the hiring company name in the job description
+ * so the LLM never leaks the target company name into the tailored resume.
+ */
+function scrubCompanyName(text: string, company?: string): string {
+  if (!text) return "N/A";
+  const cleanCompany = (company || "").trim();
+  if (cleanCompany.length < 2) return text;
+  const escaped = cleanCompany.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(new RegExp(escaped, "gi"), "the organization");
+}
+
+/**
+ * Scores a job against a resume text using a clear ATS & Recruiter evaluation rubric.
  */
 export async function scoreJobWithResume(
   resumeText: string,
-  jobDetails: { job_id?: string; job_title: string; company: string; level?: string; description: string }
+  jobDetails: {
+    job_id?: string;
+    job_title: string;
+    company: string;
+    level?: string;
+    description: string;
+  },
 ): Promise<number | null> {
-  const prompt = `
-    You are a scoring assistant. You will be given a resume and a job description.  
-    Based **only** on the information provided, **return exactly one integer between 0 and 100** (inclusive) that represents the candidate’s suitability for the role.  
-    Do **not** return any words, punctuation, or explanation—only the integer.
+  const prompt = `You are an expert technical recruiter and ATS evaluation engine.
+Evaluate the candidate's resume against the target job description and return a single suitability score from 0 to 100.
 
-    --- RESUME ---
-    ${resumeText}
-    --- END RESUME ---
+Scoring Rubric:
+- Hard Skills, Tools & Keyword Match (40 pts): Alignment between required technical/domain skills and the resume.
+- Relevant Experience & Impact (35 pts): Depth of similar responsibilities, problem-solving scope, and measurable outcomes.
+- Seniority & Role Alignment (15 pts): Match in career level, years of experience, and core role identity.
+- Domain & Environment Fit (10 pts): Familiarity with similar systems, workflows, or industry contexts.
 
-    --- JOB DESCRIPTION ---
-    Job Title: ${jobDetails.job_title || "N/A"}
-    Company: ${jobDetails.company || "N/A"}
-    Level: ${jobDetails.level || "N/A"}
+Return ONLY a single integer between 0 and 100. Do not include any text, explanation, or punctuation.
 
-    ${jobDetails.description || "N/A"}
-    --- END JOB DESCRIPTION ---
+--- RESUME ---
+${resumeText}
+--- END RESUME ---
 
-    Score (0–100):
-  `;
+--- JOB DESCRIPTION ---
+Job Title: ${jobDetails.job_title || "N/A"}
+Level: ${jobDetails.level || "N/A"}
+
+${jobDetails.description || "N/A"}
+--- END JOB DESCRIPTION ---
+
+Score (0-100):`;
 
   try {
     const raw = await callLLM({ prompt, temperature: 0.1 });
@@ -457,64 +502,75 @@ function extractJsonFromText(text: string): any {
       const slice = text.slice(firstBrace, lastBrace + 1);
       return JSON.parse(slice);
     }
-    throw new Error(`Failed to extract valid JSON from LLM response. Raw output:\n${text.slice(0, 300)}`);
+    throw new Error(
+      `Failed to extract valid JSON from LLM response. Raw output:\n${text.slice(0, 300)}`,
+    );
   }
 }
 
 /**
  * Stage 1: The Strategist
- * Evaluates the Target Job Description against the Master Base Resume.
- * Formulates a strategic Curation Plan: extracts core pain points, selects 1-3 best projects,
- * curates 8-15 matching skills, sets an anti-hallucination forbidden list, and creates role-by-role guidance.
+ * Analyzes the Target Job Description against the Master Base Resume to build a Curation Plan:
+ * identifies core pain points, bridges terminology, selects the best 1-3 projects and 8-15 skills,
+ * flags missing skills to prevent fabrication, and outlines role-by-role tailoring angles.
  */
 export async function curateResumeStrategy(
   baseResume: Resume,
-  jobDetails: { job_title: string; company: string; level?: string; description: string }
+  jobDetails: {
+    job_title: string;
+    company: string;
+    level?: string;
+    description: string;
+  },
 ): Promise<CurationPlan> {
-  const systemPrompt = `You are an expert executive resume strategist and technical recruiter.
-Your task is to analyze a candidate's Master Base Resume against a Target Job Description and formulate a strategic Curation Plan.
+  // Strip personal identifiers so the LLM focuses purely on professional content
+  const sanitizedResumeProfile = {
+    summary: baseResume.summary,
+    skills: baseResume.skills,
+    experience: baseResume.experience,
+    projects: baseResume.projects,
+    education: baseResume.education,
+    certifications: baseResume.certifications,
+  };
 
-The Master Resume is comprehensive and contains details across multiple domains, projects, and experiences.
-Your goal is to select and prioritize what belongs on a focused, targeted 2-page ATS resume to maximize the candidate's interview conversion rate, WITHOUT EVER fabricating or lying.
+  const cleanDescription = scrubCompanyName(
+    jobDetails.description,
+    jobDetails.company,
+  );
 
-CORE RULES FOR STRATEGY:
-1. NO FABRICATION: Every skill, achievement, or project MUST be grounded in the candidate's actual history. Never invent new roles, tools, or projects.
-2. PROJECT SELECTION (CRITICAL FOR 2-PAGE CEILING):
-   - Review ALL projects in the Master Resume.
-   - Select between 1 and 3 projects that best demonstrate qualifications for this Target Job.
-   - If a project is irrelevant or does not add value for this role, DO NOT include it.
-   - The names in 'selected_project_names' MUST EXACTLY match the 'name' field of projects present in the Master Resume.
-3. SKILLS CURATION:
-   - Select 8 to 15 skills that directly match the Target Job requirements.
-   - Every single selected skill MUST already be explicitly present in the Master Resume (in skills, project technologies, or experience descriptions).
-4. MISSING SKILLS ACKNOWLEDGMENT (ANTI-HALLUCINATION SHIELD):
-   - Identify up to 5 explicit skills or tools required by the Target Job that the candidate does NOT possess in the Master Resume.
-   - This list serves as an explicit barrier to prevent subsequent copywriting steps from inventing them.
-5. EXPERIENCE GUIDANCE:
-   - All positions in the candidate's work history must be kept (to avoid unexplained employment gaps).
-   - For each job, identify:
-     a) 'key_achievements_to_highlight': specific tasks, technologies, or achievements from the original description to emphasize.
-     b) 'points_to_condense_or_omit': routine, administrative, or irrelevant tasks to downplay or omit completely.
-6. STRATEGY SUMMARY & PAIN POINTS:
-   - Provide a 1-2 sentence positioning summary explaining how the candidate's actual background directly aligns with this target job.
-   - Identify 2-3 target role pain points that the hiring manager needs solved.
-7. OUTPUT FORMAT: Return valid JSON matching the CurationPlan schema.`;
+  const systemPrompt = `You are an elite executive resume strategist and ATS optimization specialist.
+Analyze the candidate's Master Resume against the Target Job Description and produce a strategic Curation Plan for a high-converting, 2-page tailored resume.
+
+HOW TO BUILD THE STRATEGY:
+1. DECODE THE ROLE PAIN POINTS:
+   - Identify the 2-3 core operational or technical problems this role exists to solve ('target_role_pain_points').
+2. POSITIONING PITCH ('strategy_summary'):
+   - Write a 1-2 sentence positioning angle in implied first-person resume voice (e.g., "Senior Support Engineer with 5+ years of experience in incident triage and cloud reliability...") that connects the candidate's strongest truth to the role's primary need.
+   - Never mention any hiring company name or use personal pronouns (I, he, she, they).
+3. SKILLS & KEYWORD ALIGNMENT:
+   - 'selected_skills': Pick 8 to 15 skills that match the job description AND are demonstrably present in the candidate's Master Resume (across skills, experience, or projects).
+   - 'missing_skills_acknowledged': List up to 5 explicit tools or skills required by the job that the candidate does NOT have. This acts as a strict boundary so the writer never fabricates them.
+4. PROJECT CURATION (2-PAGE FOCUS):
+   - 'selected_project_names': Select the 1 to 3 projects from the Master Resume that best prove capability for this specific role. Use the exact project 'name' strings from the Master Resume.
+5. ROLE-BY-ROLE TAILORING BLUEPRINT ('experience_guidance'):
+   - Include every job from the candidate's work history.
+   - 'key_achievements_to_highlight': Identify which accomplishments to feature first AND specify exact keywords/terminology from the job description to naturally bridge into those bullets.
+   - 'points_to_condense_or_omit': Flag routine or unrelated tasks to trim so the most relevant impact stands out.`;
 
   const prompt = `Target Job Details:
-- Title: ${jobDetails.job_title}
-- Company: ${jobDetails.company}
+- Role Title: ${jobDetails.job_title}
 - Level: ${jobDetails.level || "N/A"}
-- Description:
-${jobDetails.description}
+- Job Description:
+${cleanDescription}
 
 ---
 
-Candidate's Master Base Resume:
-${JSON.stringify(baseResume, null, 2)}
+Candidate's Master Resume Profile:
+${JSON.stringify(sanitizedResumeProfile, null, 2)}
 
 ---
 
-Formulate the CurationPlan JSON matching this schema:
+Return valid JSON matching this schema:
 {
   "strategy_summary": string,
   "target_role_pain_points": string[],
@@ -540,102 +596,117 @@ Formulate the CurationPlan JSON matching this schema:
 
   const parsed = extractJsonFromText(raw);
   return {
-    strategy_summary: parsed.strategy_summary || "Strategic alignment with role requirements.",
-    target_role_pain_points: Array.isArray(parsed.target_role_pain_points) ? parsed.target_role_pain_points : [],
-    selected_project_names: Array.isArray(parsed.selected_project_names) ? parsed.selected_project_names : [],
-    selected_skills: Array.isArray(parsed.selected_skills) && parsed.selected_skills.length > 0
-      ? parsed.selected_skills
-      : (baseResume.skills?.slice(0, 12) || []),
-    missing_skills_acknowledged: Array.isArray(parsed.missing_skills_acknowledged) ? parsed.missing_skills_acknowledged : [],
-    experience_guidance: Array.isArray(parsed.experience_guidance) ? parsed.experience_guidance : [],
+    strategy_summary:
+      parsed.strategy_summary || "Strategic alignment with role requirements.",
+    target_role_pain_points: Array.isArray(parsed.target_role_pain_points)
+      ? parsed.target_role_pain_points
+      : [],
+    selected_project_names: Array.isArray(parsed.selected_project_names)
+      ? parsed.selected_project_names
+      : [],
+    selected_skills:
+      Array.isArray(parsed.selected_skills) && parsed.selected_skills.length > 0
+        ? parsed.selected_skills
+        : baseResume.skills?.slice(0, 12) || [],
+    missing_skills_acknowledged: Array.isArray(
+      parsed.missing_skills_acknowledged,
+    )
+      ? parsed.missing_skills_acknowledged
+      : [],
+    experience_guidance: Array.isArray(parsed.experience_guidance)
+      ? parsed.experience_guidance
+      : [],
   };
 }
 
 /**
  * Stage 2: The ATS Copywriter
- * Crafts tailored, recruiter-grade resume content adhering to Google XYZ formula:
- * "Accomplished [X] as measured by [Y] by doing [Z]" with active action verbs.
+ * Rewrites the resume to maximize ATS keyword alignment and recruiter readability while staying
+ * 100% grounded in the candidate's real history.
  */
 export async function writeTailoredResumeContent(
   baseResume: Resume,
-  jobDetails: { job_title: string; company: string; level?: string; description: string },
-  curationPlan: CurationPlan
+  jobDetails: {
+    job_title: string;
+    company: string;
+    level?: string;
+    description: string;
+  },
+  curationPlan: CurationPlan,
 ): Promise<any> {
   // Filter base projects to only those selected in curationPlan
   const selectedNamesLower = new Set(
-    (curationPlan.selected_project_names || []).map((n) => n.trim().toLowerCase())
+    (curationPlan.selected_project_names || []).map((n) =>
+      n.trim().toLowerCase(),
+    ),
   );
   let filteredProjects = (baseResume.projects || []).filter((p) =>
-    selectedNamesLower.has(p.name.trim().toLowerCase())
+    selectedNamesLower.has(p.name.trim().toLowerCase()),
   );
   if (filteredProjects.length === 0 && (baseResume.projects || []).length > 0) {
-    // Fallback: take first 2 projects if names did not match
     filteredProjects = (baseResume.projects || []).slice(0, 2);
   }
 
-  const forbiddenSkillsNote = curationPlan.missing_skills_acknowledged?.length > 0
-    ? `\nCRITICAL ANTI-HALLUCINATION GUARDRAIL:\nThe candidate does NOT have experience in: ${curationPlan.missing_skills_acknowledged.join(", ")}.\nDO NOT claim or imply proficiency in these tools.`
-    : "";
+  const cleanDescription = scrubCompanyName(
+    jobDetails.description,
+    jobDetails.company,
+  );
 
-  const systemPrompt = `You are an elite executive resume writer and precise ATS JSON generator.
-Your task is to craft tailored, compelling resume content for a target job application based on the provided Curation Plan and candidate's Master Resume.
+  const skillGapGuardrail =
+    curationPlan.missing_skills_acknowledged?.length > 0
+      ? `\nSKILL BOUNDARY: Do not claim or imply experience with: ${curationPlan.missing_skills_acknowledged.join(", ")}. Pivot instead to the candidate's verified adjacent strengths.`
+      : "";
 
-WRITING RULES:
-1. SUMMARY:
-   - Write a compelling 2-3 sentence elevator pitch tailored to the target job and positioning strategy: "${curationPlan.strategy_summary}".
-   - Preserve the candidate's core professional identity and actual years of experience. Do NOT falsely invent titles the candidate never held.
-2. SKILLS:
-   - Provide the curated list of 8 to 15 skills strictly selected from the Curation Plan.
-3. EXPERIENCE (IMMUTABLE TIMELINE):
-   - Include ALL work experience entries from the Master Resume (all employers, job titles, locations, and dates MUST remain EXACTLY identical).
-   - Rewrite each role's 'description' into 3 to 4 punchy, high-impact bullet points separated by newlines (e.g., "- Engineered...\n- Optimized...\n- Delivered...").
-   - Follow Google's XYZ formula: 'Accomplished [X] as measured by [Y] by doing [Z]'.
-   - Emphasize the 'key_achievements_to_highlight' from the Curation Plan.
-   - Omit the 'points_to_condense_or_omit'.
-   - Quantify impact wherever supported by the candidate's original history.
-   - NEVER invent new achievements, companies, or tools.${forbiddenSkillsNote}
-4. PROJECTS:
-   - Include ONLY the selected projects provided in the prompt.
-   - Preserve the 'name' and 'technologies' fields from the original project.
-   - Rewrite each project's 'description' into 2 to 3 concise, impactful bullet points separated by newlines (e.g., "- Built...\n- Deployed...").
-5. LENGTH & CONCISENESS (CRITICAL FOR 2-PAGE ATS BUDGET):
-   - Keep bullet points punchy and concise (maximum 1 to 2 lines per bullet point).
-   - Ensure the content is focused so the complete resume fits comfortably within a clean 2-page layout.
-6. OUTPUT FORMAT: Output valid JSON matching the schema below.`;
+  const systemPrompt = `You are an elite executive resume writer. Transform the candidate's Master Resume content into a sharp, ATS-optimized resume tailored to the target role using the provided Curation Plan.
 
-  const prompt = `Target Job Details:
-- Title: ${jobDetails.job_title}
-- Company: ${jobDetails.company}
+PRINCIPLES OF HIGH-IMPACT RESUME WRITING:
+1. AUTHENTICITY & GROUNDING:
+   - Every claim, metric, and tool must come from the candidate's actual history. Never invent metrics, tools, or responsibilities.${skillGapGuardrail}
+   - Write in crisp, implied first-person resume voice (no personal pronouns like I/my/he/she/they, no candidate names, and never mention any hiring company name).
+
+2. EXECUTIVE SUMMARY (2-3 Sentences):
+   - Sentence 1 (Identity & Scope): Professional title/identity, years of experience, and core specializations aligned with the target role.
+   - Sentence 2 (Proven Track Record): Highlight 2-3 signature strengths or technical/operational capabilities from their history that directly address the target role's pain points.
+   - Example tone: "Systems & Support Engineer with 5+ years of experience in enterprise incident triage, root cause analysis, and 24/7 high-availability operations. Proven track record reducing ticket resolution times through Python automation, structured escalation workflows, and cross-functional technical documentation."
+
+3. EXPERIENCE BULLETS (3-4 Bullets per Role, separated by "\\n"):
+   - FRONT-LOAD RELEVANCE: Order the bullets within each role so the achievement most relevant to the target job is Bullet #1.
+   - BRIDGE TERMINOLOGY: Naturally mirror the job description's keywords where they accurately describe the candidate's past work (follow the Curation Plan's 'key_achievements_to_highlight').
+   - ACTION + CONTEXT + IMPACT: Start every bullet with a strong action verb (e.g., "- Engineered...", "- Resolved...", "- Automated..."). Include exact metrics when present in the original text; when numbers aren't present, emphasize concrete technical scope, system reliability, or operational outcome rather than forcing unnatural phrasing.
+   - CONCISE & SCANNABLE: Keep each bullet to 1-2 lines maximum. Preserve all original 'job_title', 'company', 'location', 'start_date', and 'end_date' fields unchanged.
+
+4. PROJECTS (2-3 Bullets per Project, separated by "\\n"):
+   - Frame each selected project around what was built, how the technologies were applied, and the practical problem solved. Keep 'name' and 'technologies' unchanged.`;
+
+  const prompt = `Target Role Context:
+- Target Title: ${jobDetails.job_title}
 - Level: ${jobDetails.level || "N/A"}
-- Description:
-${jobDetails.description}
+- Core Role Pain Points to Address: ${curationPlan.target_role_pain_points.join("; ")}
+- Positioning Strategy: ${curationPlan.strategy_summary}
+- Target Job Description (for domain phrasing & keyword alignment):
+${cleanDescription}
 
 ---
 
-Curation Plan Strategy:
-- Strategy Summary: ${curationPlan.strategy_summary}
-- Target Pain Points: ${curationPlan.target_role_pain_points.join(", ")}
-- Selected Skills to Include: ${JSON.stringify(curationPlan.selected_skills)}
-- Role-by-Role Guidance: ${JSON.stringify(curationPlan.experience_guidance, null, 2)}
+Curation Plan:
+- Curated Skills (keep in priority order): ${JSON.stringify(curationPlan.selected_skills)}
+- Role-by-Role Tailoring Guidance:
+${JSON.stringify(curationPlan.experience_guidance, null, 2)}
 
 ---
 
-Original Experience Entries (Keep job_title, company, location, dates UNCHANGED; rewrite description only into newline-separated bullets):
+Candidate's Original Summary:
+${baseResume.summary || "N/A"}
+
+Candidate's Original Experience (Keep job_title, company, location, dates identical; rewrite description into 3-4 newline-separated bullets starting with "- "):
 ${JSON.stringify(baseResume.experience || [], null, 2)}
 
----
-
-Selected Projects to Include (Keep name & technologies UNCHANGED; rewrite description only into newline-separated bullets):
+Selected Projects to Tailor (Keep name & technologies identical; rewrite description into 2-3 newline-separated bullets starting with "- "):
 ${JSON.stringify(filteredProjects, null, 2)}
 
 ---
 
-Original Master Resume Summary:
-${baseResume.summary || "N/A"}
-
----
-
-Return JSON adhering to this structure:
+Return valid JSON matching this exact structure:
 {
   "summary": string,
   "skills": string[],
@@ -676,37 +747,66 @@ Return JSON adhering to this structure:
 export function validateAndHealResume(
   baseResume: Resume,
   tailoredRaw: any,
-  curationPlan: CurationPlan
-): Omit<Resume, "id" | "created_at" | "parsed_at" | "last_updated" | "resume_link"> {
+  curationPlan: CurationPlan,
+): Omit<
+  Resume,
+  "id" | "created_at" | "parsed_at" | "last_updated" | "resume_link"
+> {
   // 1. Summary healing
   let summary = tailoredRaw?.summary;
   if (!summary || typeof summary !== "string" || summary.trim().length < 20) {
-    summary = baseResume.summary || curationPlan.strategy_summary || "Experienced professional.";
+    summary =
+      baseResume.summary ||
+      curationPlan.strategy_summary ||
+      "Experienced professional.";
   }
 
   // 2. Skills healing (ensure non-empty subset of base skills or curation plan)
   let skills: string[] = [];
   if (Array.isArray(tailoredRaw?.skills) && tailoredRaw.skills.length > 0) {
-    skills = tailoredRaw.skills.filter((s: any) => typeof s === "string" && s.trim());
+    skills = tailoredRaw.skills.filter(
+      (s: any) => typeof s === "string" && s.trim(),
+    );
   }
   if (skills.length === 0) {
-    skills = curationPlan.selected_skills?.length > 0
-      ? curationPlan.selected_skills
-      : (baseResume.skills?.slice(0, 15) || []);
+    skills =
+      curationPlan.selected_skills?.length > 0
+        ? curationPlan.selected_skills
+        : baseResume.skills?.slice(0, 15) || [];
   }
 
   // 3. Experience healing (Strictly preserve timeline, employers, titles, dates)
   const baseExp = baseResume.experience || [];
-  const rawExp = Array.isArray(tailoredRaw?.experience) ? tailoredRaw.experience : [];
+  const rawExp = Array.isArray(tailoredRaw?.experience)
+    ? tailoredRaw.experience
+    : [];
 
   const healedExperience = baseExp.map((origExp, index) => {
-    // Try to find matching tailored entry by company name or index
-    const matchingTailored = rawExp.find(
-      (e: any) => e.company && origExp.company && e.company.toLowerCase().trim() === origExp.company.toLowerCase().trim()
-    ) || rawExp[index];
+    // Match by both company AND job_title first (handles promotions/multiple roles at same company),
+    // then by index, then by company name alone.
+    const matchingTailored =
+      rawExp.find(
+        (e: any) =>
+          e.company?.toLowerCase().trim() ===
+            origExp.company?.toLowerCase().trim() &&
+          e.job_title?.toLowerCase().trim() ===
+            origExp.job_title?.toLowerCase().trim(),
+      ) ||
+      rawExp[index] ||
+      rawExp.find(
+        (e: any) =>
+          e.company &&
+          origExp.company &&
+          e.company.toLowerCase().trim() ===
+            origExp.company.toLowerCase().trim(),
+      );
 
     let description = matchingTailored?.description;
-    if (!description || typeof description !== "string" || description.trim().length < 15) {
+    if (
+      !description ||
+      typeof description !== "string" ||
+      description.trim().length < 15
+    ) {
       description = origExp.description || "";
     }
 
@@ -722,20 +822,26 @@ export function validateAndHealResume(
 
   // 4. Projects healing (Ensure only valid base projects, max 3)
   const baseProjects = baseResume.projects || [];
-  const rawProjects = Array.isArray(tailoredRaw?.projects) ? tailoredRaw.projects : [];
+  const rawProjects = Array.isArray(tailoredRaw?.projects)
+    ? tailoredRaw.projects
+    : [];
 
   let healedProjects: any[] = [];
   for (const p of rawProjects) {
     if (!p || !p.name) continue;
     const origProj = baseProjects.find(
-      (bp) => bp.name && bp.name.toLowerCase().trim() === p.name.toLowerCase().trim()
+      (bp) =>
+        bp.name && bp.name.toLowerCase().trim() === p.name.toLowerCase().trim(),
     );
     if (origProj) {
       healedProjects.push({
         name: origProj.name,
-        description: (p.description && typeof p.description === "string" && p.description.trim().length > 10)
-          ? p.description.trim()
-          : origProj.description,
+        description:
+          p.description &&
+          typeof p.description === "string" &&
+          p.description.trim().length > 10
+            ? p.description.trim()
+            : origProj.description,
         technologies: origProj.technologies || p.technologies || [],
       });
     }
@@ -743,9 +849,16 @@ export function validateAndHealResume(
 
   // If no projects matched or projects were dropped, take the curation plan / top base projects
   if (healedProjects.length === 0 && baseProjects.length > 0) {
-    const selectedNames = new Set((curationPlan.selected_project_names || []).map((n) => n.toLowerCase().trim()));
-    const matching = baseProjects.filter((bp) => selectedNames.has(bp.name.toLowerCase().trim()));
-    const fallbackProjects = matching.length > 0 ? matching : baseProjects.slice(0, 2);
+    const selectedNames = new Set(
+      (curationPlan.selected_project_names || []).map((n) =>
+        n.toLowerCase().trim(),
+      ),
+    );
+    const matching = baseProjects.filter((bp) =>
+      selectedNames.has(bp.name.toLowerCase().trim()),
+    );
+    const fallbackProjects =
+      matching.length > 0 ? matching : baseProjects.slice(0, 2);
 
     healedProjects = fallbackProjects.map((bp) => ({
       name: bp.name,
@@ -770,7 +883,11 @@ export function validateAndHealResume(
     projects: healedProjects,
     certifications: baseResume.certifications || [],
     languages: baseResume.languages || [],
-    links: baseResume.links || { linkedin: null, github: null, portfolio: null },
+    links: baseResume.links || {
+      linkedin: null,
+      github: null,
+      portfolio: null,
+    },
   };
 }
 
@@ -782,25 +899,51 @@ export function validateAndHealResume(
  */
 export async function customizeResumeWithLLM(
   baseResume: Resume,
-  jobDetails: { job_title: string; company: string; level?: string; description: string }
-): Promise<Omit<Resume, "id" | "created_at" | "parsed_at" | "last_updated" | "resume_link">> {
-  console.log(`  [ResumeTailor] Stage 1/3: Formulating strategic Curation Plan (The Strategist)...`);
+  jobDetails: {
+    job_title: string;
+    company: string;
+    level?: string;
+    description: string;
+  },
+): Promise<
+  Omit<
+    Resume,
+    "id" | "created_at" | "parsed_at" | "last_updated" | "resume_link"
+  >
+> {
+  console.log(
+    `  [ResumeTailor] Stage 1/3: Formulating strategic Curation Plan (The Strategist)...`,
+  );
   const curationPlan = await curateResumeStrategy(baseResume, jobDetails);
   console.log(
     `  [ResumeTailor] ✓ Curation Plan ready: Strategy: "${curationPlan.strategy_summary.slice(0, 70)}..." | ` +
-    `Projects: ${curationPlan.selected_project_names.join(", ") || "None"} | ` +
-    `Skills: ${curationPlan.selected_skills.length} skills.`
+      `Projects: ${curationPlan.selected_project_names.join(", ") || "None"} | ` +
+      `Skills: ${curationPlan.selected_skills.length} skills.`,
   );
 
   // Rate-limiting safety pause between Stage 1 and Stage 2 (respects 15-30 RPM limits on free tiers)
   await new Promise((resolve) => setTimeout(resolve, 2000));
 
-  console.log(`  [ResumeTailor] Stage 2/3: Crafting tailored ATS copy with Google XYZ formula (The Copywriter)...`);
-  const rawTailoredContent = await writeTailoredResumeContent(baseResume, jobDetails, curationPlan);
+  console.log(
+    `  [ResumeTailor] Stage 2/3: Crafting high-impact tailored ATS copy (The Copywriter)...`,
+  );
+  const rawTailoredContent = await writeTailoredResumeContent(
+    baseResume,
+    jobDetails,
+    curationPlan,
+  );
 
-  console.log(`  [ResumeTailor] Stage 2.5: Running deterministic code verification & timeline preservation...`);
-  const validatedResume = validateAndHealResume(baseResume, rawTailoredContent, curationPlan);
-  console.log(`  [ResumeTailor] ✓ Resume tailored and validated successfully (Ready for ATS Rescoring).`);
+  console.log(
+    `  [ResumeTailor] Stage 2.5: Running deterministic code verification & timeline preservation...`,
+  );
+  const validatedResume = validateAndHealResume(
+    baseResume,
+    rawTailoredContent,
+    curationPlan,
+  );
+  console.log(
+    `  [ResumeTailor] ✓ Resume tailored and validated successfully (Ready for ATS Rescoring).`,
+  );
 
   return validatedResume;
 }
