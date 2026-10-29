@@ -82,7 +82,12 @@ if (-not (Test-Path "$targetDir\web\package.json")) {
 Write-Host ""
 Write-Host "[*] Step 1/3: Installing project dependencies (Next.js, TypeScript Scraper, PDFKit)..." -ForegroundColor Yellow
 $webDir = Join-Path $targetDir "web"
-Start-Process -FilePath "npm" -ArgumentList "install" -WorkingDirectory $webDir -NoNewWindow -Wait
+Push-Location $webDir
+try {
+    cmd.exe /c "npm install"
+} finally {
+    Pop-Location
+}
 
 # 4. Create Desktop Shortcut
 Write-Host ""
@@ -105,7 +110,8 @@ try {
 # 5. Start Dev Server & Open Setup Wizard
 Write-Host ""
 Write-Host "[*] Step 3/3: Launching JobTrack dev server..." -ForegroundColor Yellow
-Start-Process "cmd.exe" -ArgumentList "/k cd /d `"$webDir`" && npm run dev"
+$serverCmd = "/k title JobTrack Dev Server && cd /d `"$webDir`" && npm run dev"
+Start-Process "cmd.exe" -ArgumentList $serverCmd
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
