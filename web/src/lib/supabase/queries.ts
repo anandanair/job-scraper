@@ -270,7 +270,7 @@ export async function getTailoredJobs(
     .from("jobs")
     .select("*, customized_resumes(id, resume_link)")
     .eq("is_active", true)
-    .eq("status", "new")
+    .in("status", ["new", "resume_generated"])
     .eq("job_state", "new")
     .not("customized_resume_id", "is", null);
 
@@ -323,7 +323,7 @@ export async function getTailoredJobsCount(
     .from("jobs")
     .select("*", { count: "exact", head: true })
     .eq("is_active", true)
-    .eq("status", "new")
+    .in("status", ["new", "resume_generated"])
     .eq("job_state", "new")
     .not("customized_resume_id", "is", null);
 
@@ -394,7 +394,7 @@ export async function getJobsTabCounts(): Promise<JobsTabCounts> {
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .eq("is_active", true)
-      .eq("status", "new")
+      .in("status", ["new", "resume_generated"])
       .eq("job_state", "new")
       .not("customized_resume_id", "is", null)
       .or("is_interested.is.null,is_interested.eq.true"),
@@ -1054,7 +1054,7 @@ export async function getDashboardStats(
       .not("resume_score", "is", null)
       .eq("resume_score_stage", "custom")
       .eq("is_active", true)
-      .eq("status", "new")
+      .in("status", ["new", "resume_generated"])
       .eq("job_state", "new"),
     supabase
       .from("jobs")
@@ -1106,7 +1106,7 @@ export const getCachedDashboardStats = unstable_cache(
   },
   ["dashboard-stats-cache"],
   {
-    revalidate: 300, // Background revalidation every 5 minutes
+    revalidate: 15, // Background revalidation every 15 seconds
     tags: ["dashboard-stats"],
   }
 );

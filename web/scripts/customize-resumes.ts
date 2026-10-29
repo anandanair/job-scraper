@@ -136,13 +136,10 @@ async function main() {
         continue;
       }
 
-      // Step C: Update job record with foreign key and status
+      // Step C: Update job record with foreign key
       const jobUpdates: Record<string, any> = {
         customized_resume_id: customizedResumeId,
       };
-      if (job.status === "new") {
-        jobUpdates.status = "resume_generated";
-      }
 
       const { error: jobUpdateError } = await supabase
         .from("jobs")

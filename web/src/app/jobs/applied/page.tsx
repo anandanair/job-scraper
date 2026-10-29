@@ -92,5 +92,5 @@ export default async function AppliedJobsPage({
   );
 }
 
-// Optional: Add revalidation if needed
-export const revalidate = 3600; // Revalidate once per hour
+
+export const dynamic = "force-dynamic";

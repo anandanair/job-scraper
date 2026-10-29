@@ -392,14 +392,14 @@ BEGIN
     SELECT json_build_object(
         'totalNewJobs', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new'),
         'totalAppliedJobs', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new'),
-        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score >= 50 AND resume_score <= 100),
+        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score >= 50 AND resume_score <= 100),
         'expiredJobsCount', count(*) FILTER (WHERE job_state = 'expired'),
         'pendingScoreJobsCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NULL),
-        'scoredJobsCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NOT NULL),
+        'scoredJobsCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL),
         'customResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NOT NULL),
         'noCustomResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NULL),
         'scoredWithOriginalResumeCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'initial'),
-        'scoredWithCustomResumeCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'custom'),
+        'scoredWithCustomResumeCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'custom'),
         'linkedInJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'linkedin'),
         'careersFutureJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'careers_future'),
         'appliedTodayCount', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new' AND application_date >= p_today_start AND application_date < p_today_end)

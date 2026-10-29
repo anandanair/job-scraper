@@ -113,9 +113,6 @@ export async function POST(
     const jobUpdates: Record<string, any> = {
       customized_resume_id: customizedResumeId,
     };
-    if (job.status === "new") {
-      jobUpdates.status = "resume_generated";
-    }
     if (newScore !== null) {
       jobUpdates.resume_score = newScore;
       jobUpdates.resume_score_stage = "custom";
