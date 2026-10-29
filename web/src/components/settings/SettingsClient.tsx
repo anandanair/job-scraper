@@ -32,7 +32,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   scraping_sources: ["linkedin"],
   jobs_to_score_per_run: 2,
   jobs_to_customize_per_run: 1,
-  max_jobs_per_search: { linkedin: 10, careers_future: 20 },
+  max_jobs_per_search: {
+    linkedin: 5,
+    careers_future: 5,
+    daily_scrape_linkedin: 15,
+    daily_scrape_careers_future: 15,
+  },
   llm_max_rpm: 5,
   llm_request_delay_seconds: 15,
   llm_daily_request_budget: 0,
@@ -55,10 +60,30 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
         ? raw.max_jobs_per_search.daily_resumes
         : Math.max(1, (raw.jobs_to_customize_per_run || 1) * 6);
 
+    const dailyScrapeLinkedin = Math.min(
+      30,
+      typeof raw.max_jobs_per_search?.daily_scrape_linkedin === "number"
+        ? raw.max_jobs_per_search.daily_scrape_linkedin
+        : (typeof raw.max_jobs_per_search?.linkedin === "number"
+            ? Math.min(30, raw.max_jobs_per_search.linkedin)
+            : 15)
+    );
+
+    const dailyScrapeCareersFuture = Math.min(
+      30,
+      typeof raw.max_jobs_per_search?.daily_scrape_careers_future === "number"
+        ? raw.max_jobs_per_search.daily_scrape_careers_future
+        : (typeof raw.max_jobs_per_search?.careers_future === "number"
+            ? Math.min(30, raw.max_jobs_per_search.careers_future)
+            : 15)
+    );
+
     return {
       ...raw,
       max_jobs_per_search: {
         ...(raw.max_jobs_per_search || {}),
+        daily_scrape_linkedin: dailyScrapeLinkedin,
+        daily_scrape_careers_future: dailyScrapeCareersFuture,
         daily_jobs: dailyJobs,
         daily_resumes: dailyResumes,
       },

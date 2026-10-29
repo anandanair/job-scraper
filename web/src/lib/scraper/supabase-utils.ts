@@ -14,6 +14,8 @@ export interface LoadedScraperSettings {
 let cachedExistingIds: Set<string> | null = null;
 let cachedCompanyTitleKeys: Set<string> | null = null;
 
+export const SAFE_MAX_SCRAPE_PER_SOURCE = 30;
+
 export const DEFAULT_LINKEDIN_CONFIG: LinkedInConfig = {
   maxStart: 25,
   requestTimeoutSeconds: 30,
@@ -46,7 +48,12 @@ export async function loadScraperSettings(
 ): Promise<LoadedScraperSettings> {
   const defaults: LoadedScraperSettings = {
     scrapingSources: ["linkedin"],
-    maxJobsPerSearch: { linkedin: 10, careers_future: 20 },
+    maxJobsPerSearch: {
+      linkedin: 5,
+      careers_future: 5,
+      daily_scrape_linkedin: 15,
+      daily_scrape_careers_future: 15,
+    },
     linkedinQueries: [],
     linkedinConfig: { ...DEFAULT_LINKEDIN_CONFIG },
     careersFutureQueries: [],
@@ -71,7 +78,37 @@ export async function loadScraperSettings(
       return defaults;
     }
 
-    const maxJobs = data.max_jobs_per_search || defaults.maxJobsPerSearch;
+    const rawMaxJobs = data.max_jobs_per_search || defaults.maxJobsPerSearch;
+    const lQueries = data.linkedin_search_queries || [];
+    const cfQueries = (data.careers_future_search_queries && data.careers_future_search_queries.length > 0)
+      ? data.careers_future_search_queries
+      : lQueries;
+
+    const dailyScrapeLinkedin = Math.min(
+      SAFE_MAX_SCRAPE_PER_SOURCE,
+      typeof rawMaxJobs.daily_scrape_linkedin === "number"
+        ? rawMaxJobs.daily_scrape_linkedin
+        : (typeof rawMaxJobs.linkedin === "number" ? Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, rawMaxJobs.linkedin) : 15)
+    );
+
+    const dailyScrapeCf = Math.min(
+      SAFE_MAX_SCRAPE_PER_SOURCE,
+      typeof rawMaxJobs.daily_scrape_careers_future === "number"
+        ? rawMaxJobs.daily_scrape_careers_future
+        : (typeof rawMaxJobs.careers_future === "number" ? Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, rawMaxJobs.careers_future) : 15)
+    );
+
+    const linkedinPerQuery = Math.max(1, Math.floor(dailyScrapeLinkedin / Math.max(1, lQueries.length)));
+    const cfPerQuery = Math.max(1, Math.floor(dailyScrapeCf / Math.max(1, cfQueries.length)));
+
+    const maxJobs: Record<string, number> = {
+      ...rawMaxJobs,
+      daily_scrape_linkedin: dailyScrapeLinkedin,
+      daily_scrape_careers_future: dailyScrapeCf,
+      linkedin: Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, linkedinPerQuery),
+      careers_future: Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, cfPerQuery),
+    };
+
     const sources = Array.isArray(data.scraping_sources) && data.scraping_sources.length > 0
       ? data.scraping_sources
       : defaults.scrapingSources;

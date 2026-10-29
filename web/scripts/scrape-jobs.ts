@@ -15,6 +15,7 @@ import {
   processLinkedInQuery,
   processCareersFutureQuery,
   saveJobsToSupabase,
+  SAFE_MAX_SCRAPE_PER_SOURCE,
 } from "../src/lib/scraper";
 
 function sleep(ms: number) {
@@ -118,16 +119,33 @@ async function main() {
   if (activeSources.includes("linkedin")) {
     console.log("\n==================== Starting LinkedIn Scraping ====================");
     const queries = cli.query ? [cli.query] : settings.linkedinQueries;
-    const maxJobs = cli.limit ?? settings.maxJobsPerSearch.linkedin ?? 10;
+    const dailyTarget = Math.min(
+      SAFE_MAX_SCRAPE_PER_SOURCE,
+      settings.maxJobsPerSearch.daily_scrape_linkedin ?? 15
+    );
+    const perQueryLimit = Math.min(
+      SAFE_MAX_SCRAPE_PER_SOURCE,
+      cli.limit ?? (cli.query ? dailyTarget : (settings.maxJobsPerSearch.linkedin ?? 5))
+    );
 
     if (queries.length === 0) {
       console.log("ℹ️ No LinkedIn search queries configured. Set queries in Settings or pass --query.");
     }
 
+    let totalLinkedinScrapedThisRun = 0;
+
     for (let i = 0; i < queries.length; i++) {
+      if (totalLinkedinScrapedThisRun >= dailyTarget) {
+        console.log(`[LinkedIn] Reached daily safety limit of ${totalLinkedinScrapedThisRun}/${dailyTarget} jobs. Halting further queries.`);
+        break;
+      }
+
       const query = queries[i];
+      const remainingQuota = dailyTarget - totalLinkedinScrapedThisRun;
+      const queryLimit = Math.min(perQueryLimit, remainingQuota);
+
       console.log(`\n------------------------------------------------------------`);
-      console.log(`[LinkedIn] Processing Query (${i + 1}/${queries.length}): "${query}" (Limit: ${maxJobs})`);
+      console.log(`[LinkedIn] Processing Query (${i + 1}/${queries.length}): "${query}" (Limit: ${queryLimit}, Daily Cap: ${dailyTarget})`);
       console.log(`------------------------------------------------------------`);
 
       const scrapedJobs = await processLinkedInQuery(
@@ -135,10 +153,11 @@ async function main() {
         settings.linkedinConfig.location,
         supabase,
         settings.linkedinConfig,
-        maxJobs
+        queryLimit
       );
 
       if (scrapedJobs.length > 0) {
+        totalLinkedinScrapedThisRun += scrapedJobs.length;
         if (!cli.dryRun) {
           const savedCount = await saveJobsToSupabase(supabase, scrapedJobs);
           totalNewJobsSaved += savedCount;
@@ -150,7 +169,7 @@ async function main() {
         console.log(`[LinkedIn] No new jobs fetched for query "${query}".`);
       }
 
-      if (i < queries.length - 1) {
+      if (i < queries.length - 1 && totalLinkedinScrapedThisRun < dailyTarget) {
         const queryDelay = randomBetween(
           settings.linkedinConfig.searchQueryMinDelay,
           settings.linkedinConfig.searchQueryMaxDelay
@@ -167,26 +186,44 @@ async function main() {
   if (activeSources.includes("careers_future")) {
     console.log("\n================= Starting CareersFuture Scraping =================");
     const queries = cli.query ? [cli.query] : settings.careersFutureQueries;
-    const maxJobs = cli.limit ?? settings.maxJobsPerSearch.careers_future ?? 20;
+    const dailyTarget = Math.min(
+      SAFE_MAX_SCRAPE_PER_SOURCE,
+      settings.maxJobsPerSearch.daily_scrape_careers_future ?? 15
+    );
+    const perQueryLimit = Math.min(
+      SAFE_MAX_SCRAPE_PER_SOURCE,
+      cli.limit ?? (cli.query ? dailyTarget : (settings.maxJobsPerSearch.careers_future ?? 5))
+    );
 
     if (queries.length === 0) {
       console.log("ℹ️ No CareersFuture search queries configured. Set queries in Settings or pass --query.");
     }
 
+    let totalCfScrapedThisRun = 0;
+
     for (let i = 0; i < queries.length; i++) {
+      if (totalCfScrapedThisRun >= dailyTarget) {
+        console.log(`[CareersFuture] Reached daily safety limit of ${totalCfScrapedThisRun}/${dailyTarget} jobs. Halting further queries.`);
+        break;
+      }
+
       const query = queries[i];
+      const remainingQuota = dailyTarget - totalCfScrapedThisRun;
+      const queryLimit = Math.min(perQueryLimit, remainingQuota);
+
       console.log(`\n------------------------------------------------------------`);
-      console.log(`[CareersFuture] Processing Query (${i + 1}/${queries.length}): "${query}" (Limit: ${maxJobs})`);
+      console.log(`[CareersFuture] Processing Query (${i + 1}/${queries.length}): "${query}" (Limit: ${queryLimit}, Daily Cap: ${dailyTarget})`);
       console.log(`------------------------------------------------------------`);
 
       const scrapedJobs = await processCareersFutureQuery(
         query,
         supabase,
         settings.careersFutureConfig,
-        maxJobs
+        queryLimit
       );
 
       if (scrapedJobs.length > 0) {
+        totalCfScrapedThisRun += scrapedJobs.length;
         if (!cli.dryRun) {
           const savedCount = await saveJobsToSupabase(supabase, scrapedJobs);
           totalNewJobsSaved += savedCount;
@@ -198,7 +235,7 @@ async function main() {
         console.log(`[CareersFuture] No new jobs fetched for query "${query}".`);
       }
 
-      if (i < queries.length - 1) {
+      if (i < queries.length - 1 && totalCfScrapedThisRun < dailyTarget) {
         const queryDelay = randomBetween(5.0, 10.0);
         console.log(`[CareersFuture] Waiting ${queryDelay.toFixed(2)}s before next query...`);
         await sleep(queryDelay * 1000);

@@ -51,9 +51,11 @@ graph TD
    - All REST API endpoints and server routes are Next.js Route Handlers located under [`web/src/app/api/`](web/src/app/api/).
 2. **Scraping Engine 100% in TypeScript**:
    - Built in TypeScript under [`web/src/lib/scraper/`](web/src/lib/scraper/) and executed via [`web/scripts/scrape-jobs.ts`](web/scripts/scrape-jobs.ts) (`npm run scrape`). It uses `impit` for browser TLS (JA3/JA4) impersonation on LinkedIn, `cheerio` for fast HTML parsing, and `node-html-markdown` for local Markdown conversion with zero LLM API cost.
+   - Enforces a hard, non-overridable safety ceiling of 30 jobs/day per platform (`SAFE_MAX_SCRAPE_PER_SOURCE = 30`) to protect against guest endpoint rate-limits and IP blocking.
    - The project is fully unified in TypeScript with zero Python dependencies.
 3. **TypeScript for Application Logic & Batch Workers**:
    - Job scoring, resume customization, PDF generation, job expiration, and resume parsing are written in TypeScript under [`web/scripts/`](web/scripts/) and [`web/src/lib/`](web/src/lib/).
+   - `score-jobs.ts` prioritizes newest scraped listings first (`order("scraped_at", { ascending: false })`) to eliminate queue starvation and ensure fresh postings are evaluated immediately.
 4. **Single Source of Truth for Configuration (`app_settings`)**:
    - All user preferences (search queries, locations, LinkedIn filters, scraping sources) and AI settings (provider, model, API keys, RPM limits, budget) are stored in the Supabase **`app_settings`** table.
    - The TypeScript scraper dynamically fetches these settings at startup via `loadScraperSettings(supabase)`.

@@ -83,7 +83,7 @@ async function main() {
     .select("job_id, job_title, company, description, level")
     .is("resume_score", null)
     .eq("is_active", true)
-    .order("scraped_at", { ascending: true })
+    .order("scraped_at", { ascending: false }) // Prioritize freshly scraped jobs first
     .limit(batchLimit);
 
   if (fetchError) {
