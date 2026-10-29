@@ -36,8 +36,6 @@ async function getInitialSetupStatus(): Promise<{
 
   let url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
   let serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  let llmKey = process.env.LLM_API_KEY || process.env.GEMINI_API_KEY || process.env.FIREWORKS_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || "";
-  let llmModel = process.env.LLM_MODEL || "";
 
   if (!url || !serviceKey) {
     const isWebCwd = fs.existsSync(path.resolve(process.cwd(), "next.config.ts")) || 
@@ -54,10 +52,6 @@ async function getInitialSetupStatus(): Promise<{
           url = trimmed.split("=")[1].replace(/["']/g, "").trim();
         } else if (trimmed.startsWith("SUPABASE_SERVICE_ROLE_KEY=")) {
           serviceKey = trimmed.split("=")[1].replace(/["']/g, "").trim();
-        } else if (trimmed.startsWith("LLM_API_KEY=")) {
-          llmKey = trimmed.split("=")[1].replace(/["']/g, "").trim();
-        } else if (trimmed.startsWith("LLM_MODEL=")) {
-          llmModel = trimmed.split("=")[1].replace(/["']/g, "").trim();
         }
       }
     }
@@ -86,9 +80,9 @@ async function getInitialSetupStatus(): Promise<{
         .limit(1)
         .single();
 
-      const effectiveAiKey = settings?.llm_api_key || llmKey;
+      const effectiveAiKey = settings?.llm_api_key || "";
       const hasAiKey = Boolean(effectiveAiKey && effectiveAiKey.trim().length > 0);
-      const savedModel = settings?.llm_model || llmModel || "gemini-3.8-flash";
+      const savedModel = settings?.llm_model || "gemini-3.8-flash";
       const savedProvider = settings?.llm_provider || "gemini";
       const savedTier = (settings?.llm_tier as "free" | "paid") || "free";
 

@@ -74,8 +74,7 @@ export default async function Home() {
   }
 
   let isSetupComplete =
-    cookieStore.get("jobtrack_setup_complete")?.value === "true" ||
-    process.env.SETUP_COMPLETED === "true";
+    cookieStore.get("jobtrack_setup_complete")?.value === "true";
 
   // Get server's current local date in YYYY-MM-DD format
   const now = new Date(); // Current date/time in server's local timezone
@@ -138,12 +137,7 @@ export default async function Home() {
     appliedTodayCount,
   } = statsData;
 
-  const hasApiKey = Boolean(
-    appSettings?.llm_api_key ||
-    process.env.LLM_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.FIREWORKS_API_KEY
-  );
+  const hasApiKey = Boolean(appSettings?.llm_api_key);
   // Create a Date object from the localToday string for formatting the description.
   // new Date(localToday) will parse it as midnight in the server's local timezone.
   const dateForAppliedTodayDescription = new Date(localToday);

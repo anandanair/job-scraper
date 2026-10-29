@@ -141,8 +141,6 @@ export async function POST(req: Request) {
       serviceRoleKey,
     });
 
-    process.env.SETUP_STEP = "2";
-
     return NextResponse.json({
       success: true,
       projectRef,

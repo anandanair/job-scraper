@@ -61,7 +61,7 @@ graph TD
 4. **Single Source of Truth for Configuration (`app_settings`)**:
    - All user preferences (search queries, locations, LinkedIn filters, scraping sources) and AI settings (provider, model, API keys, RPM limits, budget) are stored in the Supabase **`app_settings`** table.
    - The Python scraper dynamically fetches these settings at startup via `supabase_utils.load_and_apply_app_settings()`.
-   - The LLM caller in `web/src/lib/llm.ts` reads `app_settings` first, falling back to environment variables.
+   - The LLM caller in `web/src/lib/llm.ts` reads `app_settings` as the exclusive source of truth for AI configuration and credentials.
 
 ---
 
@@ -174,7 +174,7 @@ graph TD
   - **Anthropic**: Claude 3.5 Sonnet, Claude 3.5 Haiku
   - **Groq**: Llama 3.3 70B, Mixtral
 - Respects `llm_max_rpm` and `llm_request_delay_seconds` to prevent quota exhaustion.
-- Fallback chain: Supabase `app_settings.llm_api_key` → Environment variables (`LLM_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.).
+- Single source of truth: Supabase `app_settings.llm_api_key` (environment variables strictly contain Supabase connection keys only).
 
 ---
 
@@ -225,6 +225,6 @@ npm run parse-resume     # Parse master resume.pdf into base_resume table
    - Return standard `NextResponse.json(...)`.
    - Use `createSupabaseServerClient()` or `createSupabaseStaticClient()` from `@/utils/supabase/server`.
 4. **Environment Variables**:
-   - `web/.env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `LLM_API_KEY`.
+   - `web/.env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
    - `backend/.env` (or root `.env`): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 

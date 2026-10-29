@@ -44,7 +44,7 @@ Every AI assistant working in this repository MUST follow these three operationa
 4. **Single Source of Truth for Configuration**:
    - All user preferences (search queries, locations, filters, active sources) and AI settings (provider, model, API keys, RPM limits, budget) are stored in the Supabase **`app_settings`** table.
    - The Python scraper dynamically fetches these settings at startup via `supabase_utils.load_and_apply_app_settings()`.
-   - The LLM caller in `web/src/lib/llm.ts` reads `app_settings` first, falling back to environment variables.
+   - The LLM caller in `web/src/lib/llm.ts` reads `app_settings` as the exclusive source of truth for AI configuration.
 5. **ATS PDF Generation**:
    - ATS-compliant PDF generation is implemented in TypeScript using **PDFKit** in [`web/src/lib/pdf.ts`](web/src/lib/pdf.ts).
    - Do not introduce Python PDF libraries (no ReportLab or Weasyprint).
@@ -79,7 +79,7 @@ Always run commands from the project root:
   - `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY`
-  - `LLM_API_KEY` (or provider keys: `GEMINI_API_KEY`, `FIREWORKS_API_KEY`, `OPENAI_API_KEY`, etc.)
+  *(Note: All AI settings, API keys, and job preferences reside exclusively in the Supabase `app_settings` table)*
 - `backend/.env` (or root `.env`):
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`

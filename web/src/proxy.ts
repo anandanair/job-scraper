@@ -66,10 +66,9 @@ export function proxy(request: NextRequest) {
   }
 
   const isSetupComplete =
-    request.cookies.get("jobtrack_setup_complete")?.value === "true" ||
-    process.env.SETUP_COMPLETED === "true";
+    request.cookies.get("jobtrack_setup_complete")?.value === "true";
 
-  // If cookie or process.env confirms completion:
+  // If cookie confirms completion:
   if (isSetupComplete) {
     // Prevent navigating back to /setup (unless explicitly forced via ?force=true)
     if (pathname === "/setup" || pathname.startsWith("/setup/")) {

@@ -12,8 +12,7 @@ interface CallLLMOptions {
 
 /**
  * Universal LLM caller supporting Google Gemini, OpenAI, Fireworks AI, and Anthropic.
- * Prioritizes Supabase app_settings table as the single source of truth,
- * with process.env used only as a developer fallback.
+ * Uses the Supabase app_settings table as the single source of truth for AI configuration.
  */
 export async function callLLM({
   prompt,
@@ -47,18 +46,8 @@ export async function callLLM({
     }
   }
 
-  // 2. Fallback to process.env (for offline CLI or unit test environments)
-  if (!apiKey) {
-    apiKey =
-      process.env.LLM_API_KEY ||
-      process.env.FIREWORKS_API_KEY ||
-      process.env.GEMINI_API_KEY ||
-      process.env.OPENAI_API_KEY ||
-      process.env.ANTHROPIC_API_KEY ||
-      "";
-  }
   if (!model) {
-    model = (process.env.LLM_MODEL || "gemini-3.8-flash").replace(/["']/g, "").trim();
+    model = "gemini-3.8-flash";
   }
 
   apiKey = (apiKey || "").replace(/["']/g, "").trim();

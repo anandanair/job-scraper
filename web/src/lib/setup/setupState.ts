@@ -69,18 +69,7 @@ export async function getSetupState(): Promise<SetupState> {
     // Ignore db read issues during early setup
   }
 
-  // 2. In-memory process fallback
-  const envCompleted = process.env.SETUP_COMPLETED === "true";
-  let step: 1 | 2 | 3 | 4 | 5 = 1;
-  const envStepStr = process.env.SETUP_STEP;
-  if (envStepStr) {
-    const parsed = parseInt(envStepStr, 10);
-    if (parsed >= 1 && parsed <= 5) {
-      step = parsed as 1 | 2 | 3 | 4 | 5;
-    }
-  }
-
-  return { step, isCompleted: envCompleted };
+  return { step: 1, isCompleted: false };
 }
 
 /**
@@ -88,8 +77,6 @@ export async function getSetupState(): Promise<SetupState> {
  * Does NOT touch .env files to prevent Next.js dev server hot-restarts.
  */
 export async function saveSetupStep(step: 1 | 2 | 3 | 4 | 5): Promise<void> {
-  process.env.SETUP_STEP = String(step);
-
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       await updateAppSettings({
@@ -113,9 +100,6 @@ export async function saveSetupStep(step: 1 | 2 | 3 | 4 | 5): Promise<void> {
  * Does NOT touch .env files to ensure seamless, instant dashboard launch.
  */
 export async function markSetupComplete(): Promise<void> {
-  process.env.SETUP_COMPLETED = "true";
-  process.env.SETUP_STEP = "5";
-
   try {
     await updateAppSettings({
       setup_step: 5,

@@ -5,9 +5,6 @@ export interface EnvVariables {
   supabaseUrl: string;
   anonKey?: string;
   serviceRoleKey: string;
-  llmApiKey?: string;
-  llmModel?: string;
-  llmProvider?: string;
 }
 
 /**

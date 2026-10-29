@@ -9,8 +9,6 @@ export const dynamic = "force-dynamic";
 function getEnvCredentials() {
   let url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
   let serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  let llmKey = process.env.LLM_API_KEY || process.env.GEMINI_API_KEY || process.env.FIREWORKS_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || "";
-  let llmModel = process.env.LLM_MODEL || "";
 
   // If not in process.env, attempt reading directly from .env.local
   if (!url || !serviceKey) {
@@ -28,21 +26,17 @@ function getEnvCredentials() {
           url = trimmed.split("=")[1].replace(/["']/g, "").trim();
         } else if (trimmed.startsWith("SUPABASE_SERVICE_ROLE_KEY=")) {
           serviceKey = trimmed.split("=")[1].replace(/["']/g, "").trim();
-        } else if (trimmed.startsWith("LLM_API_KEY=")) {
-          llmKey = trimmed.split("=")[1].replace(/["']/g, "").trim();
-        } else if (trimmed.startsWith("LLM_MODEL=")) {
-          llmModel = trimmed.split("=")[1].replace(/["']/g, "").trim();
         }
       }
     }
   }
 
-  return { url, serviceKey, llmKey, llmModel };
+  return { url, serviceKey };
 }
 
 export async function GET() {
   try {
-    const { url, serviceKey, llmKey, llmModel } = getEnvCredentials();
+    const { url, serviceKey } = getEnvCredentials();
 
     // 1. If no Supabase URL or Key -> Step 1 is pending
     if (!url || !serviceKey) {
@@ -57,7 +51,7 @@ export async function GET() {
 
     // 2. Validate Supabase connection and verify tables exist
     let supabaseConnected = false;
-    let hasAiKey = Boolean(llmKey);
+    let hasAiKey = false;
     let hasResume = false;
     let savedSettings: any = null;
 
@@ -147,7 +141,7 @@ export async function GET() {
       hasPreferences,
       isComplete,
       savedSettings,
-      llmModel,
+      llmModel: savedSettings?.llm_model || "gemini-3.8-flash",
     });
   } catch (err: any) {
     return NextResponse.json(

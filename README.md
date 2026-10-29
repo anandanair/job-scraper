@@ -117,13 +117,13 @@ pip install -r backend/requirements.txt
    - *This creates all tables (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`, `app_settings`, `linkedin_geo_locations`), indexes, triggers, and private storage buckets (`resumes`, `personalized_resumes`).*
 
 ### 4. Configure Environment Variables
-Create a `web/.env.local` file:
+Create a `web/.env.local` file (only Supabase credentials required):
 ```env
 NEXT_PUBLIC_SUPABASE_URL="https://<YOUR_PROJECT_ID>.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="sb_publishable_..."
 SUPABASE_SERVICE_ROLE_KEY="sb_secret_..."
-LLM_API_KEY="AIzaSy..." # Or FIREWORKS_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY
 ```
+*(Note: All AI provider settings, API keys, search queries, and rate limits are managed in the Supabase `app_settings` table and configured via the interactive Setup Wizard or Settings UI.)*
 
 Create a `backend/.env` file (or root `.env`):
 ```env

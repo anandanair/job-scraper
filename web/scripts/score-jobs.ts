@@ -12,7 +12,6 @@ import { createSupabaseStaticClient } from "../src/utils/supabase/server";
 import { formatResumeToText, scoreJobWithResume } from "../src/lib/llm";
 import { Resume } from "../src/types";
 
-const DELAY_MS = 4000;
 const BATCH_LIMIT = 10;
 
 function sleep(ms: number) {
@@ -26,21 +25,24 @@ async function main() {
   // 1. Load dynamic AI configuration from Supabase app_settings (Single Source of Truth)
   const { data: dbSettings } = await supabase
     .from("app_settings")
-    .select("llm_api_key, llm_model, llm_provider, llm_tier, jobs_to_score_per_run")
+    .select("llm_api_key, llm_model, llm_provider, llm_tier, jobs_to_score_per_run, llm_request_delay_seconds")
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  const batchLimit = dbSettings?.jobs_to_score_per_run || 10;
-
-  if (dbSettings?.llm_api_key) {
-    process.env.LLM_API_KEY = dbSettings.llm_api_key;
-    process.env.GEMINI_API_KEY = dbSettings.llm_api_key;
-    if (dbSettings.llm_model) process.env.LLM_MODEL = dbSettings.llm_model;
-    console.log(`✓ Using AI Model: "${dbSettings.llm_model || "gemini-3.8-flash"}" from Supabase app_settings (Batch limit: ${batchLimit} jobs).`);
-  } else if (process.env.LLM_API_KEY) {
-    console.log(`✓ Using AI Model from environment variables (Model: ${process.env.LLM_MODEL || "default"}, Batch limit: ${batchLimit} jobs).`);
+  if (!dbSettings?.llm_api_key) {
+    console.error("✗ Error: LLM API key not configured in Supabase 'app_settings'.");
+    console.error("  Please configure your AI provider and API key in Settings or complete the Setup Wizard.");
+    process.exit(1);
   }
+
+  const batchLimit = dbSettings.jobs_to_score_per_run || BATCH_LIMIT;
+  const delayMs = (dbSettings.llm_request_delay_seconds ?? 8) * 1000;
+
+  console.log(
+    `✓ Using AI Model: "${dbSettings.llm_model || "gemini-3.8-flash"}" from Supabase app_settings ` +
+    `(Batch limit: ${batchLimit} jobs, Delay: ${delayMs / 1000}s).`
+  );
 
   // 2. Fetch base resume
   let baseResume: Resume | null = null;
@@ -137,7 +139,7 @@ async function main() {
     }
 
     if (i < jobsToScore.length - 1) {
-      await sleep(DELAY_MS);
+      await sleep(delayMs);
     }
   }
 

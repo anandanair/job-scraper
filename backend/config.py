@@ -12,9 +12,6 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_TABLE_NAME: str = "jobs"
-SUPABASE_CUSTOMIZED_RESUMES_TABLE_NAME: str = "customized_resumes"
-SUPABASE_BASE_RESUME_TABLE_NAME: str = "base_resume"
-SUPABASE_RESUME_STYLE_TABLE_NAME: str = "resume_style_settings"
 
 # =================================================================
 # 2. SCRAPER ENGINE NETWORK & RATE LIMIT SETTINGS
