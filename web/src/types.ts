@@ -68,7 +68,7 @@ export interface Resume {
   phone: string;
   location: string;
   summary: string;
-  skills: string[]; 
+  skills: string[];
   education: Education[];
   experience: Experience[];
   projects: Project[];
@@ -79,7 +79,6 @@ export interface Resume {
   last_updated?: string; // Optional field for last update timestamp
   resume_link?: string; // Optional field for resume link ur
 }
-
 
 // --- Multi-Stage Resume Tailoring Types ---
 export interface RoleGuidance {
@@ -120,10 +119,17 @@ export type FontFamilyOption = "Helvetica" | "Times-Roman" | "Courier";
 export type FontSizeScaleOption = "compact" | "normal" | "spacious";
 export type LineSpacingOption = "tight" | "normal" | "relaxed";
 export type HeaderAlignmentOption = "left" | "center";
-export type HeaderStyleOption = "stacked_left" | "stacked_center" | "split_twocol";
+export type HeaderStyleOption =
+  | "stacked_left"
+  | "stacked_center"
+  | "split_twocol";
 export type SkillsLayoutOption = "grid_3col" | "inline_wrap";
 export type MarginsOption = "compact" | "normal" | "wide";
-export type HeadingStyleOption = "underline" | "left_bar" | "shaded_pill" | "borderless";
+export type HeadingStyleOption =
+  | "underline"
+  | "left_bar"
+  | "shaded_pill"
+  | "borderless";
 export type ResumeSectionKey =
   | "summary"
   | "skills"
@@ -174,7 +180,12 @@ export interface ResumeStyleSetting {
 
 // --- App Settings & Configuration Interfaces ---
 
-export type LLMProvider = "gemini" | "fireworks" | "openai" | "groq" | "anthropic";
+export type LLMProvider =
+  | "gemini"
+  | "fireworks"
+  | "openai"
+  | "groq"
+  | "anthropic";
 export type LLMTier = "free" | "paid";
 
 export interface AppSettings {
@@ -204,5 +215,3 @@ export interface AppSettings {
   created_at?: string;
   updated_at?: string;
 }
-
-

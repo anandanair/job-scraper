@@ -7,17 +7,24 @@ import {
   getActiveResumeStyle,
 } from "@/lib/supabase/queries";
 import { createSupabaseStaticClient } from "@/utils/supabase/server";
-import { customizeResumeWithLLM, formatResumeToText, scoreJobWithResume } from "@/lib/llm";
+import {
+  customizeResumeWithLLM,
+  formatResumeToText,
+  scoreJobWithResume,
+} from "@/lib/llm";
 import { buildPdfBuffer } from "@/lib/pdf";
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ job_id: string }> }
+  { params }: { params: Promise<{ job_id: string }> },
 ) {
   try {
     const { job_id } = await params;
     if (!job_id) {
-      return NextResponse.json({ error: "Job ID is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Job ID is required" },
+        { status: 400 },
+      );
     }
 
     // 1. Fetch Job
@@ -31,12 +38,14 @@ export async function POST(
     if (!baseResume) {
       return NextResponse.json(
         { error: "No base resume found. Please configure your profile first." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // 3. Tailor resume content using AI multi-stage pipeline
-    console.log(`[API /customize-resume] Starting multi-stage resume customization for job ${job_id}...`);
+    console.log(
+      `[API /customize-resume] Starting multi-stage resume customization for job ${job_id}...`,
+    );
     const customizedData = await customizeResumeWithLLM(baseResume, {
       job_title: job.job_title,
       company: job.company,
@@ -62,8 +71,11 @@ export async function POST(
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
       return NextResponse.json(
-        { error: "Failed to upload resume to storage", details: uploadError.message },
-        { status: 500 }
+        {
+          error: "Failed to upload resume to storage",
+          details: uploadError.message,
+        },
+        { status: 500 },
       );
     }
 
@@ -82,15 +94,20 @@ export async function POST(
     if (insertError || !insertedResume) {
       console.error("Customized resume insert error:", insertError);
       return NextResponse.json(
-        { error: "Failed to save customized resume to database", details: insertError?.message },
-        { status: 500 }
+        {
+          error: "Failed to save customized resume to database",
+          details: insertError?.message,
+        },
+        { status: 500 },
       );
     }
 
     const customizedResumeId = insertedResume.id;
 
     // 7. Stage 3: Re-score the job with the newly customized resume immediately (The Evaluator)
-    console.log(`[API /customize-resume] Stage 3: Evaluating customized resume against job ${job_id}...`);
+    console.log(
+      `[API /customize-resume] Stage 3: Evaluating customized resume against job ${job_id}...`,
+    );
     let newScore: number | null = null;
     try {
       const resumeText = formatResumeToText(customizedData);
@@ -132,15 +149,16 @@ export async function POST(
         customized_resume_id: customizedResumeId,
         resume_link: destinationPath,
         resume_score: newScore,
-        resume_score_stage: newScore !== null ? "custom" : job.resume_score_stage,
+        resume_score_stage:
+          newScore !== null ? "custom" : job.resume_score_stage,
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error: any) {
     console.error("Error customizing resume:", error);
     return NextResponse.json(
       { error: "Failed to customize resume", details: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
