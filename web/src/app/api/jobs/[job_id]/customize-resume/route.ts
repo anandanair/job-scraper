@@ -32,6 +32,17 @@ export async function POST(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
+    // Exclude job if marked as Not Interested
+    if (job.is_interested === false) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot customize resume: this job is marked as Not Interested (is_interested is FALSE).",
+        },
+        { status: 400 },
+      );
+    }
+
     // 2. Fetch baseline master profile
     const baseResume = await getUserProfileByEmail();
     if (!baseResume) {

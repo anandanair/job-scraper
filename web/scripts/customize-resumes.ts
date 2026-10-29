@@ -81,12 +81,15 @@ async function main() {
   const activeStyle = await getActiveResumeStyle();
 
   // 3. Query top scored jobs lacking customized resumes
+  // Completely exclude jobs marked as not interested (is_interested is false), even if score is 100.
   const { data: candidateJobs, error: fetchError } = await supabase
     .from("jobs")
-    .select("job_id, job_title, company, description, level, resume_score, status")
+    .select("job_id, job_title, company, description, level, resume_score, status, is_interested")
     .eq("is_active", true)
     .is("customized_resume_id", null)
     .gte("resume_score", MIN_SCORE_THRESHOLD)
+    .or("is_interested.is.null,is_interested.eq.true")
+    .order("is_interested", { ascending: false, nullsFirst: false })
     .order("resume_score", { ascending: false })
     .limit(batchLimit);
 
@@ -100,10 +103,17 @@ async function main() {
     return;
   }
 
-  console.log(`Found ${candidateJobs.length} eligible jobs (score >= ${MIN_SCORE_THRESHOLD}) to customize.`);
+  console.log(`Found ${candidateJobs.length} eligible jobs (score >= ${MIN_SCORE_THRESHOLD}, is_interested is not false) to customize.`);
 
   for (let i = 0; i < candidateJobs.length; i++) {
     const job = candidateJobs[i];
+
+    // Explicit guard: Completely exclude any job marked as Not Interested
+    if (job.is_interested === false) {
+      console.log(`[${i + 1}/${candidateJobs.length}] Skipping job "${job.job_title}" (${job.job_id}) - marked as Not Interested.`);
+      continue;
+    }
+
     console.log(`[${i + 1}/${candidateJobs.length}] Customizing resume for: "${job.job_title}" at "${job.company}" (${job.job_id})`);
 
     try {

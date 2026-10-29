@@ -58,6 +58,10 @@ export default function TopMatchesList({
 
   const handleGenerateCustomResume = async () => {
     if (!selectedJob) return;
+    if (selectedJob.is_interested === false) {
+      showToast("Cannot customize resume: this job is marked as Not Interested.", "error");
+      return;
+    }
     setIsGeneratingResume(true);
     try {
       const res = await fetch(`/api/jobs/${selectedJob.job_id}/customize-resume`, {
@@ -547,6 +551,15 @@ export default function TopMatchesList({
                   >
                     View Customized Resume
                     <FileText size={16} className="ml-2" />
+                  </button>
+                ) : selectedJob.is_interested === false ? (
+                  <button
+                    disabled
+                    className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-400 text-sm font-medium rounded-md cursor-not-allowed border border-gray-200"
+                    title="This job is marked as Not Interested. Mark as Interested or unmark to enable resume customization."
+                  >
+                    <ThumbsDown size={16} className="mr-2 text-red-400" />
+                    Excluded (Not Interested)
                   </button>
                 ) : (
                   <button

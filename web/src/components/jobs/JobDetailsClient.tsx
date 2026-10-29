@@ -5,6 +5,8 @@ import Link from "next/link";
 import {
   ExternalLink,
   CheckCircle,
+  ThumbsUp,
+  ThumbsDown,
   BuildingIcon,
   MapPinIcon,
   BarChart3Icon,
@@ -51,6 +53,10 @@ export default function JobDetailsClient({
   };
 
   const handleGenerateCustomResume = async () => {
+    if (job.is_interested === false) {
+      showToast("Cannot customize resume: this job is marked as Not Interested.", "error");
+      return;
+    }
     setIsGeneratingResume(true);
     try {
       const res = await fetch(`/api/jobs/${job.job_id}/customize-resume`, {
@@ -150,6 +156,55 @@ export default function JobDetailsClient({
     }
   };
 
+  const handleSetInterest = async (newInterestValue: boolean | null) => {
+    setIsUpdatingInterest(true);
+    let finalInterestValue: boolean | null;
+
+    if (job.is_interested === newInterestValue) {
+      finalInterestValue = null;
+    } else {
+      finalInterestValue = newInterestValue;
+    }
+
+    try {
+      const response = await fetch(`/api/jobs/${job.job_id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          is_interested: finalInterestValue,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage =
+          errorData?.error || `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
+      }
+
+      const updatedJob: Job = await response.json();
+      setJob(updatedJob);
+
+      const message =
+        finalInterestValue === true
+          ? "Job marked as Interested!"
+          : finalInterestValue === false
+            ? "Job marked as Not Interested. Excluded from resume tailoring."
+            : "Interest preference cleared.";
+      showToast(message, "success");
+      router.refresh();
+    } catch (error) {
+      console.error("Error setting job interest:", error);
+      const message =
+        error instanceof Error ? error.message : "An unknown error occurred.";
+      showToast(`Error: ${message}`, "error");
+    } finally {
+      setIsUpdatingInterest(false);
+    }
+  };
+
   const showToast = (message: string, type: "success" | "error") => {
     console.log(`Toast (${type}): ${message}`);
     if (type === "error") {
@@ -172,9 +227,23 @@ export default function JobDetailsClient({
       <div className="bg-gray-50 border-b border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-bold text-gray-900">
               {job.job_title}
-            </h1>
+              </h1>
+              {job.is_interested === true && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                  <ThumbsUp className="h-3 w-3 mr-1" />
+                  Interested
+                </span>
+              )}
+              {job.is_interested === false && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
+                  <ThumbsDown className="h-3 w-3 mr-1" />
+                  Not Interested
+                </span>
+              )}
+            </div>
             <div className="mt-3 flex flex-col sm:flex-row sm:items-center text-gray-600 space-y-2 sm:space-y-0 sm:space-x-6">
               <div className="flex items-center">
                 <BuildingIcon className="h-5 w-5 mr-2 text-gray-500" />
@@ -265,6 +334,15 @@ export default function JobDetailsClient({
               View Customized Resume
               <FileText size={16} className="ml-2" />
             </button>
+          ) : job.is_interested === false ? (
+            <button
+              disabled
+              className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-400 text-sm font-medium rounded-md cursor-not-allowed border border-gray-200"
+              title="This job is marked as Not Interested. Mark as Interested or clear preference to enable resume customization."
+            >
+              <ThumbsDown size={16} className="mr-2 text-red-400" />
+              Excluded (Not Interested)
+            </button>
           ) : (
             <button
               onClick={handleGenerateCustomResume}
@@ -315,6 +393,45 @@ export default function JobDetailsClient({
               Applied
             </div>
           )}
+
+          {/* Interest buttons */}
+          <div className="inline-flex rounded-md shadow-sm sm:ml-auto">
+            <button
+              onClick={() => handleSetInterest(true)}
+              disabled={isUpdatingInterest}
+              className={`relative cursor-pointer inline-flex items-center px-3 py-2 rounded-l-md text-sm font-medium focus:z-10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed
+                ${
+                  job.is_interested === true
+                    ? "bg-green-600 text-white hover:bg-green-700"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+            >
+              <ThumbsUp
+                size={16}
+                className="mr-2"
+                fill={job.is_interested === true ? "currentColor" : "none"}
+              />
+              Interested
+            </button>
+
+            <button
+              onClick={() => handleSetInterest(false)}
+              disabled={isUpdatingInterest}
+              className={`relative cursor-pointer inline-flex items-center px-3 py-2 rounded-r-md text-sm font-medium focus:z-10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed border-l border-gray-300
+                ${
+                  job.is_interested === false
+                    ? "bg-red-600 text-white hover:bg-red-700"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+            >
+              <ThumbsDown
+                size={16}
+                className="mr-2"
+                fill={job.is_interested === false ? "currentColor" : "none"}
+              />
+              Not Interested
+            </button>
+          </div>
         </div>
       </div>
 

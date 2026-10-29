@@ -292,11 +292,11 @@ BEGIN
         AND j.job_state = 'new'
         AND j.resume_score >= 70
         AND j.customized_resume_id IS NULL -- Key new filter
+        AND j.is_interested IS NOT FALSE
     ORDER BY
         CASE
             WHEN j.is_interested IS TRUE THEN 1
-            WHEN j.is_interested IS NULL THEN 2
-            ELSE 3
+            ELSE 2
         END ASC,
         j.resume_score DESC
     LIMIT p_page_size
