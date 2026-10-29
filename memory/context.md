@@ -8,9 +8,9 @@
 ## 1. System Overview
 
 **JobTrack** is an autonomous job discovery, AI suitability evaluation, resume customization, and ATS typesetting platform. It consists of:
-1. **Python Scraping Engine (`backend/`)**: Periodically collects job listings from LinkedIn and CareersFuture into a Supabase PostgreSQL database.
+1. **TypeScript Scraping Engine (`web/src/lib/scraper/` & `web/scripts/scrape-jobs.ts`)**: Collects job listings from LinkedIn (via guest endpoints with `impit` native Chrome TLS/JA3/JA4 fingerprint impersonation) and CareersFuture (typed REST API) into Supabase PostgreSQL with local `node-html-markdown` conversion. *(Note: The legacy Python scraper in `backend/` is preserved as a verified fallback during transition)*.
 2. **Fullstack Next.js Application (`web/`)**: Provides an interactive setup wizard, master resume studio, ATS visual theme designer, job dashboard, and REST API route handlers.
-3. **TypeScript Batch Workers (`web/scripts/`)**: Autonomous worker processes for AI job scoring, custom resume generation, posting expiration checks, and master resume parsing.
+3. **TypeScript Batch Workers (`web/scripts/`)**: Autonomous worker processes for scraping, AI job scoring, custom resume generation, posting expiration checks, and master resume parsing.
 4. **Supabase Backend**: Hosts application data (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`, `app_settings`, `linkedin_geo_locations`) and object storage buckets (`resumes`, `personalized_resumes`).
 5. **GitHub Actions CI/CD (`.github/workflows/`)**: Automates scheduled scraping, scoring, tailoring, and maintenance workflows on cron schedules.
 
@@ -157,7 +157,8 @@ graph TD
 | **Frontend UI** | Next.js 16 (App Router), React 19, Tailwind CSS v4, Lucide React |
 | **PDF Generation** | PDFKit (server-side 1:1 typesetting), React-PDF (client preview) |
 | **Database & Auth** | Supabase (PostgreSQL, Row Level Security, Storage Buckets, `@supabase/ssr`) |
-| **Job Scraper** | Python 3.10+, Requests, BeautifulSoup4, Markdownify, Supabase Python SDK |
+| **Job Scraper (Primary)** | TypeScript, `impit` (Rust TLS/JA4 impersonation), `cheerio`, `node-html-markdown` |
+| **Job Scraper (Backup)** | Python 3.10+, Requests, BeautifulSoup4, Markdownify, Supabase Python SDK |
 | **AI LLM Engine** | Universal caller supporting Google Gemini, Fireworks AI, OpenAI, Anthropic, Groq |
 | **Security & Secrets** | Tweetsodium (libsodium sealed-box encryption for GitHub Actions secrets) |
 | **CLI Execution** | `tsx` for TypeScript worker execution without separate build steps |
@@ -201,9 +202,11 @@ npm run build            # Build Next.js application for production
 npm run start            # Run production Next.js server
 npm run install:web      # Install web dependencies (npm --prefix web install)
 
-# --- Python Scraper ---
-npm run scrape           # Scrape active platforms using settings from Supabase
-python backend/scraper.py --source linkedin --query "Frontend Engineer" --limit 10
+# --- Job Scraper ---
+npm run scrape           # Run TypeScript scraper using settings from Supabase (impit + cheerio)
+npm run scrape:py        # Legacy Python scraper backup
+npm run test:scraper     # Run diagnostic and live parity tests on scraping engine
+npm run scrape -- --source linkedin --query "Frontend Engineer" --limit 10
 
 # --- TypeScript Automation Workers ---
 npm run score            # Evaluate unscored jobs against master resume (0-100 score)

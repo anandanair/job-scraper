@@ -32,9 +32,9 @@ Every AI assistant working in this repository MUST follow these three operationa
 1. **NO Python Web Server / REST API**:
    - There is **no** Flask, FastAPI, Django, or Python HTTP server anywhere in this project.
    - All application APIs and server routes are **Next.js Route Handlers** in [`web/src/app/api/`](web/src/app/api/).
-2. **Python is SOLELY for Scraping**:
-   - The [`backend/`](backend/) directory contains **only** the job scraping engine ([`backend/scraper.py`](backend/scraper.py)) and its helper utilities ([`backend/supabase_utils.py`](backend/supabase_utils.py), [`backend/config.py`](backend/config.py), [`backend/user_agents.py`](backend/user_agents.py)).
-   - It scrapes LinkedIn and CareersFuture into Supabase. It uses `markdownify` to convert HTML to Markdown locally with zero LLM API cost.
+2. **Job Scraping in TypeScript (Primary) & Python (Fallback)**:
+   - The primary scraping engine is written in TypeScript under [`web/src/lib/scraper/`](web/src/lib/scraper/) and executed via [`web/scripts/scrape-jobs.ts`](web/scripts/scrape-jobs.ts) (`npm run scrape`). It uses `impit` for browser TLS (JA3/JA4) impersonation on LinkedIn, `cheerio` for fast HTML parsing, and `node-html-markdown` for local Markdown conversion.
+   - The legacy Python scraper in [`backend/`](backend/) is retained as a working fallback during transition (`npm run scrape:py`).
 3. **TypeScript for Workers & Business Logic**:
    - Automation workers are TypeScript scripts in [`web/scripts/`](web/scripts/) executed via `tsx`:
      - Job Scoring: [`web/scripts/score-jobs.ts`](web/scripts/score-jobs.ts) (`npm run score`)
@@ -65,7 +65,9 @@ Always run commands from the project root:
 | `npm run build` | Builds the Next.js production bundle | `npm --prefix web run build` |
 | `npm run start` | Starts Next.js production server | `npm --prefix web run start` |
 | `npm run install:web` | Installs dependencies for the `web/` application | `npm --prefix web install` |
-| `npm run scrape` | Runs Python scraper for active sources | `python backend/scraper.py` |
+| `npm run scrape` | Runs TypeScript scraper for active sources | `npm --prefix web run scrape` |
+| `npm run scrape:py` | Legacy Python scraper backup | `python backend/scraper.py` |
+| `npm run test:scraper` | Diagnostic & parity tests on scraping engine | `npm --prefix web run test:scraper` |
 | `npm run score` | Scores pending unscored jobs with AI | `npm --prefix web run score` |
 | `npm run customize` | Tailors resumes for top-matching jobs | `npm --prefix web run customize` |
 | `npm run manage` | Checks job availability & expires inactive jobs | `npm --prefix web run manage` |

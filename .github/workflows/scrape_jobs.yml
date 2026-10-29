@@ -6,10 +6,6 @@ on:
     - cron: "0 11 * * *"   # 7:00 PM SGT (Once daily, captures past 24 hours of job postings)
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: backend
-
 jobs:
   prepare-matrix:
     runs-on: ubuntu-latest
@@ -20,23 +16,44 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: "web/package-lock.json"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: npm --prefix web install
 
       - name: Extract search queries and sources from Supabase
         id: get-queries
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          python -c "import supabase_utils, config, json; supabase_utils.load_and_apply_app_settings(); l_queries = config.LINKEDIN_SEARCH_QUERIES if 'linkedin' in config.SCRAPING_SOURCES else []; print('linkedin_queries=' + json.dumps(l_queries)); print('include_careers_future=' + str('careers_future' in config.SCRAPING_SOURCES).lower())" >> $GITHUB_OUTPUT
+          npx --prefix web tsx -e "
+            import { createSupabaseStaticClient } from './web/src/utils/supabase/server';
+            import { loadScraperSettings } from './web/src/lib/scraper';
+            import fs from 'fs';
+            async function main() {
+              const supabase = createSupabaseStaticClient();
+              const settings = await loadScraperSettings(supabase);
+              const lQueries = settings.scrapingSources.includes('linkedin') ? settings.linkedinQueries : [];
+              const hasCf = settings.scrapingSources.includes('careers_future');
+              const out = [
+                'linkedin_queries=' + JSON.stringify(lQueries),
+                'include_careers_future=' + String(hasCf)
+              ].join('\n');
+              if (process.env.GITHUB_OUTPUT) {
+                fs.appendFileSync(process.env.GITHUB_OUTPUT, out + '\n');
+              } else {
+                console.log(out);
+              }
+            }
+            main();
+          "
 
   scrape-linkedin:
     needs: prepare-matrix
@@ -52,21 +69,22 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: "web/package-lock.json"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: npm --prefix web install
 
       - name: Run LinkedIn scraper for query
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python scraper.py --source linkedin --query "${{ matrix.query }}"
+        run: npm run scrape -- --source linkedin --query "${{ matrix.query }}"
 
   scrape-careers-future:
     needs: prepare-matrix
@@ -76,18 +94,19 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: "web/package-lock.json"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: npm --prefix web install
 
       - name: Run CareersFuture scraper
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python scraper.py --source careers_future
+        run: npm run scrape -- --source careers_future
