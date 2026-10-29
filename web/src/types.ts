@@ -81,6 +81,23 @@ export interface Resume {
 }
 
 
+// --- Multi-Stage Resume Tailoring Types ---
+export interface RoleGuidance {
+  company: string;
+  job_title: string;
+  key_achievements_to_highlight: string[];
+  points_to_condense_or_omit: string[];
+}
+
+export interface CurationPlan {
+  strategy_summary: string;
+  target_role_pain_points: string[];
+  selected_project_names: string[];
+  selected_skills: string[];
+  missing_skills_acknowledged: string[];
+  experience_guidance: RoleGuidance[];
+}
+
 export interface DashboardStats {
   totalNewJobs: number;
   totalAppliedJobs: number;

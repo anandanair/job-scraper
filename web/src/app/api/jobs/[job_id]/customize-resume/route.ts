@@ -35,7 +35,8 @@ export async function POST(
       );
     }
 
-    // 3. Tailor resume content using AI
+    // 3. Tailor resume content using AI multi-stage pipeline
+    console.log(`[API /customize-resume] Starting multi-stage resume customization for job ${job_id}...`);
     const customizedData = await customizeResumeWithLLM(baseResume, {
       job_title: job.job_title,
       company: job.company,
@@ -88,7 +89,8 @@ export async function POST(
 
     const customizedResumeId = insertedResume.id;
 
-    // 7. Re-score the job with the newly customized resume immediately
+    // 7. Stage 3: Re-score the job with the newly customized resume immediately (The Evaluator)
+    console.log(`[API /customize-resume] Stage 3: Evaluating customized resume against job ${job_id}...`);
     let newScore: number | null = null;
     try {
       const resumeText = formatResumeToText(customizedData);

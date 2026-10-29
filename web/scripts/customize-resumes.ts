@@ -107,8 +107,8 @@ async function main() {
     console.log(`[${i + 1}/${candidateJobs.length}] Customizing resume for: "${job.job_title}" at "${job.company}" (${job.job_id})`);
 
     try {
-      // Step A: Tailor resume content using AI
-      console.log("  Tailoring resume content with AI...");
+      // Step A: Tailor resume content using AI multi-stage pipeline
+      console.log("  Tailoring resume content with Multi-Stage AI Pipeline (Strategist + Copywriter)...");
       const customizedData = await customizeResumeWithLLM(baseResume, {
         job_title: job.job_title,
         company: job.company,
@@ -165,7 +165,8 @@ async function main() {
 
       console.log(`  ✓ Customized resume PDF saved and linked to job ${job.job_id}.`);
 
-      // Step F: Re-score job with newly customized resume
+      // Step F: Stage 3: Re-score job with newly customized resume (The Evaluator)
+      console.log("  Stage 3/3: Re-scoring job fit with customized resume (The Evaluator)...");
       try {
         const tailoredText = formatResumeToText(customizedData);
         const newScore = await scoreJobWithResume(tailoredText, {
