@@ -115,7 +115,10 @@ graph TD
 │   ├── package.json            # Web application dependencies & worker scripts
 │   └── tsconfig.json
 ├── install.bat                 # 1-Click installer for Windows
-├── install.sh                  # 1-Click installer for macOS/Linux
+├── install.ps1                 # 1-Line PowerShell installer for Windows
+├── install.sh                  # 1-Click / 1-Line installer for macOS/Linux
+├── start.bat                   # Instant daily launcher for Windows (desktop shortcut target)
+├── start.sh                    # Instant daily launcher for macOS/Linux
 ├── package.json                # Root monorepo scripts
 ├── vercel.json                 # Vercel deployment configuration
 ├── AGENTS.md                   # AI Agent operational protocol

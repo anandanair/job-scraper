@@ -10,7 +10,14 @@
 
 **An autonomous multi-platform job hunting, AI resume tailoring, and ATS typesetting platform.**
 
-[Quick Start](#-quick-start-1-click-installer) • [Architecture](#-architecture) • [Features](#-core-features) • [Setup Wizard](#-setup-wizard-flow-setup) • [CLI & Commands](#-commands--scripts) • [AI Instructions](AGENTS.md)
+[Quick Start](#-quick-start) • [Daily Usage](#-daily-usage-day-2) • [Architecture](#-architecture) • [Features](#-core-features) • [Setup Wizard](#-setup-wizard-flow-setup) • [CLI & Commands](#-commands--scripts) • [AI Instructions](AGENTS.md)
+
+<div style="margin-top: 12px;">
+
+[![Download ZIP](https://img.shields.io/badge/⬇️%20Download-JobTrack%20(.zip)-blue?style=for-the-badge)](https://github.com/anandanair/job-scraper/archive/refs/heads/main.zip)
+[![Deploy with Vercel](https://img.shields.io/badge/▲%20Deploy-with%20Vercel-black?style=for-the-badge)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fanandanair%2Fjob-scraper&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY)
+
+</div>
 
 </div>
 
@@ -71,28 +78,59 @@ graph TD
 
 ---
 
-## 🚀 Quick Start (1-Click Installer)
+## 🚀 Quick Start
 
-The repository provides automated 1-click installers that verify prerequisites (Node.js 20+ LTS), install dependencies, start the dev server, and launch the setup wizard.
+Choose the easiest installation method for your setup:
 
-### Windows
-Double-click [`install.bat`](install.bat) or run from PowerShell / Command Prompt:
-```cmd
-.\install.bat
-```
+### Method 1: 1-Line Quick Install (Zero Git / Zero Cloning Required)
 
-### macOS / Linux
-Run [`install.sh`](install.sh) from terminal:
-```bash
-chmod +x install.sh
-./install.sh
-```
+Open your terminal and paste one command:
 
-Once running, your browser will automatically open **`http://localhost:3000/setup`** to complete the 5-step guided configuration.
+- **Windows (PowerShell)**:
+  ```powershell
+  irm https://raw.githubusercontent.com/anandanair/job-scraper/main/install.ps1 | iex
+  ```
+  *PowerShell checks Node.js, downloads JobTrack, installs dependencies, places a **JobTrack shortcut on your Desktop**, and opens `http://localhost:3000/setup`.*
+
+- **macOS / Linux (Terminal)**:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/anandanair/job-scraper/main/install.sh | bash
+  ```
 
 ---
 
-## 🛠 Manual Installation & Local Development
+### Method 2: 1-Click ZIP Download (No Git Needed)
+
+1. **[Download JobTrack (.zip)](https://github.com/anandanair/job-scraper/archive/refs/heads/main.zip)** and extract it to any folder.
+2. Double-click **[`install.bat`](install.bat)** (Windows) or execute **[`./install.sh`](install.sh)** (macOS/Linux).
+3. The installer configures dependencies, adds a **Desktop shortcut**, and automatically opens the browser setup wizard.
+
+---
+
+### Method 3: 1-Click Cloud Deployment (Zero Local Installation)
+
+Don't want to install Node.js locally? Run the entire system serverless in the cloud for free:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fanandanair%2Fjob-scraper&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY)
+
+- **Next.js UI & REST APIs**: Hosted on Vercel.
+- **Database & Storage**: Hosted on Supabase (PostgreSQL + Buckets).
+- **Background Scrapers & AI Workers**: Autonomous cron execution via GitHub Actions.
+
+---
+
+## ☀️ Daily Usage (Day 2+)
+
+Once installed, you never need to re-run the installer or re-install dependencies:
+
+- **Windows**: Double-click the **JobTrack** icon on your Desktop, or double-click **[`start.bat`](start.bat)**.
+- **macOS / Linux**: Run **[`./start.sh`](start.sh)** from the project directory.
+
+The local web server starts instantly and opens **`http://localhost:3000`** in your browser.
+
+---
+
+## 🛠 Manual Installation & Local Development (Developers)
 
 If you prefer to configure the repository manually:
 
@@ -261,7 +299,10 @@ npm run parse-resume     # Parse resume.pdf into base_resume table
 │   ├── package.json            # Web dependencies & scripts
 │   └── tsconfig.json
 ├── install.bat                 # 1-Click installer for Windows
-├── install.sh                  # 1-Click installer for macOS/Linux
+├── install.ps1                 # 1-Line PowerShell installer for Windows
+├── install.sh                  # 1-Click / 1-Line installer for macOS/Linux
+├── start.bat                   # Instant daily launcher for Windows (opens browser)
+├── start.sh                    # Instant daily launcher for macOS/Linux
 ├── package.json                # Monorepo root npm scripts
 ├── vercel.json                 # Vercel deployment configuration
 ├── AGENTS.md                   # AI Agent & Pair Programming Protocol
