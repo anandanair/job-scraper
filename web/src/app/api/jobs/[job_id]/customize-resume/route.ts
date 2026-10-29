@@ -60,18 +60,21 @@ export async function POST(
     const supabase = createSupabaseStaticClient();
 
     // 5. Save Customized Resume into Supabase table (Single Source of Truth, no storage bucket required)
+    const customizedResumeId = crypto.randomUUID();
+    const resumeStreamingUrl = `/api/customized_resumes/${customizedResumeId}/pdf`;
+
     const dataToInsert = {
+      id: customizedResumeId,
       ...customizedData,
+      resume_link: resumeStreamingUrl,
       theme_config: activeStyle,
     };
 
-    const { data: insertedResume, error: insertError } = await supabase
+    const { error: insertError } = await supabase
       .from("customized_resumes")
-      .insert(dataToInsert)
-      .select("id")
-      .single();
+      .insert(dataToInsert);
 
-    if (insertError || !insertedResume) {
+    if (insertError) {
       console.error("Customized resume insert error:", insertError);
       return NextResponse.json(
         {
@@ -81,9 +84,6 @@ export async function POST(
         { status: 500 },
       );
     }
-
-    const customizedResumeId = insertedResume.id;
-    const resumeStreamingUrl = `/api/customized_resumes/${customizedResumeId}/pdf`;
 
     // 6. Stage 3: Re-score the job with the newly customized resume immediately (The Evaluator)
     console.log(
@@ -113,6 +113,9 @@ export async function POST(
     const jobUpdates: Record<string, any> = {
       customized_resume_id: customizedResumeId,
     };
+    if (job.status === "new") {
+      jobUpdates.status = "resume_generated";
+    }
     if (newScore !== null) {
       jobUpdates.resume_score = newScore;
       jobUpdates.resume_score_stage = "custom";

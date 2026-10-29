@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import dotenv from "dotenv";
 
 // 1. Load env files
@@ -82,7 +83,7 @@ async function main() {
   // 3. Query top scored jobs lacking customized resumes
   const { data: candidateJobs, error: fetchError } = await supabase
     .from("jobs")
-    .select("job_id, job_title, company, description, level, resume_score")
+    .select("job_id, job_title, company, description, level, resume_score, status")
     .eq("is_active", true)
     .is("customized_resume_id", null)
     .gte("resume_score", MIN_SCORE_THRESHOLD)
@@ -116,34 +117,42 @@ async function main() {
       });
 
       // Step B: Insert into customized_resumes table (Single Source of Truth with Theme Snapshot)
+      const customizedResumeId = crypto.randomUUID();
+      const resumeStreamingUrl = `/api/customized_resumes/${customizedResumeId}/pdf`;
+
       const dataToInsert = {
+        id: customizedResumeId,
         ...customizedData,
+        resume_link: resumeStreamingUrl,
         theme_config: activeStyle,
       };
 
-      const { data: insertedResume, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from("customized_resumes")
-        .insert(dataToInsert)
-        .select("id")
-        .single();
+        .insert(dataToInsert);
 
-      if (insertError || !insertedResume) {
-        console.error(`  ✗ Failed to save customized resume in DB for ${job.job_id}:`, insertError?.message);
+      if (insertError) {
+        console.error(`  ✗ Failed to save customized resume in DB for ${job.job_id}:`, insertError.message);
         continue;
       }
 
-      const customizedResumeId = insertedResume.id;
-      const resumeStreamingUrl = `/api/customized_resumes/${customizedResumeId}/pdf`;
+      // Step C: Update job record with foreign key and status
+      const jobUpdates: Record<string, any> = {
+        customized_resume_id: customizedResumeId,
+      };
+      if (job.status === "new") {
+        jobUpdates.status = "resume_generated";
+      }
 
-      // Step C: Update job record
-      await supabase
+      const { error: jobUpdateError } = await supabase
         .from("jobs")
-        .update({
-          customized_resume_id: customizedResumeId,
-          resume_link: resumeStreamingUrl,
-          status: "resume_generated",
-        })
+        .update(jobUpdates)
         .eq("job_id", job.job_id);
+
+      if (jobUpdateError) {
+        console.error(`  ✗ Failed to link customized resume to job ${job.job_id}:`, jobUpdateError.message);
+        continue;
+      }
 
       console.log(`  ✓ Customized resume saved and linked to job ${job.job_id} (ID: ${customizedResumeId}).`);
 
@@ -160,14 +169,19 @@ async function main() {
         });
 
         if (newScore !== null) {
-          await supabase
+          const { error: scoreUpdateError } = await supabase
             .from("jobs")
             .update({
               resume_score: newScore,
               resume_score_stage: "custom",
             })
             .eq("job_id", job.job_id);
-          console.log(`  ✓ Re-scored with customized resume: ${job.resume_score} -> ${newScore}/100`);
+
+          if (scoreUpdateError) {
+            console.warn("  ⚠ Failed to update re-score on job:", scoreUpdateError.message);
+          } else {
+            console.log(`  ✓ Re-scored with customized resume: ${job.resume_score} -> ${newScore}/100`);
+          }
         }
       } catch (scoreErr: any) {
         console.warn("  ⚠ Re-scoring notice:", scoreErr.message);
