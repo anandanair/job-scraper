@@ -7,11 +7,11 @@
     "build": "npm --prefix web run build",
     "start": "npm --prefix web run start",
     "install:web": "npm --prefix web install",
-    "scrape": "npm --prefix web run scrape",
-    "test:scraper": "npm --prefix web run test:scraper",
-    "score": "npm --prefix web run score",
-    "customize": "npm --prefix web run customize",
-    "manage": "npm --prefix web run manage",
-    "parse-resume": "npm --prefix web run parse-resume"
+    "scrape": "npm --prefix web run scrape --",
+    "test:scraper": "npm --prefix web run test:scraper --",
+    "score": "npm --prefix web run score --",
+    "customize": "npm --prefix web run customize --",
+    "manage": "npm --prefix web run manage --",
+    "parse-resume": "npm --prefix web run parse-resume --"
   }
 }

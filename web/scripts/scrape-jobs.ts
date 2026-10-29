@@ -35,23 +35,52 @@ interface CliArgs {
 function parseCliArgs(): CliArgs {
   const args = process.argv.slice(2);
   const result: CliArgs = {};
+  const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === "--source" && args[i + 1]) {
+    if (arg === "--dry-run") {
+      result.dryRun = true;
+    } else if (arg.startsWith("--source=")) {
+      const src = arg.split("=")[1].toLowerCase();
+      if (src === "all" || src === "linkedin" || src === "careers_future") {
+        result.source = src;
+      }
+    } else if (arg === "--source" && args[i + 1]) {
       const src = args[++i].toLowerCase();
       if (src === "all" || src === "linkedin" || src === "careers_future") {
         result.source = src;
       }
+    } else if (arg.startsWith("--query=")) {
+      result.query = arg.slice("--query=".length);
     } else if (arg === "--query" && args[i + 1]) {
       result.query = args[++i];
+    } else if (arg.startsWith("--limit=")) {
+      const lim = parseInt(arg.split("=")[1], 10);
+      if (!isNaN(lim) && lim > 0) {
+        result.limit = lim;
+      }
     } else if (arg === "--limit" && args[i + 1]) {
       const lim = parseInt(args[++i], 10);
       if (!isNaN(lim) && lim > 0) {
         result.limit = lim;
       }
-    } else if (arg === "--dry-run") {
-      result.dryRun = true;
+    } else if (!arg.startsWith("-")) {
+      positional.push(arg);
+    }
+  }
+
+  // Positional fallback in case an outer runner or npm strips flag keys
+  if (positional.length > 0) {
+    for (const p of positional) {
+      const lower = p.toLowerCase();
+      if (!result.source && (lower === "linkedin" || lower === "careers_future" || lower === "all")) {
+        result.source = lower;
+      } else if (!result.limit && /^\d+$/.test(p)) {
+        result.limit = parseInt(p, 10);
+      } else if (!result.query) {
+        result.query = p;
+      }
     }
   }
 
@@ -64,6 +93,7 @@ async function main() {
   console.log("=================================================================\n");
 
   const cli = parseCliArgs();
+  console.log(`[CLI] Options: source=${cli.source ?? "all (configured)"}, query=${cli.query ? `"${cli.query}"` : "all (configured)"}, limit=${cli.limit ?? "default"}, dryRun=${Boolean(cli.dryRun)}`);
   const supabase = createSupabaseStaticClient();
 
   // Load dynamic configuration from Supabase app_settings (or defaults if unconfigured)
