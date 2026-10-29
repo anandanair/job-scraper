@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
     "parse-resume": "tsx scripts/parse-resume.ts",
@@ -16,9 +16,8 @@
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.99.0",
     "@types/pdfkit": "^0.17.5",
-    "axios": "^1.9.0",
     "lucide-react": "^0.577.0",
-    "next": "^16.1.6",
+    "next": "^16.4.3",
     "pdfkit": "^0.17.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -38,5 +37,13 @@
     "tailwindcss": "^4.1.5",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "baseline-browser-mapping": "^2.11.0",
+    "postcss": "^8.5.23",
+    "postcss-selector-parser": "^6.1.5",
+    "source-map-js": "^1.2.2",
+    "nanoid": "^3.3.18",
+    "ws": "^8.21.0"
   }
 }
