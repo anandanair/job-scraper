@@ -819,5 +819,74 @@ INSERT INTO "public"."linkedin_geo_locations" ("name", "country", "geo_id", "ent
 ('Worldwide / Remote', 'Worldwide', '92000000', 'Global', true)
 ON CONFLICT ("geo_id") DO NOTHING;
 
+-- --- Schema Migrations & Automated DDL Execution Helper ---
+CREATE TABLE IF NOT EXISTS "public"."schema_migrations" (
+    "version" text PRIMARY KEY,
+    "applied_at" timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE "public"."schema_migrations" OWNER TO "postgres";
+ALTER TABLE "public"."schema_migrations" ENABLE ROW LEVEL SECURITY;
+
+-- Migration bookkeeping is server-side only. Clients must never be able to
+-- forge or delete a version row, otherwise they could suppress real migrations.
+REVOKE ALL ON TABLE "public"."schema_migrations" FROM PUBLIC, "anon", "authenticated";
+GRANT ALL ON TABLE "public"."schema_migrations" TO "service_role";
+
+-- Drop the legacy single-argument overload so PostgREST cannot resolve
+-- exec_migration() ambiguously (PGRST203).
+DROP FUNCTION IF EXISTS "public"."exec_migration"("sql_query" text);
+
+-- Applies one versioned migration atomically.
+--   * SECURITY DEFINER + pinned search_path prevents search_path hijacking.
+--     public must come first so unqualified DDL in a migration targets the
+--     application schema rather than pg_catalog.
+--   * pg_advisory_xact_lock serializes concurrent callers (multiple tabs,
+--     launcher + browser, retries) so DDL never runs twice.
+--   * The version row is written by the function itself, so a migration can
+--     never be applied without being recorded.
+CREATE OR REPLACE FUNCTION "public"."exec_migration"("p_version" text, "sql_query" text) RETURNS void
+    LANGUAGE "plpgsql"
+    SECURITY DEFINER
+    SET search_path = public, pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM pg_advisory_xact_lock(hashtext('jobtrack_schema_migrations'));
+
+    IF EXISTS (SELECT 1 FROM public.schema_migrations WHERE version = p_version) THEN
+        RETURN;
+    END IF;
+
+    EXECUTE sql_query;
+
+    INSERT INTO public.schema_migrations (version) VALUES (p_version)
+    ON CONFLICT (version) DO NOTHING;
+END;
+$$;
+
+ALTER FUNCTION "public"."exec_migration"("p_version" text, "sql_query" text) OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "public"."exec_migration"("p_version" text, "sql_query" text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION "public"."exec_migration"("p_version" text, "sql_query" text) TO service_role;
+
+-- Read-only probe so the app can detect the booster without executing DDL.
+CREATE OR REPLACE FUNCTION "public"."has_migration_booster"() RETURNS boolean
+    LANGUAGE "sql" STABLE
+    SECURITY DEFINER
+    SET search_path = public, pg_catalog, pg_temp
+    AS $$
+    SELECT to_regprocedure('public.exec_migration(text, text)') IS NOT NULL;
+$$;
+
+ALTER FUNCTION "public"."has_migration_booster"() OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "public"."has_migration_booster"() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION "public"."has_migration_booster"() TO service_role;
+
+-- This script already contains the DDL for the booster migration, so record it
+-- as applied. Without this seed every fresh install would immediately report a
+-- pending migration and show a false "Database Update Available" banner.
+INSERT INTO "public"."schema_migrations" ("version")
+VALUES ('20261029_01_migration_booster_and_interest_filter')
+ON CONFLICT ("version") DO NOTHING;
+
 
 

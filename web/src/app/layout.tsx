@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar"; // Import the Navbar component
 import Footer from "@/components/Footer";
+import SchemaUpdateBanner from "@/components/SchemaUpdateBanner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,6 +31,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col h-screen bg-gray-50 overflow-hidden`} // Added h-screen and overflow-hidden
       >
         <Navbar /> {/* Fixed at top */}
+        <SchemaUpdateBanner />
         {/* Main content area with overflow scrolling */}
         <main className="flex-grow container mx-auto p-4 overflow-auto">
           {children}

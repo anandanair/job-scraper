@@ -26,6 +26,13 @@ jobs:
       - name: Install dependencies
         run: npm --prefix web install
 
+      - name: Apply pending database migrations
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run migrate
+
       - name: Extract search queries and sources from Supabase
         id: get-queries
         env:

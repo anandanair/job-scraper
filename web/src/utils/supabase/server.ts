@@ -99,3 +99,11 @@ export function createSupabaseStaticClient() {
   const { url, key } = getCredentials();
   return createSupabaseClient(url, key);
 }
+
+/**
+ * Returns whether Supabase credentials are present, without creating a client.
+ * Used by startup hooks that must not attempt a network call when unconfigured.
+ */
+export function isSupabaseConfigured(): boolean {
+  return getCredentials().isConfigured;
+}

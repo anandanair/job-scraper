@@ -1,0 +1,60 @@
+name: Sync Fork with Upstream
+
+# Keeps every user's fork of anandanair/job-scraper in lockstep with the primary
+# repository, so the desktop launcher always pulls current code.
+#
+# Note: GitHub disables scheduled workflows after 60 days of repository
+# inactivity. If upstream goes quiet for a long time, re-enable this workflow
+# from the Actions tab (or run it manually) to resume automatic syncing.
+
+on:
+  schedule:
+    # Daily at 18:00 UTC (1 hour before the daily scraper runs at 19:00 UTC / 3:00 AM SGT)
+    - cron: "0 18 * * *"
+  workflow_dispatch: # Allows manual trigger anytime from the Actions tab
+
+# Never let two syncs race each other on the same fork.
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync_latest_from_upstream:
+    runs-on: ubuntu-latest
+    name: Sync main branch with upstream
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync with Upstream via GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          UPSTREAM="anandanair/job-scraper"
+
+          if [ "$REPO" = "$UPSTREAM" ]; then
+            echo "Running on the upstream primary repository. No sync needed."
+            exit 0
+          fi
+
+          # Resolve the fork's default branch instead of assuming "main".
+          BRANCH=$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name')
+          echo "Syncing $REPO ($BRANCH) with $UPSTREAM..."
+
+          # gh repo sync fails hard when the fork has diverged (local commits on
+          # the default branch). Detect that first and report it clearly instead
+          # of failing the workflow with an opaque error every single day.
+          if ! gh repo sync "$REPO" --source "$UPSTREAM" --branch "$BRANCH"; then
+            echo "::warning title=Fork has diverged::Could not fast-forward $REPO/$BRANCH from $UPSTREAM. The fork has local commits on its default branch. Delete or reset the branch in your fork to resume automatic syncing."
+            exit 0
+          fi
+
+          echo "Fork synced successfully."

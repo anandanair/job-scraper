@@ -131,11 +131,13 @@ The local web server starts instantly in a single window and opens **`http://loc
 
 ## 🔄 Updating JobTrack
 
-JobTrack stays up to date with zero friction:
+JobTrack keeps both your **code** and your **database schema** up to date:
 
-- **Automatic on Startup**: Every time you launch via `start.bat` or `./start.sh`, JobTrack automatically checks GitHub for new updates, pulls changes, and refreshes dependencies.
-- **Manual 1-Click Updater**: Double-click **[`update.bat`](update.bat)** (Windows) or run **[`./update.sh`](update.sh)** (macOS/Linux) anytime to pull the latest version.
-- *Note: User settings, AI configurations, and job data reside in your Supabase database and local `.env.local`, which are safely preserved across updates.*
+- **Automatic on Startup**: Every time you launch via `start.bat` or `./start.sh`, JobTrack fetches the latest code from the primary repository (`upstream`), fast-forwards your local copy, and pushes the update to your GitHub fork so your cloud automation runs the same code. If you have uncommitted changes or a diverged branch, it warns you and starts anyway rather than breaking your install.
+- **Automatic Fork Sync**: Your GitHub fork is synced with the primary repository daily by the `Sync Fork with Upstream` workflow, so your cloud automation (scraping, scoring, resume tailoring) always runs the latest code.
+- **Automatic Database Updates**: Schema changes ship as versioned migrations and are applied automatically — both when you launch the app and before every cloud automation run. If your database predates the migration booster, a banner appears with a one-click SQL snippet to paste into your Supabase SQL Editor.
+- **Manual 1-Click Updater**: Double-click **[`update.bat`](update.bat)** (Windows) or run **[`./update.sh`](update.sh)** (macOS/Linux) anytime to force an update. Unlike the launcher, this reports errors instead of continuing.
+- *Note: User settings, AI configurations, and job data reside in your Supabase database and local `.env.local`, which are safely preserved across updates. Your data is never overwritten by an update.*
 
 ---
 

@@ -297,16 +297,30 @@ export async function POST(req: Request) {
         }
       );
       actionsEnabled = actionsPermRes.ok || actionsPermRes.status === 204;
+
+      // Ensure Actions workflows have write permissions so automatic sync can push
+      await fetch(
+        `https://api.github.com/repos/${targetOwner}/${targetRepo}/actions/permissions/workflow`,
+        {
+          method: "PUT",
+          headers: githubHeaders,
+          body: JSON.stringify({
+            default_workflow_permissions: "write",
+            can_approve_pull_request_reviews: false,
+          }),
+        }
+      );
     } catch (e) {
       console.warn("Notice enabling repository Actions permissions:", e);
     }
 
-    // 6. Enable all 4 automation workflows
+    // 6. Enable all 5 automation workflows
     const workflowsToEnable = [
       "scrape_jobs.yml",
       "score_jobs.yml",
       "hourly_resume_customization.yml",
       "job_manager.yml",
+      "sync_upstream.yml",
     ];
 
     for (const wf of workflowsToEnable) {

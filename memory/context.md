@@ -71,7 +71,8 @@ graph TD
 │   ├── scrape_jobs.yml         # Daily TypeScript job scraper (7:00 PM SGT)
 │   ├── score_jobs.yml          # TypeScript AI job scorer (every 4 hrs)
 │   ├── hourly_resume_customization.yml # TypeScript resume tailor (every 4 hrs)
-│   └── job_manager.yml         # TypeScript job status manager (daily)
+│   ├── job_manager.yml         # TypeScript job status manager (daily)
+│   └── sync_upstream.yml       # Daily automatic fork sync from upstream repository
 ├── memory/                     # AI & Engineering Knowledge Base
 │   ├── context.md              # Living technical architecture and conventions (this file)
 │   ├── progress_latest.md      # Active monthly changelog and task tracker
@@ -231,4 +232,40 @@ npm run parse-resume     # Parse master resume.pdf into base_resume table
    - Use `createSupabaseServerClient()` or `createSupabaseStaticClient()` from `@/utils/supabase/server`.
 4. **Environment Variables**:
    - `web/.env.local` (or root `.env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+---
+
+## 10. Synchronization & Migration Architecture
+
+1. **GitHub Fork Autopilot Sync (`.github/workflows/sync_upstream.yml`)**:
+   - Runs daily using native GitHub CLI `gh repo sync` with `GITHUB_TOKEN`.
+   - Resolves the fork's default branch dynamically (does not assume `main`).
+   - Uses a `concurrency` group so two syncs never race.
+   - If a fork has diverged (local commits on its default branch), the workflow emits a warning and exits successfully instead of failing every day.
+   - *Note: GitHub disables scheduled workflows after 60 days of repository inactivity. Re-enable from the Actions tab if upstream goes quiet.*
+2. **Local Repository Sync (`start.bat` / `update.bat` / `start.sh` / `update.sh`)**:
+   - Configures an `upstream` remote pointing directly to `https://github.com/anandanair/job-scraper.git`.
+   - On launcher startup, fetches and fast-forwards `upstream main` so local clones always run the latest primary code regardless of fork settings.
+   - **Launchers are best-effort**: a failed fetch, dirty working tree, or diverged branch prints a warning and the app still starts. Only `update.*` treats these as hard errors.
+   - Updates use `git merge --ff-only` (never `git pull`), so local commits are never silently merged or clobbered.
+   - `GIT_TERMINAL_PROMPT=0` prevents a credential prompt from hanging the launcher window.
+   - After a successful fast-forward, the launcher runs `git push origin HEAD:main` to propagate the new commits to the user's **fork**, so cloud automation runs the same code as the local clone. This is skipped when `origin` is the upstream repo itself, and failure is non-fatal (the user is told to use GitHub's "Sync fork" button).
+3. **Database Schema Doctor & Auto-Migrations (`web/src/lib/setup/migrations.ts`)**:
+   - Tracks versioned migrations in Supabase `schema_migrations`.
+   - `exec_migration(p_version, sql_query)` applies one migration atomically: it takes a `pg_advisory_xact_lock`, skips already-recorded versions, runs the DDL, then records the version itself. A migration can never be applied without being recorded.
+   - The function is `SECURITY DEFINER` with `SET search_path = public, pg_catalog, pg_temp` (public first, so unqualified DDL targets the app schema) and is granted to `service_role` only.
+   - `has_migration_booster()` is a read-only catalog probe used to detect the booster without executing DDL.
+   - `GET /api/system/schema-status` is **read-only**; `POST` applies migrations. The banner never triggers DDL on page load.
+   - `getMigrationStatus()` distinguishes `not_configured`, `unreachable`, `up_to_date`, and `pending`, so an offline or unconfigured project never shows a false update banner.
+   - For legacy databases lacking the booster, `SchemaUpdateBanner` surfaces a 1-click modal with direct links to the user's Supabase SQL Editor (`/sql/new`).
+4. **Three migration entry points (all share `runPendingMigrations()`)**:
+   - **App startup** — `web/src/instrumentation.ts` runs once per server process, so launching the app applies pending migrations automatically.
+   - **Cloud workflows** — every automation workflow runs `npm run migrate` (`web/scripts/migrate.ts`) before touching the database, so cloud-only users who never launch the app locally still receive schema updates. The step exits non-zero when migrations remain, failing the workflow loudly instead of running against a stale schema.
+   - **Dashboard banner** — manual fallback for databases without the booster.
+5. **Adding a schema change (required workflow)**:
+   - Update `supabase_setup/init.sql` **and** append a new entry to `ALL_MIGRATIONS` in `web/src/lib/setup/migrations.ts` with a new `YYYYMMDD_NN_*` id.
+   - `init.sql` is the fresh-install path; `ALL_MIGRATIONS` is the upgrade path for existing users. Both must stay in sync.
+   - Never edit an already-released migration id — existing databases have already recorded it and will skip it.
+6. **What cannot be synced**: user data (jobs, settings, resumes) lives in each user's own Supabase project and is never overwritten. Only schema and reference/seed data propagate.
+
 

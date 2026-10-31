@@ -42,23 +42,88 @@ goto :LAUNCH_APP
 where git >nul 2>&1
 if %errorlevel% neq 0 goto :eof
 
-echo [*] Checking for updates from GitHub...
-git fetch origin main --quiet 2>nul
-set BEHIND=0
-for /f %%i in ('git rev-list HEAD..origin/main --count 2^>nul') do set BEHIND=%%i
+:: Never block the launcher on a credential prompt
+set GIT_TERMINAL_PROMPT=0
 
-if "%BEHIND%" gtr "0" (
+:: Ensure 'upstream' remote points to the primary repository
+git remote get-url upstream >nul 2>&1
+if %errorlevel% neq 0 (
+    git remote add upstream https://github.com/anandanair/job-scraper.git >nul 2>&1
+)
+
+echo [*] Checking for updates from upstream repository...
+git fetch upstream main --quiet 2>nul
+if %errorlevel% neq 0 (
+    echo     Could not reach GitHub. Starting with the current local version.
     echo.
-    echo [*] Update available: %BEHIND% new commit^(s^) found on GitHub.
-    echo [*] Pulling latest updates...
-    git pull origin main --quiet
-    echo [*] Updating dependencies...
-    call npm --prefix web install
-    echo [SUCCESS] JobTrack is now updated to the latest version!
-    echo.
-) else (
+    goto :eof
+)
+
+set BEHIND=0
+for /f %%i in ('git rev-list HEAD..upstream/main --count 2^>nul') do set BEHIND=%%i
+
+if not "%BEHIND%" gtr "0" (
     echo     JobTrack is up to date.
     echo.
+    goto :eof
+)
+
+echo.
+echo [*] Update available: %BEHIND% new commit^(s^) found on upstream repository.
+
+:: Refuse to touch a dirty working tree - a merge would clobber local edits
+set DIRTY=0
+for /f %%i in ('git status --porcelain 2^>nul') do set DIRTY=1
+if "%DIRTY%"=="1" (
+    echo [WARNING] You have uncommitted local changes, so the update was skipped.
+    echo           Commit or stash them, then run update.bat to update.
+    echo.
+    goto :eof
+)
+
+echo [*] Pulling latest updates...
+git merge --ff-only upstream/main --quiet 2>nul
+if %errorlevel% neq 0 (
+    echo [WARNING] Could not fast-forward to the latest version.
+    echo           Your local branch has diverged from upstream.
+    echo           Run update.bat for details, or reset manually with:
+    echo             git reset --hard upstream/main
+    echo.
+    goto :eof
+)
+
+:: Push the new commits to the user's own fork so its cloud automation
+:: (scraping, scoring, resume tailoring) runs the same code as this clone.
+:: Best-effort: many users have no push credentials configured.
+call :PUSH_TO_FORK
+
+echo [*] Updating dependencies...
+call npm --prefix web install
+if %errorlevel% neq 0 (
+    echo [WARNING] Dependency installation reported errors. JobTrack may not run correctly.
+    echo.
+    goto :eof
+)
+
+echo [SUCCESS] JobTrack is now updated to the latest version!
+echo.
+goto :eof
+
+:PUSH_TO_FORK
+:: Skip when origin is the upstream repository itself (developer clone)
+for /f %%i in ('git remote get-url origin 2^>nul') do set ORIGIN_URL=%%i
+echo %ORIGIN_URL% | findstr /i "anandanair/job-scraper" >nul
+if %errorlevel% equ 0 goto :eof
+
+git push origin HEAD:main --quiet 2>nul
+if %errorlevel% neq 0 (
+    echo [NOTICE] Could not push the update to your GitHub fork.
+    echo          Your local copy is current, but cloud automation on your fork
+    echo          may still run older code. To fix it, open your fork on GitHub
+    echo          and click "Sync fork" ^> "Update branch".
+    echo.
+) else (
+    echo [*] Synced your GitHub fork with the latest code.
 )
 goto :eof
 

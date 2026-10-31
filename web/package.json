@@ -12,6 +12,7 @@
     "customize": "tsx scripts/customize-resumes.ts",
     "manage": "tsx scripts/job-manager.ts",
     "scrape": "tsx scripts/scrape-jobs.ts",
+    "migrate": "tsx scripts/migrate.ts",
     "test:scraper": "tsx scripts/test-scraper.ts"
   },
   "dependencies": {

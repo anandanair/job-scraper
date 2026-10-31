@@ -40,6 +40,7 @@ Every AI assistant working in this repository MUST follow these three operationa
      - Job Scoring: [`web/scripts/score-jobs.ts`](web/scripts/score-jobs.ts) (`npm run score`)
      - Resume Customization: [`web/scripts/customize-resumes.ts`](web/scripts/customize-resumes.ts) (`npm run customize`)
      - Job Expiration / Status Manager: [`web/scripts/job-manager.ts`](web/scripts/job-manager.ts) (`npm run manage`)
+     - Database Migrations: [`web/scripts/migrate.ts`](web/scripts/migrate.ts) (`npm run migrate`)
      - Resume Parsing: [`web/scripts/parse-resume.ts`](web/scripts/parse-resume.ts) (`npm run parse-resume`)
 4. **Single Source of Truth for Configuration**:
    - All user preferences (search queries, locations, filters, active sources) and AI settings (provider, model, API keys, RPM limits, budget) are stored in the Supabase **`app_settings`** table.
@@ -70,6 +71,7 @@ Always run commands from the project root:
 | `npm run score` | Scores pending unscored jobs with AI | `npm --prefix web run score` |
 | `npm run customize` | Tailors resumes for top-matching jobs | `npm --prefix web run customize` |
 | `npm run manage` | Checks job availability & expires inactive jobs | `npm --prefix web run manage` |
+| `npm run migrate` | Applies pending database schema migrations | `npm --prefix web run migrate` |
 | `npm run parse-resume` | Parses `resume.pdf` into structured JSON | `npm --prefix web run parse-resume` |
 
 ---
