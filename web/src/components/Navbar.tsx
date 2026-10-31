@@ -94,7 +94,7 @@ export default function Navbar() {
             : "bg-white border-b border-gray-100"
         }`}
       >
-        <div className="container mx-auto px-4 max-w-6xl">
+        <div className="container mx-auto px-4 max-w-7xl">
           <nav className="flex justify-between items-center h-16">
             {/* Minimalist Logo */}
             <Link

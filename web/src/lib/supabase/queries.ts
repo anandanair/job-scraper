@@ -1111,6 +1111,94 @@ export const getCachedDashboardStats = unstable_cache(
   }
 );
 
+/**
+ * Gets the number of applied jobs per day for the last N local days (oldest first).
+ * @param days Number of local days to include (including today).
+ * @returns Array of { date: 'YYYY-MM-DD', count: number } entries, oldest first.
+ */
+export async function getAppliedJobsCountsLastNDays(
+  days: number,
+): Promise<{ date: string; count: number }[]> {
+  const supabase = createSupabaseStaticClient();
+  const appliedStatuses = ["applied", "interviewing", "offer"];
+
+  // Build local-day boundaries (server local timezone, same pattern as getDashboardStats)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startOfWindow = new Date(today);
+  startOfWindow.setDate(today.getDate() - (days - 1));
+  const startOfWindowUTC = startOfWindow.toISOString();
+  const startOfTomorrowUTC = new Date(
+    today.getTime() + 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("application_date")
+    .eq("is_active", true)
+    .in("status", appliedStatuses)
+    .eq("job_state", "new")
+    .gte("application_date", startOfWindowUTC)
+    .lt("application_date", startOfTomorrowUTC);
+
+  if (error) {
+    console.error(
+      "Supabase error fetching recent application dates:",
+      error.message,
+    );
+    throw new Error(error.message);
+  }
+
+  // Initialize every local day in the window with 0 so the chart has no gaps
+  const countsByDate = new Map<string, number>();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(startOfWindow);
+    d.setDate(startOfWindow.getDate() + i);
+    const key = `${d.getFullYear()}-${(d.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
+    countsByDate.set(key, 0);
+  }
+
+  for (const row of data ?? []) {
+    if (!row.application_date) continue;
+    // application_date is a UTC timestamp; convert to the server's local date key
+    const localDate = new Date(row.application_date);
+    const key = `${localDate.getFullYear()}-${(localDate.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}-${localDate.getDate().toString().padStart(2, "0")}`;
+    if (countsByDate.has(key)) {
+      countsByDate.set(key, (countsByDate.get(key) ?? 0) + 1);
+    }
+  }
+
+  return Array.from(countsByDate.entries()).map(([date, count]) => ({
+    date,
+    count,
+  }));
+}
+
+/**
+ * Gets the most recent job scrape timestamp (latest scraped_at across all jobs).
+ * @returns ISO timestamp string or null when no jobs exist yet.
+ */
+export async function getLastScrapedAt(): Promise<string | null> {
+  const supabase = createSupabaseStaticClient();
+
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("scraped_at")
+    .order("scraped_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.error("Supabase error fetching last scraped_at:", error.message);
+    throw new Error(error.message);
+  }
+
+  return data?.[0]?.scraped_at ?? null;
+}
+
 // --- Resume Style Settings Queries ---
 
 /**

@@ -11,8 +11,8 @@ export default function Footer() {
   }
 
   return (
-    <footer className="flex-shrink-0 bg-gray-200 p-4 text-center text-sm text-gray-600">
-      © {new Date().getFullYear()} Job App Tracker
+    <footer className="flex-shrink-0 border-t border-gray-100 bg-white py-4 text-center text-xs text-gray-400">
+      © {new Date().getFullYear()} JobTrack
     </footer>
   );
 }

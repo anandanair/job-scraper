@@ -102,6 +102,7 @@ graph TD
 │   │   │   ├── settings/       # AI provider & job preferences configuration
 │   │   │   └── setup/          # 5-Step interactive onboarding wizard
 │   │   ├── components/         # React components organized by feature
+│   │   │   ├── dashboard/      # Home page dashboard (Hero, KpiCards, PipelineFunnel, TopMatchesPreview, ActivityChart)
 │   │   ├── lib/                # Core business logic (llm.ts, pdf.ts, resumeParser.ts, etc.)
 │   │   ├── utils/supabase/     # Supabase client/server initializers
 │   │   └── types.ts            # Shared TypeScript interfaces & types
@@ -232,6 +233,10 @@ npm run parse-resume     # Parse master resume.pdf into base_resume table
    - Use `createSupabaseServerClient()` or `createSupabaseStaticClient()` from `@/utils/supabase/server`.
 4. **Environment Variables**:
    - `web/.env.local` (or root `.env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+5. **Dashboard Home Page (`web/src/app/page.tsx`)**:
+   - Composed of server components in `web/src/components/dashboard/`: `DashboardHero` (personalized greeting + quick actions + last-scrape timestamp), `KpiCards` (New/Top Matches/Tailored/Applied — numbers sourced from `getJobsTabCounts()` to mirror the jobs page tab pills), `PipelineFunnel` (proportional stage bars with conversion %; pending/expired/provider stats as footer chips), `TopMatchesPreview` (top 5 via `getTopScoredJobs(1, 5)`), and `ActivityChart` (pure-CSS 14-day applications bar chart).
+   - Supporting queries in `web/src/lib/supabase/queries.ts`: `getAppliedJobsCountsLastNDays(days)` and `getLastScrapedAt()`.
+   - All dashboard data fetches run in one `Promise.all` and fail soft (render zeros/empty states on error).
 
 ---
 
