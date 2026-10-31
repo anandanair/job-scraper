@@ -117,6 +117,94 @@ GRANT ALL ON FUNCTION "public"."get_jobs_for_resume_generation_custom_sort"("p_p
 -- 5. Record this migration as applied
 INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261029_01_migration_booster_and_interest_filter') ON CONFLICT DO NOTHING;`,
   },
+  {
+    id: "20261101_01_applied_jobs_tracking",
+    title: "Applied Jobs Tracking (Follow-ups, Events & Status History)",
+    description:
+      "Adds follow_up_at, next_event_at, next_event_label and status_history columns to jobs for application tracking, updates get_applied_jobs_sorted to include rejected jobs by default and support follow-up sorting, and adds supporting indexes.",
+    sql: `-- 1. Add tracking columns to jobs
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "follow_up_at" timestamp with time zone;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "next_event_at" timestamp with time zone;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "next_event_label" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "status_history" "jsonb" DEFAULT '[]'::"jsonb";
+
+COMMENT ON COLUMN "public"."jobs"."follow_up_at" IS 'Timestamp when the user wants a follow-up reminder for this application';
+COMMENT ON COLUMN "public"."jobs"."next_event_at" IS 'Timestamp of the next scheduled event (e.g., interview, offer deadline)';
+COMMENT ON COLUMN "public"."jobs"."next_event_label" IS 'Human-readable label for the next scheduled event (e.g., Technical Interview Round 2)';
+COMMENT ON COLUMN "public"."jobs"."status_history" IS 'Append-only JSONB array of status transitions: [{from, to, at, note}]';
+
+-- 2. Supporting indexes for follow-up and event queries
+CREATE INDEX IF NOT EXISTS "idx_jobs_follow_up_at" ON "public"."jobs" USING "btree" ("follow_up_at");
+CREATE INDEX IF NOT EXISTS "idx_jobs_next_event_at" ON "public"."jobs" USING "btree" ("next_event_at");
+
+-- 3. Update get_applied_jobs_sorted: include rejected in default set, add follow_up_at sort
+DROP FUNCTION IF EXISTS "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text");
+DROP FUNCTION IF EXISTS "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text", "p_sort_by" "text", "p_sort_order" "text");
+
+CREATE OR REPLACE FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text" DEFAULT NULL::"text", "p_search_query" "text" DEFAULT NULL::"text", "p_application_status" "text" DEFAULT NULL::"text", "p_sort_by" "text" DEFAULT NULL::"text", "p_sort_order" "text" DEFAULT 'desc'::"text") RETURNS SETOF "public"."jobs"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  RETURN QUERY
+  SELECT *
+  FROM jobs j
+  WHERE
+    j.is_active = TRUE AND
+    j.job_state = 'new' AND
+    (
+      p_application_status IS NULL AND j.status IN ('applied', 'interviewing', 'offer', 'rejected') OR
+      j.status = p_application_status
+    )
+    AND (p_provider IS NULL OR j.provider = p_provider)
+    AND (
+      p_search_query IS NULL OR
+      j.job_title ILIKE '%' || p_search_query || '%' OR
+      j.company ILIKE '%' || p_search_query || '%'
+    )
+  ORDER BY
+    CASE
+      WHEN p_sort_by = 'application_date' AND p_sort_order = 'asc' THEN j.application_date
+      ELSE NULL
+    END ASC NULLS LAST,
+    CASE
+      WHEN p_sort_by = 'application_date' AND p_sort_order = 'desc' THEN j.application_date
+      ELSE NULL
+    END DESC NULLS LAST,
+    CASE
+      WHEN p_sort_by = 'resume_score' AND p_sort_order = 'asc' THEN j.resume_score
+      ELSE NULL
+    END ASC NULLS LAST,
+    CASE
+      WHEN p_sort_by = 'resume_score' AND p_sort_order = 'desc' THEN j.resume_score
+      ELSE NULL
+    END DESC NULLS LAST,
+    CASE
+      WHEN p_sort_by = 'follow_up_at' AND p_sort_order = 'asc' THEN j.follow_up_at
+      ELSE NULL
+    END ASC NULLS LAST,
+    CASE
+      WHEN p_sort_by = 'follow_up_at' AND p_sort_order = 'desc' THEN j.follow_up_at
+      ELSE NULL
+    END DESC NULLS LAST,
+    CASE j.status
+      WHEN 'offer' THEN 1
+      WHEN 'interviewing' THEN 2
+      WHEN 'applied' THEN 3
+      WHEN 'rejected' THEN 4
+      ELSE 5
+    END ASC,
+    j.application_date DESC
+  LIMIT p_page_size
+  OFFSET (p_page_number - 1) * p_page_size;
+END;
+$$;
+
+ALTER FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text", "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
+GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer, "p_page_size" integer, "p_provider" "text", "p_search_query" "text", "p_application_status" "text", "p_sort_by" "text", "p_sort_order" "text") TO "anon", "authenticated", "service_role";
+
+-- 4. Record this migration as applied
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261101_01_applied_jobs_tracking') ON CONFLICT DO NOTHING;`,
+  },
 ];
 
 /**

@@ -20,6 +20,18 @@ export interface Job {
   customized_resumes?: Resume | null;
   resume_link?: string | null;
   provider: string;
+  follow_up_at?: string | null;
+  next_event_at?: string | null;
+  next_event_label?: string | null;
+  status_history?: StatusHistoryEntry[] | null;
+}
+
+// Append-only record of a single status transition
+export interface StatusHistoryEntry {
+  from: string | null;
+  to: string;
+  at: string;
+  note?: string;
 }
 
 // --- Resume Related Interfaces ---

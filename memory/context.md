@@ -142,6 +142,11 @@ graph TD
      - Onboarding status: `setup_step`, `setup_completed`.
 6. **`linkedin_geo_locations`**:
    - Pre-populated mapping of global locations to LinkedIn `geoId`s (e.g., Singapore `102454443`, United States `103644278`).
+6. **`jobs` application-tracking columns** (migration `20261101_01_applied_jobs_tracking`):
+   - `follow_up_at` (timestamptz): user-set follow-up reminder; surfaced as due/overdue badges on the Applied page.
+   - `next_event_at` (timestamptz) + `next_event_label` (text): next scheduled event (e.g., interview round) with countdown banner.
+   - `status_history` (jsonb, default `[]`): append-only array of `{from, to, at, note}` transitions, auto-appended by the `PATCH /api/jobs/[job_id]` route (transient `note` body field) and rendered as a timeline.
+   - Applied-page statuses are `applied`, `interviewing`, `offer`, `rejected` (the RPC `get_applied_jobs_sorted` includes `rejected` in its default set and supports `p_sort_by = 'follow_up_at'`).
 
 ### Storage Architecture (On-Demand Streaming)
 - **Supabase Storage Buckets (`resumes`, `personalized_resumes`)**: Fully deprecated.
@@ -237,6 +242,7 @@ npm run parse-resume     # Parse master resume.pdf into base_resume table
    - Composed of server components in `web/src/components/dashboard/`: `DashboardHero` (personalized greeting + quick actions + last-scrape timestamp), `KpiCards` (New/Top Matches/Tailored/Applied — numbers sourced from `getJobsTabCounts()` to mirror the jobs page tab pills), `PipelineFunnel` (proportional stage bars with conversion %; pending/expired/provider stats as footer chips), `TopMatchesPreview` (top 5 via `getTopScoredJobs(1, 5)`), and `ActivityChart` (pure-CSS 14-day applications bar chart).
    - Supporting queries in `web/src/lib/supabase/queries.ts`: `getAppliedJobsCountsLastNDays(days)` and `getLastScrapedAt()`.
    - All dashboard data fetches run in one `Promise.all` and fail soft (render zeros/empty states on error).
+   - **Applied page (`/jobs/applied`, "Application Tracker")**: redesigned tracking view composed of `web/src/components/jobs/applied/` components (`AppliedStatsBar` clickable status-count cards, `AppliedJobCard` with company avatar/event/follow-up badges + expandable notes & timeline, `StatusChangeModal` contextual status form, `StatusTimeline`, `NotesEditor`, `Toast`) orchestrated by `web/src/components/jobs/AppliedJobsList.tsx`. Shared status helpers (status metadata, follow-up/event urgency, company avatars, date formatting) live in `web/src/lib/applied-status.ts`. Supports `followUpOnly=true` search param for the needs-attention filter and `sortBy=follow_up_at`.
 
 ---
 

@@ -17,6 +17,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import MarkdownRenderer from "./MarkdownRenderer";
+import Toast, { ToastData } from "./applied/Toast";
 import { Job } from "@/types";
 import { useRouter, useSearchParams } from "next/navigation"; // Added useSearchParams
 
@@ -211,8 +212,10 @@ export default function TopMatchesList({
 
       const updatedJob: Job = await response.json();
       setSelectedJob(updatedJob);
-      // Toast notification instead of alert
-      showToast("Job marked as applied successfully!", "success");
+      // Toast with Undo so accidental applications can be reverted
+      showToast("Job marked as applied successfully!", "success", () =>
+        handleUndoApplied(updatedJob)
+      );
       router.refresh(); // Refresh the page to show updated jobs
     } catch (error) {
       console.error("Error marking job as applied:", error);
@@ -279,14 +282,42 @@ export default function TopMatchesList({
     }
   };
 
-  // Simple toast notification function (you may want to replace with a proper toast library)
-  const showToast = (message: string, type: "success" | "error") => {
-    // This is a placeholder - you would implement a proper toast notification
-    // Consider using react-hot-toast, react-toastify, or a similar library
-    console.log(`Toast (${type}): ${message}`);
-    // For now, we'll use a simple alert as a fallback
-    if (type === "error") {
-      alert(message);
+  // Toast state: real notifications with optional Undo action
+  const [toast, setToast] = useState<ToastData | null>(null);
+  const showToast = (
+    message: string,
+    type: "success" | "error",
+    onUndo?: () => void
+  ) => {
+    setToast({ id: Date.now(), message, type, onUndo });
+  };
+
+  // Revert a job out of the applied pipeline (toast Undo action)
+  const handleUndoApplied = async (job: Job) => {
+    try {
+      const response = await fetch(`/api/jobs/${job.job_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "new",
+          application_date: null,
+          follow_up_at: null,
+          next_event_at: null,
+          next_event_label: null,
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.error || `HTTP error! status: ${response.status}`
+        );
+      }
+      showToast("Application reverted — job is back in your pipeline", "success");
+      router.refresh();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "An unknown error occurred.";
+      showToast(`Error: ${message}`, "error");
     }
   };
 
@@ -672,6 +703,9 @@ export default function TopMatchesList({
           </div>
         )}
       </div>
+
+      {/* Toast notifications */}
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

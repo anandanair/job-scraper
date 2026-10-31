@@ -1,14 +1,14 @@
 import { Suspense } from "react";
-import RefreshButton from "@/components/jobs/RefreshButton";
-import { Job } from "@/types";
-import { getAppliedJobs, getAppliedJobsCount } from "@/lib/supabase/queries";
+import { getAppliedJobs, getAppliedJobsCount, getAppliedStatusCounts } from "@/lib/supabase/queries";
 import AppliedJobsList from "@/components/jobs/AppliedJobsList";
 import JobListSkeleton from "@/components/jobs/JobListSkeleton";
 import SearchComponent from "@/components/jobs/SearchComponent";
 import FilterButton from "@/components/jobs/FilterButton";
-import SortOptions from "@/components/jobs/SortOptions"; // Import the new SortOptions component
+import RefreshButton from "@/components/jobs/RefreshButton";
 
-const PAGE_SIZE = 10; // Define page size
+const PAGE_SIZE = 10;
+/** Days an "applied" application can sit untouched before a follow-up hint appears */
+const FOLLOW_UP_THRESHOLD_DAYS = 7;
 
 export default async function AppliedJobsPage({
   searchParams,
@@ -16,29 +16,22 @@ export default async function AppliedJobsPage({
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
-  // Get current page from search params, default to 1
   const currentPage = parseInt(params?.page as string) || 1;
-
-  // Get search query from search params
   const searchQuery = params?.query as string;
 
-  // Get provider filter from search params
   const provider = params?.provider as string;
   const providerFilter = provider && provider !== "all" ? provider : undefined;
 
-  // Get application status filter from search params
   const applicationStatus = params?.applicationStatus as string;
   const applicationStatusFilter =
     applicationStatus && applicationStatus !== "all"
       ? applicationStatus
       : undefined;
 
-  // Get sort parameters from search params (New)
-  const sortBy = params?.sortBy as string; // e.g., 'application_date', 'resume_score'
-  const sortOrder = params?.sortOrder as string; // e.g., 'asc', 'desc'
+  const sortBy = params?.sortBy as string;
+  const sortOrder = params?.sortOrder as string;
 
-  // Fetch the jobs for the current page and total count in parallel
-  const [appliedJobs, totalCount] = await Promise.all([
+  const [appliedJobs, totalCount, statusCounts] = await Promise.all([
     getAppliedJobs(
       currentPage,
       PAGE_SIZE,
@@ -48,11 +41,8 @@ export default async function AppliedJobsPage({
       sortBy,
       sortOrder
     ),
-    getAppliedJobsCount(
-      providerFilter,
-      searchQuery,
-      applicationStatusFilter
-    ),
+    getAppliedJobsCount(providerFilter, searchQuery, applicationStatusFilter),
+    getAppliedStatusCounts(),
   ]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -62,9 +52,12 @@ export default async function AppliedJobsPage({
       {/* Page header with actions */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Applied Jobs</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+            Application Tracker
+          </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Showing applied jobs ({totalCount} total)
+            Track every application, follow up on time, and never miss an
+            interview
           </p>
         </div>
 
@@ -75,7 +68,6 @@ export default async function AppliedJobsPage({
             scoreOptions={false}
             applicationStatusOptions={true}
           />
-          <SortOptions /> {/* Add the SortOptions component here */}
           <RefreshButton currentPage={currentPage} />
         </div>
       </div>
@@ -86,11 +78,13 @@ export default async function AppliedJobsPage({
           jobs={appliedJobs}
           currentPage={currentPage}
           totalPages={totalPages}
+          totalCount={totalCount}
+          statusCounts={statusCounts}
+          followUpThresholdDays={FOLLOW_UP_THRESHOLD_DAYS}
         />
       </Suspense>
     </div>
   );
 }
-
 
 export const dynamic = "force-dynamic";

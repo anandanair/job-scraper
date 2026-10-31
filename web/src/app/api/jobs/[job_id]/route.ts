@@ -7,7 +7,8 @@ import {
   updateCustomizedResumeById,
   getActiveResumeStyle,
 } from "@/lib/supabase/queries";
-import { Job } from "@/types";
+import { Job, StatusHistoryEntry } from "@/types";
+import { parseStatusHistory } from "@/lib/applied-status";
 
 // Handler for PATCH requests to update a job
 export async function PATCH(
@@ -23,12 +24,36 @@ export async function PATCH(
       );
     }
 
-    const updates = (await request.json()) as Partial<Omit<Job, "job_id">>;
-    if (!updates || Object.keys(updates).length === 0) {
+    const body = (await request.json()) as Partial<Job> & { note?: string };
+    if (!body || Object.keys(body).length === 0) {
       return NextResponse.json(
         { error: "Update payload is required" },
         { status: 400 }
       );
+    }
+
+    // `note` is a transient field consumed by the history entry below;
+    // the persisted column is `notes`.
+    const { note, ...updates } = body;
+
+    // Append to the status history timeline whenever the status changes.
+    // History is always rebuilt from the DB so concurrent updates are preserved.
+    if (updates.status) {
+      const currentJob = await getJobById(job_id);
+      const history = parseStatusHistory(currentJob?.status_history);
+      const lastEntry = history[history.length - 1];
+      const entryNote = note && note.trim() ? note.trim() : undefined;
+      const newEntry: StatusHistoryEntry = {
+        from: lastEntry ? lastEntry.to : currentJob?.status ?? null,
+        to: updates.status,
+        at: new Date().toISOString(),
+        ...(entryNote ? { note: entryNote } : {}),
+      };
+      // Avoid duplicate consecutive entries for the same status
+      if (!lastEntry || lastEntry.to !== newEntry.to) {
+        history.push(newEntry);
+      }
+      updates.status_history = history;
     }
 
     const updatedJob = await updateJobById(job_id, updates);

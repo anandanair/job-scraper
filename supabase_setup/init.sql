@@ -81,7 +81,11 @@ CREATE TABLE IF NOT EXISTS "public"."jobs" (
     "is_interested" boolean,
     "customized_resume_id" "uuid",
     "provider" "text",
-    "posted_at" timestamp with time zone
+    "posted_at" timestamp with time zone,
+    "follow_up_at" timestamp with time zone,
+    "next_event_at" timestamp with time zone,
+    "next_event_label" "text",
+    "status_history" "jsonb" DEFAULT '[]'::"jsonb"
 );
 
 -- Upgrade existing jobs tables if columns are missing from earlier versions
@@ -103,6 +107,10 @@ ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "is_interested" boolean;
 ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "customized_resume_id" "uuid";
 ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "provider" "text";
 ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "posted_at" timestamp with time zone;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "follow_up_at" timestamp with time zone;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "next_event_at" timestamp with time zone;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "next_event_label" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "status_history" "jsonb" DEFAULT '[]'::"jsonb";
 
 
 ALTER TABLE "public"."jobs" OWNER TO "postgres";
@@ -152,6 +160,22 @@ COMMENT ON COLUMN "public"."jobs"."notes" IS 'User''s notes about the job/applic
 
 
 
+COMMENT ON COLUMN "public"."jobs"."follow_up_at" IS 'Timestamp when the user wants a follow-up reminder for this application';
+
+
+
+COMMENT ON COLUMN "public"."jobs"."next_event_at" IS 'Timestamp of the next scheduled event (e.g., interview, offer deadline)';
+
+
+
+COMMENT ON COLUMN "public"."jobs"."next_event_label" IS 'Human-readable label for the next scheduled event (e.g., Technical Interview Round 2)';
+
+
+
+COMMENT ON COLUMN "public"."jobs"."status_history" IS 'Append-only JSONB array of status transitions: [{from, to, at, note}]';
+
+
+
 COMMENT ON COLUMN "public"."jobs"."scraped_at" IS 'Timestamp when the record was first added';
 
 
@@ -177,7 +201,7 @@ BEGIN
     j.job_state = 'new' AND
     -- Conditionally apply application status filter
     (
-      p_application_status IS NULL AND j.status IN ('applied', 'interviewing', 'offer') OR
+      p_application_status IS NULL AND j.status IN ('applied', 'interviewing', 'offer', 'rejected') OR
       j.status = p_application_status
     )
     -- Conditionally apply provider filter
@@ -206,12 +230,21 @@ BEGIN
       WHEN p_sort_by = 'resume_score' AND p_sort_order = 'desc' THEN j.resume_score
       ELSE NULL
     END DESC NULLS LAST,
+    CASE
+      WHEN p_sort_by = 'follow_up_at' AND p_sort_order = 'asc' THEN j.follow_up_at
+      ELSE NULL
+    END ASC NULLS LAST,
+    CASE
+      WHEN p_sort_by = 'follow_up_at' AND p_sort_order = 'desc' THEN j.follow_up_at
+      ELSE NULL
+    END DESC NULLS LAST,
     -- Secondary / Default sort: by status priority, then by application_date descending
     CASE j.status
       WHEN 'offer' THEN 1
       WHEN 'interviewing' THEN 2
       WHEN 'applied' THEN 3
-      ELSE 4
+      WHEN 'rejected' THEN 4
+      ELSE 5
     END ASC,
     j.application_date DESC
   LIMIT p_page_size
@@ -529,6 +562,8 @@ CREATE INDEX IF NOT EXISTS "idx_jobs_status" ON "public"."jobs" USING "btree" ("
 CREATE INDEX IF NOT EXISTS "idx_jobs_job_state" ON "public"."jobs" USING "btree" ("job_state");
 CREATE INDEX IF NOT EXISTS "idx_jobs_provider" ON "public"."jobs" USING "btree" ("provider");
 CREATE INDEX IF NOT EXISTS "idx_jobs_application_date" ON "public"."jobs" USING "btree" ("application_date");
+CREATE INDEX IF NOT EXISTS "idx_jobs_follow_up_at" ON "public"."jobs" USING "btree" ("follow_up_at");
+CREATE INDEX IF NOT EXISTS "idx_jobs_next_event_at" ON "public"."jobs" USING "btree" ("next_event_at");
 CREATE INDEX IF NOT EXISTS "idx_jobs_active_status_state" ON "public"."jobs" ("is_active", "status", "job_state");
 
 

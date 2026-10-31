@@ -441,9 +441,8 @@ export async function getAppliedJobsCount(
   applicationStatus?: string, // Add new applicationStatus parameter
 ): Promise<number> {
   const supabase = await createSupabaseServerClient();
-  // IMPORTANT: Ensure these statuses match those in your RPC and database
-  // Suggestion: Standardize to ['applied', 'interviewing', 'offered'] if 'offered' is correct
-  const appliedStatuses = ["applied", "interviewing", "offer"];
+  // IMPORTANT: Keep in sync with get_applied_jobs_sorted (includes rejected)
+  const appliedStatuses = ["applied", "interviewing", "offer", "rejected"];
 
   let query = supabase
     .from("jobs")
@@ -480,6 +479,66 @@ export async function getAppliedJobsCount(
   }
 
   return count ?? 0; // Return the count or 0 if null
+}
+
+export interface AppliedStatusCounts {
+  total: number;
+  applied: number;
+  interviewing: number;
+  offer: number;
+  rejected: number;
+  needsFollowUp: number;
+}
+
+/**
+ * Counts applied jobs grouped by status, plus how many need follow-up
+ * (a due/overdue follow_up_at reminder, or stuck in "applied" for 14+ days).
+ */
+export async function getAppliedStatusCounts(): Promise<AppliedStatusCounts> {
+  const supabase = await createSupabaseServerClient();
+  const appliedStatuses = ["applied", "interviewing", "offer", "rejected"];
+
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("status, application_date, follow_up_at")
+    .eq("is_active", true)
+    .eq("job_state", "new")
+    .in("status", appliedStatuses);
+
+  const counts: AppliedStatusCounts = {
+    total: 0,
+    applied: 0,
+    interviewing: 0,
+    offer: 0,
+    rejected: 0,
+    needsFollowUp: 0,
+  };
+
+  if (error) {
+    console.error("Supabase error fetching applied status counts:", error.message);
+    return counts;
+  }
+
+  const now = Date.now();
+  const followUpThresholdMs = 14 * 86_400_000;
+
+  for (const row of data ?? []) {
+    const status = row.status as string;
+    if (!appliedStatuses.includes(status)) continue;
+    counts.total++;
+    if (status === "applied") counts.applied++;
+    else if (status === "interviewing") counts.interviewing++;
+    else if (status === "offer") counts.offer++;
+    else if (status === "rejected") counts.rejected++;
+
+    const followUpAt = row.follow_up_at ? new Date(row.follow_up_at).getTime() : null;
+    const appliedAt = row.application_date ? new Date(row.application_date).getTime() : null;
+    const reminderDue = followUpAt !== null && followUpAt <= now;
+    const staleApplied = status === "applied" && appliedAt !== null && now - appliedAt >= followUpThresholdMs;
+    if (reminderDue || staleApplied) counts.needsFollowUp++;
+  }
+
+  return counts;
 }
 
 /**

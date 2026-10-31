@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ExternalLink,
   CheckCircle,
@@ -14,10 +15,11 @@ import {
   Link as SocialLink,
   Sparkles,
   RefreshCw,
+  ArrowLeft,
 } from "lucide-react";
 import MarkdownRenderer from "./MarkdownRenderer";
+import Toast, { ToastData } from "./applied/Toast";
 import { Job } from "@/types";
-import { useRouter, useSearchParams } from "next/navigation";
 
 interface JobDetailsClientProps {
   initialJob: Job;
@@ -31,6 +33,7 @@ export default function JobDetailsClient({
   const [isUpdatingInterest, setIsUpdatingInterest] = useState(false);
   const [isGeneratingResume, setIsGeneratingResume] = useState(false);
   const [isRescoring, setIsRescoring] = useState(false);
+  const [toast, setToast] = useState<ToastData | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -144,7 +147,9 @@ export default function JobDetailsClient({
 
       const updatedJob: Job = await response.json();
       setJob(updatedJob);
-      showToast("Job marked as applied successfully!", "success");
+      showToast("Job marked as applied successfully!", "success", () =>
+        handleUndoApplied(updatedJob)
+      );
       router.refresh();
     } catch (error) {
       console.error("Error marking job as applied:", error);
@@ -205,12 +210,41 @@ export default function JobDetailsClient({
     }
   };
 
-  const showToast = (message: string, type: "success" | "error") => {
-    console.log(`Toast (${type}): ${message}`);
-    if (type === "error") {
-      alert(`Error: ${message}`);
-    } else {
-      alert(message);
+  const showToast = (
+    message: string,
+    type: "success" | "error",
+    onUndo?: () => void
+  ) => {
+    setToast({ id: Date.now(), message, type, onUndo });
+  };
+
+  // Revert the job out of the applied pipeline (toast Undo action)
+  const handleUndoApplied = async (jobToUndo: Job) => {
+    try {
+      const response = await fetch(`/api/jobs/${jobToUndo.job_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "new",
+          application_date: null,
+          follow_up_at: null,
+          next_event_at: null,
+          next_event_label: null,
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.error || `HTTP error! status: ${response.status}`
+        );
+      }
+      setJob((prev) => ({ ...prev, status: "new", application_date: "" }));
+      showToast("Application reverted — job is back in your pipeline", "success");
+      router.refresh();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "An unknown error occurred.";
+      showToast(`Error: ${message}`, "error");
     }
   };
 
@@ -223,6 +257,17 @@ export default function JobDetailsClient({
 
   return (
     <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+      {/* Back navigation */}
+      <div className="px-6 pt-4">
+        <button
+          onClick={() => router.back()}
+          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+      </div>
+
       {/* Header section */}
       <div className="bg-gray-50 border-b border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
@@ -444,6 +489,9 @@ export default function JobDetailsClient({
           <MarkdownRenderer content={job.description} />
         </div>
       </div>
+
+      {/* Toast notifications */}
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }
