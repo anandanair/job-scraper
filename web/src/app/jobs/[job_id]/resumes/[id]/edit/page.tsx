@@ -1,24 +1,15 @@
-import ResumeEditClient from "@/components/resume/ResumeEditClient";
-import { getCustomizedResumeById } from "@/lib/supabase/queries";
-import { Resume } from "@/types";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 
 type Params = {
   params: Promise<{ job_id: string; id: string }>;
 };
 
-export default async function ResumeEdit({ params }: Params) {
+/**
+ * The dedicated edit page was replaced by the inline Tailored Resume Studio
+ * (toggleable editor sidebar on the resume view page). Keep this route as a
+ * redirect so old bookmarks and links keep working.
+ */
+export default async function ResumeEditRedirect({ params }: Params) {
   const { job_id, id } = await params;
-
-  try {
-    const resume_data: Resume | null = await getCustomizedResumeById(id);
-
-    if (!resume_data) return notFound();
-
-    return <ResumeEditClient resumeData={resume_data} job_id={job_id} />;
-  } catch (error) {
-    console.error("Error getting resume:", error);
-  }
-
-  return <div>Resume Edit Page {id}</div>;
+  redirect(`/jobs/${job_id}/resumes/${id}`);
 }

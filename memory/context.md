@@ -1,7 +1,7 @@
 # JobTrack: System Architecture & Technical Context
 
 > **Single Source of Truth for AI Coding Agents and Developers**  
-> *Last Updated: October 2026*
+> *Last Updated: November 2026*
 
 ---
 
@@ -243,6 +243,12 @@ npm run parse-resume     # Parse master resume.pdf into base_resume table
    - Supporting queries in `web/src/lib/supabase/queries.ts`: `getAppliedJobsCountsLastNDays(days)` and `getLastScrapedAt()`.
    - All dashboard data fetches run in one `Promise.all` and fail soft (render zeros/empty states on error).
    - **Applied page (`/jobs/applied`, "Application Tracker")**: redesigned tracking view composed of `web/src/components/jobs/applied/` components (`AppliedStatsBar` clickable status-count cards, `AppliedJobCard` with company avatar/event/follow-up badges + expandable notes & timeline, `StatusChangeModal` contextual status form, `StatusTimeline`, `NotesEditor`, `Toast`) orchestrated by `web/src/components/jobs/AppliedJobsList.tsx`. Shared status helpers (status metadata, follow-up/event urgency, company avatars, date formatting) live in `web/src/lib/applied-status.ts`. Supports `followUpOnly=true` search param for the needs-attention filter and `sortBy=follow_up_at`.
+6. **Resume Studio Architecture (shared components)**:
+   - **Preview calibration (`web/src/lib/resume-preview.ts`)**: single source of truth for the 1:1 HTML preview mirror of the PDFKit engine — page dimensions (`PAGE_WIDTH_PX` 612 / `PAGE_HEIGHT_PX` 792), font-size scales, padding, line spacing, header-style resolution, `SECTION_LABELS`, and the `isRealValue` placeholder filter. Keep in sync with `web/src/lib/pdf.ts`.
+   - **`ResumePreviewCanvas` (`web/src/components/resume/ResumePreviewCanvas.tsx`)**: reusable presentational 1:1 resume preview (props: `resume`, `theme`; forwards ref on the paper sheet for page-fit measurement). Used by both studios.
+   - **`ResumeStyleSidebar` (`web/src/components/resume-studio/ResumeStyleSidebar.tsx`)**: reusable "Design & Style" panels (personas, presets, colors, typography, heading style, layout, section order). Fully controlled via `onThemeChange` + persona callbacks. `showPersonaManagement=false` renders personas as read-only "apply a copy" sources (used by the tailored studio so global personas can never be activated/deleted from a per-resume context).
+   - **Master studio (`web/src/components/resume-studio/ResumeStudioClient.tsx`)**: slim orchestrator composing the above; saves content to `base_resume` and style to the selected persona (`resume_style_settings`) as before.
+   - **Tailored Resume Studio (`web/src/components/jobs/TailoredResumeStudio.tsx`)**: full-screen studio at `/jobs/[job_id]/resumes/[id]` replacing the old `CustomPdfViewer` + separate `/edit` page. Sidebar closed by default (glance/download); the toolbar toggle opens the editor (Content / Design & Style tabs) with live preview. Saves content AND the `theme_config` snapshot via `PATCH /api/customized_resumes/[id]` — scoped to that customized resume only; master profile and global personas are never touched. Includes unsaved-changes guard (`beforeunload` + close dialog with Save & close / Discard), dirty-state "Unsaved" badge, Live Preview vs True PDF (react-pdf on the streaming endpoint) view toggle, and persona "apply a copy" behavior. `/jobs/[job_id]/resumes/[id]/edit` remains as a permanent redirect for old links. `CustomPdfViewer.tsx`, `ResumeEditClient.tsx`, and the dead `ResumeStyleClient.tsx` were removed.
 
 ---
 

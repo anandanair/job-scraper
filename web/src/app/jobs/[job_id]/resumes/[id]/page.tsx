@@ -1,32 +1,49 @@
-import CustomPdfViewer from "@/components/CustomPdfViewer";
-import { getCustomizedResumeById } from "@/lib/supabase/queries";
-import { Resume } from "@/types";
+import { Suspense } from "react";
+import TailoredResumeStudio from "@/components/jobs/TailoredResumeStudio";
+import {
+  getCustomizedResumeById,
+  getActiveResumeStyle,
+  getAllResumeStyles,
+} from "@/lib/supabase/queries";
+import { DEFAULT_THEME_CONFIG } from "@/lib/resume-presets";
 import { notFound } from "next/navigation";
 
 type Params = {
   params: Promise<{ job_id: string; id: string }>;
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function ResumeView({ params }: Params) {
   const { job_id, id } = await params;
 
   try {
-    const resume_data: Resume | null = await getCustomizedResumeById(id);
+    const resume_data = await getCustomizedResumeById(id);
 
     if (!resume_data) return notFound();
 
-    // Stream on-the-fly dynamically via PDFKit (no Supabase Storage bucket needed)
-    const streamingPdfUrl = `/api/customized_resumes/${id}/pdf`;
+    // Theme priority: this resume's own snapshot -> active global style -> default
+    const [activeStyle, allPresets] = await Promise.all([
+      getActiveResumeStyle(),
+      getAllResumeStyles(),
+    ]);
+    const themeConfig =
+      resume_data.theme_config || activeStyle || DEFAULT_THEME_CONFIG;
+
     const rawName = resume_data.name?.trim().replace(/\s+/g, "_") || "resume";
     const downloadFileName = `${rawName}_resume.pdf`;
 
     return (
-      <CustomPdfViewer
-        fileUrl={streamingPdfUrl}
-        jobId={job_id}
-        resumeId={id}
-        fileName={downloadFileName}
-      />
+      <Suspense fallback={null}>
+        <TailoredResumeStudio
+          jobId={job_id}
+          resumeId={id}
+          initialResume={resume_data}
+          initialThemeConfig={themeConfig}
+          savedPresets={allPresets}
+          fileName={downloadFileName}
+        />
+      </Suspense>
     );
   } catch (error) {
     console.error("Error getting customized resume:", error);
