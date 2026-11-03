@@ -959,5 +959,23 @@ CREATE INDEX IF NOT EXISTS "idx_automation_runs_status" ON "public"."automation_
 ALTER TABLE "public"."automation_runs" ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE "public"."automation_runs" TO "anon", "authenticated", "service_role";
 
+-- ============================================================================
+-- COVER LETTERS (On-demand custom tailored cover letters per job)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "public"."cover_letters" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "job_id" text NOT NULL UNIQUE REFERENCES "public"."jobs"("job_id") ON DELETE CASCADE,
+    "content" text NOT NULL,
+    "tone" text DEFAULT 'confident_professional' NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "idx_cover_letters_job_id" ON "public"."cover_letters" ("job_id");
+
+ALTER TABLE "public"."cover_letters" ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE "public"."cover_letters" TO "anon", "authenticated", "service_role";
+
+
 
 

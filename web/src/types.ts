@@ -24,6 +24,7 @@ export interface Job {
   next_event_at?: string | null;
   next_event_label?: string | null;
   status_history?: StatusHistoryEntry[] | null;
+  cover_letters?: CoverLetter | { id: string; updated_at?: string } | null;
 }
 
 // Append-only record of a single status transition
@@ -259,4 +260,21 @@ export interface AutomationRun {
   github_run_number?: string | null;
   github_run_url?: string | null;
   created_at: string;
+}
+
+// --- Cover Letter Interfaces ---
+
+export type CoverLetterTone =
+  | "confident_professional"
+  | "executive"
+  | "technical"
+  | "short_note";
+
+export interface CoverLetter {
+  id: string;
+  job_id: string;
+  content: string;
+  tone: CoverLetterTone;
+  created_at: string;
+  updated_at: string;
 }

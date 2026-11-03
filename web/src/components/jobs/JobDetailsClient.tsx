@@ -16,6 +16,7 @@ import {
   Sparkles,
   RefreshCw,
   ArrowLeft,
+  Mail,
 } from "lucide-react";
 import MarkdownRenderer from "./MarkdownRenderer";
 import Toast, { ToastData } from "./applied/Toast";
@@ -41,6 +42,12 @@ export default function JobDetailsClient({
     job.customized_resume_id ||
     job.resume_link ||
     job.customized_resumes?.resume_link
+  );
+
+  const hasCoverLetter = Boolean(
+    Array.isArray(job.cover_letters)
+      ? job.cover_letters.length > 0
+      : job.cover_letters?.id
   );
 
   // Rescore is ONLY available if a custom resume exists and the score is still based on the initial base resume
@@ -403,6 +410,20 @@ export default function JobDetailsClient({
                 : "Generate Custom Resume"}
             </button>
           )}
+
+          {/* Custom Cover Letter (On-Demand) */}
+          <Link
+            href={`/jobs/${job.job_id}/cover-letter`}
+            className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+              hasCoverLetter
+                ? "bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 focus:ring-purple-500"
+                : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 focus:ring-indigo-500 shadow-sm"
+            }`}
+            title={hasCoverLetter ? "View and edit tailored cover letter" : "Generate a custom cover letter with AI"}
+          >
+            <Mail size={16} className={`mr-2 ${hasCoverLetter ? "text-purple-600" : "text-gray-500"}`} />
+            {hasCoverLetter ? "View Cover Letter" : "Cover Letter"}
+          </Link>
 
           {/* Rescore with Custom Resume: ONLY rendered if custom resume exists AND score stage is still initial */}
           {canRescore && (

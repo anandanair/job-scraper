@@ -1,4 +1,4 @@
-import { Job, Resume, DashboardStats, ResumeThemeConfig, ResumeStyleSetting, AppSettings } from "@/types";
+import { Job, Resume, DashboardStats, ResumeThemeConfig, ResumeStyleSetting, AppSettings, CoverLetter, CoverLetterTone } from "@/types";
 import { DEFAULT_THEME_CONFIG } from "@/lib/resume-presets";
 import { createSupabaseServerClient, createSupabaseStaticClient } from "@/utils/supabase/server";
 import { unstable_cache } from "next/cache";
@@ -597,7 +597,7 @@ export async function getJobById(job_id: string): Promise<Job | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("jobs")
-    .select("*, customized_resumes(id, resume_link)") // Fetches all job fields and the resume_link from the related customized_resume
+    .select("*, customized_resumes(id, resume_link), cover_letters(id, updated_at)")
     .eq("job_id", job_id)
     .single(); // Use single() if you expect only one or zero results
 
@@ -1527,4 +1527,74 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
   return result.data as AppSettings;
 }
 
+// --- Cover Letter Queries ---
 
+/**
+ * Retrieves the cover letter for a given job_id.
+ */
+export async function getCoverLetterByJobId(
+  job_id: string,
+): Promise<CoverLetter | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("cover_letters")
+    .select("*")
+    .eq("job_id", job_id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching cover letter:", error);
+    throw new Error(error.message);
+  }
+  return data as CoverLetter | null;
+}
+
+/**
+ * Inserts or updates a cover letter for a job_id.
+ */
+export async function upsertCoverLetter(
+  job_id: string,
+  content: string,
+  tone: CoverLetterTone = "confident_professional",
+): Promise<CoverLetter> {
+  const supabase = await createSupabaseServerClient();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("cover_letters")
+    .upsert(
+      {
+        job_id,
+        content,
+        tone,
+        updated_at: now,
+      },
+      { onConflict: "job_id" },
+    )
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error upserting cover letter:", error);
+    throw new Error(error.message);
+  }
+  return data as CoverLetter;
+}
+
+/**
+ * Deletes a cover letter for a given job_id.
+ */
+export async function deleteCoverLetterByJobId(
+  job_id: string,
+): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("cover_letters")
+    .delete()
+    .eq("job_id", job_id);
+
+  if (error) {
+    console.error("Error deleting cover letter:", error);
+    throw new Error(error.message);
+  }
+  return true;
+}

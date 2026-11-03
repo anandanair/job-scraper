@@ -1196,3 +1196,179 @@ export async function buildPdfBuffer(
   doc.end();
   return await pdfPromise;
 }
+
+// ==========================================
+// COVER LETTER PDF GENERATOR
+// ==========================================
+
+export interface CoverLetterPdfInput {
+  candidate: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    location?: string;
+    links?: {
+      linkedin?: string | null;
+      github?: string | null;
+      portfolio?: string | null;
+    } | null;
+  };
+  company: string;
+  jobTitle: string;
+  content: string;
+  date?: string;
+}
+
+/**
+ * Compiles a pixel-perfect, ATS-standard Cover Letter PDF using PDFKit.
+ * Harmonizes with the candidate's active ResumeThemeConfig styling.
+ */
+export async function buildCoverLetterPdfBuffer(
+  input: CoverLetterPdfInput,
+  styleConfig?: ResumeThemeConfig
+): Promise<Buffer> {
+  const theme: ResumeThemeConfig = styleConfig || DEFAULT_THEME_CONFIG;
+  const fonts = getFontFamilyNames(theme.typography.fontFamily);
+  const sizes = getFontSizes(theme.typography.fontSizeScale);
+  const margins = getMargins(theme.layout.margins);
+  const contentWidth = PAGE_WIDTH - margins.left - margins.right;
+
+  const doc = new PDFDocument({
+    size: "LETTER",
+    margins: {
+      top: margins.top,
+      bottom: margins.bottom,
+      left: margins.left,
+      right: margins.right,
+    },
+    autoFirstPage: true,
+    bufferPages: true,
+  });
+
+  const chunks: Buffer[] = [];
+  doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+
+  const pdfPromise = new Promise<Buffer>((resolve, reject) => {
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+  });
+
+  // 1. Candidate Letterhead Header
+  const candidateName = input.candidate.name?.trim() || "Candidate";
+  doc
+    .font(fonts.bold)
+    .fontSize(sizes.name * 0.9)
+    .fillColor(theme.colors.primary)
+    .text(candidateName.toUpperCase(), margins.left, margins.top, {
+      width: contentWidth,
+      align: "left",
+    });
+  doc.moveDown(0.2);
+
+  // Contact line
+  const contactParts: string[] = [];
+  if (input.candidate.email && !isNA(input.candidate.email)) contactParts.push(input.candidate.email);
+  if (input.candidate.phone && !isNA(input.candidate.phone)) contactParts.push(input.candidate.phone);
+  if (input.candidate.location && !isNA(input.candidate.location)) contactParts.push(input.candidate.location);
+  if (input.candidate.links?.linkedin && !isNA(input.candidate.links.linkedin)) contactParts.push("LinkedIn");
+  if (input.candidate.links?.portfolio && !isNA(input.candidate.links.portfolio)) contactParts.push("Portfolio");
+
+  if (contactParts.length > 0) {
+    doc
+      .font(fonts.regular)
+      .fontSize(sizes.contact)
+      .fillColor(theme.colors.secondary)
+      .text(contactParts.join("  |  "), margins.left, doc.y, {
+        width: contentWidth,
+        align: "left",
+      });
+    doc.y += 4;
+  }
+
+  // Divider Rule
+  const ruleY = doc.y + 4;
+  doc
+    .moveTo(margins.left, ruleY)
+    .lineTo(PAGE_WIDTH - margins.right, ruleY)
+    .strokeColor(theme.colors.divider)
+    .lineWidth(theme.layout.dividerThickness || 1)
+    .stroke();
+  doc.y = ruleY + 16;
+
+  // 2. Date & Recipient Details
+  const displayDate =
+    input.date ||
+    new Date().toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+
+  const lineGap =
+    theme.typography.lineSpacing === "tight"
+      ? 1.5
+      : theme.typography.lineSpacing === "relaxed"
+      ? 3.5
+      : 2.5;
+
+  doc
+    .font(fonts.regular)
+    .fontSize(sizes.body)
+    .fillColor(theme.colors.secondary)
+    .text(displayDate, margins.left, doc.y, { width: contentWidth });
+  doc.y += 12;
+
+  // Recipient block
+  doc
+    .font(fonts.bold)
+    .fontSize(sizes.body)
+    .fillColor(theme.colors.text)
+    .text("Hiring Team", margins.left, doc.y, { width: contentWidth });
+  doc.y += 2;
+  doc
+    .font(fonts.regular)
+    .fontSize(sizes.body)
+    .fillColor(theme.colors.secondary)
+    .text(input.company, margins.left, doc.y, { width: contentWidth });
+  doc.y += 14;
+
+  // Subject line
+  doc
+    .font(fonts.bold)
+    .fontSize(sizes.body + 0.5)
+    .fillColor(theme.colors.primary)
+    .text(`RE: Application for ${input.jobTitle}`, margins.left, doc.y, {
+      width: contentWidth,
+    });
+  doc.y += 14;
+
+  // 3. Body Content
+  // Split raw content by double-newlines (paragraphs)
+  const rawParagraphs = input.content
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  for (const para of rawParagraphs) {
+    const isSignOff =
+      /^sincerely,|^best regards,|^regards,|^thank you,/i.test(para);
+
+    if (isSignOff) {
+      doc.y += 8;
+    }
+
+    doc
+      .font(fonts.regular)
+      .fontSize(sizes.body)
+      .fillColor(theme.colors.text)
+      .text(para, margins.left, doc.y, {
+        width: contentWidth,
+        lineGap,
+        align: "left",
+      });
+    doc.y += 10;
+  }
+
+  doc.end();
+  return await pdfPromise;
+}

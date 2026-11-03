@@ -95,12 +95,12 @@ graph TD
 │   │   │   ├── api/            # Server-side API endpoints
 │   │   │   │   ├── base-resume/       # Base resume CRUD
 │   │   │   │   ├── customized_resumes/# Tailored resume endpoints
-│   │   │   │   ├── jobs/              # Job actions, rescore, customize
+│   │   │   │   ├── jobs/              # Job actions, rescore, customize, cover-letter, cover-letter/pdf
 │   │   │   │   ├── resume-style/      # ATS style configuration
 │   │   │   │   ├── settings/          # App settings & LLM test
 │   │   │   │   ├── setup/             # Setup wizard endpoints
 │   │   │   │   └── system/            # Schema status & Automation runs telemetry
-│   │   │   ├── jobs/           # Job dashboard views (new, top-matches, tailored, applied, [id])
+│   │   │   ├── jobs/           # Job dashboard views (new, top-matches, tailored, applied, [id], [id]/cover-letter)
 │   │   │   ├── resume-studio/  # Master Dual-Mode Resume Studio
 │   │   │   ├── resume-style/   # ATS visual theme designer
 │   │   │   ├── settings/       # AI provider & job preferences configuration
@@ -158,9 +158,13 @@ graph TD
    - Fields: `id` (uuid), `workflow_name`, `workflow_id`, `status` (`running`, `success`, `warning`, `failed`, `skipped`), `trigger_type` (`schedule`, `workflow_dispatch`, `local_cli`), `started_at`, `completed_at`, `duration_seconds`, `summary`, `metrics` (jsonb), `error_count`, `warning_count`, `error_message`, `errors_list` (text array), `log_output` (text), `github_run_id`, `github_run_number`, `github_run_url`, `created_at`.
    - Retention: Auto-prunes to latest 100 actual worker runs. Skipped hourly schedule checks are excluded from logging to preserve telemetry capacity.
 
+8. **`cover_letters`** (migration `20261103_02_cover_letters`):
+   - On-demand custom tailored cover letters. Links 1:1 to `jobs.job_id` with cascade delete.
+   - Fields: `id` (uuid), `job_id` (text unique fk), `content` (text), `tone` (text, e.g. `confident_professional`, `executive`, `technical`, `short_note`), `created_at`, `updated_at`.
+
 ### Storage Architecture (On-Demand Streaming)
 - **Supabase Storage Buckets (`resumes`, `personalized_resumes`)**: Fully deprecated.
-- **On-Demand PDF Generation**: PDFs are compiled in-memory on demand via PDFKit (`/api/customized_resumes/[id]/pdf` and `/api/generate-resume`) in ~25ms. This ensures a single source of truth in PostgreSQL, zero storage costs/quota usage, no expiring signed URLs, and instant ATS rendering.
+- **On-Demand PDF Generation**: PDFs are compiled in-memory on demand via PDFKit (`/api/customized_resumes/[id]/pdf`, `/api/jobs/[job_id]/cover-letter/pdf`, and `/api/generate-resume`) in ~25ms. This ensures a single source of truth in PostgreSQL, zero storage costs/quota usage, no expiring signed URLs, and instant ATS rendering.
 
 ---
 
@@ -195,6 +199,9 @@ graph TD
   - **Stage 2 (The Copywriter)**: `writeTailoredResumeContent` crafts executive-grade ATS copy adhering to Google's XYZ formula (*Accomplished X as measured by Y by doing Z*) with active verbs, strictly in first-person implied resume syntax (no third person, no company name mentions), while preserving 100% of historical timeline (companies, titles, dates).
   - **Stage 2.5 (Deterministic Code Validation - 0 LLM Cost)**: `validateAndHealResume` verifies timeline integrity, caps projects at 3 for 2-page ATS ceiling, and self-heals non-tailored sections.
   - **Stage 3 (The Evaluator / Rescorer)**: `scoreJobWithResume` rescores job suitability against the tailored resume and marks `resume_score_stage = 'custom'`.
+- **On-Demand Cover Letter Engine (`generateCoverLetterWithLLM`)**:
+  - Generated exclusively on-demand (never during batch runs) using base resume and job description.
+  - Features anti-hallucination enforcement, anti-cliché bans, user-chosen tones (`confident_professional`, `executive`, `technical`, `short_note`), and optional custom guidance context.
 - Single source of truth: Supabase `app_settings.llm_api_key` (environment variables strictly contain Supabase connection keys only).
 
 ---

@@ -1,4 +1,4 @@
-import { Resume, CurationPlan } from "@/types";
+import { Resume, CurationPlan, CoverLetterTone } from "@/types";
 
 interface CallLLMOptions {
   prompt: string;
@@ -946,4 +946,123 @@ export async function customizeResumeWithLLM(
   );
 
   return validatedResume;
+}
+
+// --- On-Demand Cover Letter Generation ---
+
+export interface GenerateCoverLetterOptions {
+  tone?: CoverLetterTone;
+  customInstructions?: string;
+  senderName?: string;
+}
+
+/**
+ * Generates a tailored, professional, ATS-optimized cover letter on-demand
+ * using the candidate's master resume and target job description.
+ */
+export async function generateCoverLetterWithLLM(
+  baseResume: Resume,
+  jobDetails: {
+    job_title: string;
+    company: string;
+    level?: string;
+    description: string;
+    location?: string;
+  },
+  options: GenerateCoverLetterOptions = {},
+): Promise<string> {
+  const tone = options.tone || "confident_professional";
+  const candidateName = options.senderName || baseResume.name || "Candidate";
+
+  let toneGuidance = "Tone: Confident, articulate, professional, and impact-driven (~250-320 words).";
+  if (tone === "executive") {
+    toneGuidance = "Tone: High-level executive, strategic, vision-oriented, emphasizing organizational leadership, scale, and business outcomes (~280-350 words).";
+  } else if (tone === "technical") {
+    toneGuidance = "Tone: Technically precise, engineering-driven, highlighting system architecture, stack mastery, and concrete technical problem-solving (~250-320 words).";
+  } else if (tone === "short_note") {
+    toneGuidance = "Tone: Short, punchy, high-impact elevator pitch (~150-180 words). Ideal for LinkedIn InMail or portals with tight character counts.";
+  }
+
+  const customPromptAddendum = options.customInstructions?.trim()
+    ? `\nSPECIFIC USER GUIDANCE TO INCORPORATE:\n"${options.customInstructions.trim()}"\nEnsure this nuance or point of emphasis is woven naturally into the letter.\n`
+    : "";
+
+  // Prepare concise profile text
+  const experienceSummary = (baseResume.experience || [])
+    .slice(0, 4)
+    .map((exp) => {
+      const desc = (exp.description || "")
+        .split("\n")
+        .filter((l) => l.trim())
+        .slice(0, 3)
+        .join(" ");
+      return `- ${exp.job_title} at ${exp.company} (${exp.start_date || ""} - ${exp.end_date || "Present"}): ${desc}`;
+    })
+    .join("\n");
+
+  const projectSummary = (baseResume.projects || [])
+    .slice(0, 3)
+    .map((p) => `- ${p.name}: ${p.description || ""} [${(p.technologies || []).join(", ")}]`)
+    .join("\n");
+
+  const topSkills = (baseResume.skills || []).slice(0, 15).join(", ");
+
+  const systemPrompt = `You are an elite career strategist and executive talent copywriter.
+Write an authentic, highly tailored, ATS-ready cover letter for the candidate applying to ${jobDetails.company} for the role of ${jobDetails.job_title}.
+
+STRICT ANTI-HALLUCINATION RULES:
+1. ONLY reference real work experience, skills, technologies, and achievements from the candidate's profile.
+2. NEVER invent degrees, previous companies, statistics, or metrics that do not exist in the candidate's background.
+3. If specific metrics are in the candidate profile, leverage them accurately.
+
+STRICT ANTI-CLICHÉ & VOICE RULES:
+1. BANNED: Never open with "I am writing with great enthusiasm to apply for..." or "I hope this email finds you well".
+2. BANNED: Do not use overused AI buzzwords ("delve", "tapestry", "plethora", "beacon", "testament", "in conclusion", "synergy").
+3. Write in first person ("I", "my") with confident, active verbs and genuine professional voice.
+4. ${toneGuidance}
+
+FORMATTING REQUIREMENTS:
+- Standard business letter format.
+- Salutation: "Dear Hiring Team at ${jobDetails.company}," (or "Dear Hiring Manager,").
+- 3 to 4 distinct paragraphs separated by double line breaks (or 2-3 paragraphs for short note):
+  - Paragraph 1: Direct hook. Clearly state the role of ${jobDetails.job_title} at ${jobDetails.company}. Connect the candidate's core expertise immediately to the company's domain or challenge.
+  - Paragraph 2: Spotlight 1-2 major accomplishments from the candidate's experience that directly address key requirements in the job description.
+  - Paragraph 3: Reinforce domain/technical alignment (tools, methodologies, or collaborative strengths).
+  - Paragraph 4: Confident, forward-looking closing proposing a discussion.
+- Formal sign-off:
+Sincerely,
+${candidateName}
+
+Output ONLY the final cover letter text. No preamble, no postscript, no commentary.`;
+
+  const userPrompt = `TARGET ROLE & COMPANY:
+Company: ${jobDetails.company}
+Job Title: ${jobDetails.job_title}
+${jobDetails.level ? `Level: ${jobDetails.level}\n` : ""}${jobDetails.location ? `Location: ${jobDetails.location}\n` : ""}
+JOB DESCRIPTION:
+${jobDetails.description.slice(0, 3500)}
+
+---
+
+CANDIDATE PROFILE:
+Name: ${candidateName}
+Summary: ${baseResume.summary || "Not provided"}
+Top Skills: ${topSkills || "Not provided"}
+
+Key Experience:
+${experienceSummary || "Not provided"}
+
+Notable Projects:
+${projectSummary || "None"}
+${customPromptAddendum}
+Write the complete, tailored cover letter now.`;
+
+  console.log(`[generateCoverLetterWithLLM] Generating ${tone} cover letter for ${jobDetails.job_title} at ${jobDetails.company}...`);
+  const response = await callLLM({
+    prompt: userPrompt,
+    systemPrompt,
+    temperature: 0.3,
+  });
+
+  return response.trim();
 }

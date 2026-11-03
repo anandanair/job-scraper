@@ -264,6 +264,31 @@ GRANT ALL ON TABLE "public"."automation_runs" TO "anon", "authenticated", "servi
 -- 4. Record this migration as applied
 INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261103_01_automation_runs_telemetry') ON CONFLICT DO NOTHING;`,
   },
+  {
+    id: "20261103_02_cover_letters",
+    title: "On-Demand Custom Cover Letters",
+    description:
+      "Creates the cover_letters table to store custom generated and edited cover letters for jobs.",
+    sql: `-- 1. Create cover_letters table
+CREATE TABLE IF NOT EXISTS "public"."cover_letters" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "job_id" text NOT NULL UNIQUE REFERENCES "public"."jobs"("job_id") ON DELETE CASCADE,
+    "content" text NOT NULL,
+    "tone" text DEFAULT 'confident_professional' NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- 2. Index for job_id lookup
+CREATE INDEX IF NOT EXISTS "idx_cover_letters_job_id" ON "public"."cover_letters" ("job_id");
+
+-- 3. Security & permissions
+ALTER TABLE "public"."cover_letters" ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE "public"."cover_letters" TO "anon", "authenticated", "service_role";
+
+-- 4. Record this migration as applied
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261103_02_cover_letters') ON CONFLICT DO NOTHING;`,
+  },
 ];
 
 /**
