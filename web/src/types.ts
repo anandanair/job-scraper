@@ -191,6 +191,7 @@ export interface ResumeStyleSetting {
   updated_at?: string;
 }
 
+
 // --- App Settings & Configuration Interfaces ---
 
 export type LLMProvider =
@@ -231,4 +232,31 @@ export interface AppSettings {
   setup_completed?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+// --- Automation Runs & Telemetry Interfaces ---
+
+export type AutomationRunStatus = "running" | "success" | "warning" | "failed" | "skipped";
+export type AutomationWorkflowId = "scrape_jobs" | "score_jobs" | "customize_resumes" | "job_manager";
+
+export interface AutomationRun {
+  id: string;
+  workflow_name: string;
+  workflow_id: AutomationWorkflowId;
+  status: AutomationRunStatus;
+  trigger_type: "schedule" | "workflow_dispatch" | "local_cli";
+  started_at: string;
+  completed_at?: string | null;
+  duration_seconds?: number | null;
+  summary?: string | null;
+  metrics: Record<string, any>;
+  error_count: number;
+  warning_count: number;
+  error_message?: string | null;
+  errors_list: string[];
+  log_output?: string | null;
+  github_run_id?: string | null;
+  github_run_number?: string | null;
+  github_run_url?: string | null;
+  created_at: string;
 }

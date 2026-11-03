@@ -9,6 +9,7 @@ if (fs.existsSync(webEnv)) dotenv.config({ path: webEnv });
 if (fs.existsSync(rootEnv)) dotenv.config({ path: rootEnv });
 
 import { createSupabaseStaticClient } from "../src/utils/supabase/server";
+import { withTelemetry, TelemetryContext } from "../src/lib/telemetry";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -69,7 +70,7 @@ async function checkJobActive(jobId: string): Promise<boolean | null> {
   }
 }
 
-async function main() {
+async function runJobManager(ctx?: TelemetryContext) {
   console.log("=== Starting Job Liveness Manager (TypeScript) ===");
   const supabase = createSupabaseStaticClient();
 
@@ -86,11 +87,13 @@ async function main() {
 
   if (error) {
     console.error("Error fetching jobs to check:", error.message);
-    process.exit(1);
+    throw error;
   }
 
   if (!jobsToCheck || jobsToCheck.length === 0) {
     console.log("No jobs require expiry checks at this time.");
+    ctx?.setMetrics({ jobs_checked: 0, jobs_active: 0, jobs_closed: 0, inconclusive: 0 });
+    ctx?.setSummary("No active jobs overdue for availability check.");
     return;
   }
 
@@ -138,6 +141,30 @@ async function main() {
 
   console.log("=== Job Liveness Check Finished ===");
   console.log(`Active: ${activeCount} | Closed: ${closedCount} | Inconclusive: ${skippedCount}`);
+
+  if (ctx) {
+    ctx.setMetrics({
+      jobs_checked: jobsToCheck.length,
+      jobs_active: activeCount,
+      jobs_closed: closedCount,
+      inconclusive: skippedCount,
+    });
+    ctx.setSummary(
+      `Checked ${jobsToCheck.length} jobs: ${activeCount} active, ${closedCount} expired/closed, ${skippedCount} inconclusive.`
+    );
+  }
+}
+
+async function main() {
+  await withTelemetry(
+    {
+      workflowName: "Job Expiration Manager",
+      workflowId: "job_manager",
+    },
+    async (ctx) => {
+      await runJobManager(ctx);
+    }
+  );
 }
 
 main().catch((err) => {

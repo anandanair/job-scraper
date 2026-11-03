@@ -924,8 +924,40 @@ GRANT EXECUTE ON FUNCTION "public"."has_migration_booster"() TO service_role;
 -- as applied. Without this seed every fresh install would immediately report a
 -- pending migration and show a false "Database Update Available" banner.
 INSERT INTO "public"."schema_migrations" ("version")
-VALUES ('20261029_01_migration_booster_and_interest_filter')
+VALUES ('20261029_01_migration_booster_and_interest_filter'),
+       ('20261102_01_schedule_timezone_and_timing'),
+       ('20261103_01_automation_runs_telemetry')
 ON CONFLICT ("version") DO NOTHING;
+
+-- Automation Runs Telemetry Table
+CREATE TABLE IF NOT EXISTS "public"."automation_runs" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "workflow_name" text NOT NULL,
+    "workflow_id" text NOT NULL,
+    "status" text NOT NULL,
+    "trigger_type" text NOT NULL,
+    "started_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "completed_at" timestamp with time zone,
+    "duration_seconds" integer,
+    "summary" text,
+    "metrics" jsonb DEFAULT '{}'::jsonb,
+    "error_count" integer DEFAULT 0 NOT NULL,
+    "warning_count" integer DEFAULT 0 NOT NULL,
+    "error_message" text,
+    "errors_list" jsonb DEFAULT '[]'::jsonb,
+    "log_output" text,
+    "github_run_id" text,
+    "github_run_number" text,
+    "github_run_url" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "idx_automation_runs_started_at" ON "public"."automation_runs" ("started_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_automation_runs_workflow_id" ON "public"."automation_runs" ("workflow_id");
+CREATE INDEX IF NOT EXISTS "idx_automation_runs_status" ON "public"."automation_runs" ("status");
+
+ALTER TABLE "public"."automation_runs" ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE "public"."automation_runs" TO "anon", "authenticated", "service_role";
 
 
 

@@ -98,7 +98,8 @@ graph TD
 │   │   │   │   ├── jobs/              # Job actions, rescore, customize
 │   │   │   │   ├── resume-style/      # ATS style configuration
 │   │   │   │   ├── settings/          # App settings & LLM test
-│   │   │   │   └── setup/             # Setup wizard endpoints
+│   │   │   │   ├── setup/             # Setup wizard endpoints
+│   │   │   │   └── system/            # Schema status & Automation runs telemetry
 │   │   │   ├── jobs/           # Job dashboard views (new, top-matches, tailored, applied, [id])
 │   │   │   ├── resume-studio/  # Master Dual-Mode Resume Studio
 │   │   │   ├── resume-style/   # ATS visual theme designer
@@ -151,6 +152,11 @@ graph TD
    - `next_event_at` (timestamptz) + `next_event_label` (text): next scheduled event (e.g., interview round) with countdown banner.
    - `status_history` (jsonb, default `[]`): append-only array of `{from, to, at, note}` transitions, auto-appended by the `PATCH /api/jobs/[job_id]` route (transient `note` body field) and rendered as a timeline.
    - Applied-page statuses are `applied`, `interviewing`, `offer`, `rejected` (the RPC `get_applied_jobs_sorted` includes `rejected` in its default set and supports `p_sort_by = 'follow_up_at'`).
+
+7. **`automation_runs`** (migration `20261103_01_automation_runs_telemetry`):
+   - Telemetry execution records for GitHub Action workflows (`scrape_jobs`, `score_jobs`, `customize_resumes`, `job_manager`).
+   - Fields: `id` (uuid), `workflow_name`, `workflow_id`, `status` (`running`, `success`, `warning`, `failed`, `skipped`), `trigger_type` (`schedule`, `workflow_dispatch`, `local_cli`), `started_at`, `completed_at`, `duration_seconds`, `summary`, `metrics` (jsonb), `error_count`, `warning_count`, `error_message`, `errors_list` (text array), `log_output` (text), `github_run_id`, `github_run_number`, `github_run_url`, `created_at`.
+   - Retention: Auto-prunes to latest 100 actual worker runs. Skipped hourly schedule checks are excluded from logging to preserve telemetry capacity.
 
 ### Storage Architecture (On-Demand Streaming)
 - **Supabase Storage Buckets (`resumes`, `personalized_resumes`)**: Fully deprecated.

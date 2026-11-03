@@ -9,6 +9,7 @@ import { AiEngineSettings } from "./AiEngineSettings";
 import { JobSearchSettings } from "./JobSearchSettings";
 import { AutomationBudgetSettings } from "./AutomationBudgetSettings";
 import { CloudWorkflowsSettings } from "./CloudWorkflowsSettings";
+import { ExecutionLogsTab } from "./ExecutionLogsTab";
 import { SettingsStickyBar } from "./SettingsStickyBar";
 
 interface SettingsClientProps {
@@ -292,13 +293,19 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
         <CloudWorkflowsSettings settings={settings} onChange={handleFieldChange} />
       )}
 
+      {activeTab === "logs" && (
+        <ExecutionLogsTab />
+      )}
+
       {/* Fixed Sticky Action Bar */}
-      <SettingsStickyBar
-        isDirty={isDirty}
-        isSaving={saving}
-        onReset={handleReset}
-        onSave={handleSave}
-      />
+      {activeTab !== "logs" && (
+        <SettingsStickyBar
+          isDirty={isDirty}
+          isSaving={saving}
+          onReset={handleReset}
+          onSave={handleSave}
+        />
+      )}
     </div>
   );
 }

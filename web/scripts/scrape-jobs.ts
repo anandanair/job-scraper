@@ -17,6 +17,7 @@ import {
   saveJobsToSupabase,
   SAFE_MAX_SCRAPE_PER_SOURCE,
 } from "../src/lib/scraper";
+import { withTelemetry } from "../src/lib/telemetry";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -88,7 +89,7 @@ function parseCliArgs(): CliArgs {
   return result;
 }
 
-async function main() {
+async function runScraper(ctx?: any) {
   console.log("=================================================================");
   console.log("       JobTrack Autonomous Job Scraper (TypeScript Engine)       ");
   console.log("=================================================================\n");
@@ -317,6 +318,31 @@ async function main() {
       console.warn("[WARN] Could not update last_scraped_at in app_settings:", stampErr?.message || stampErr);
     }
   }
+
+  if (ctx) {
+    ctx.setMetrics({
+      jobs_saved: totalNewJobsSaved,
+      sources: activeSources,
+      dry_run: Boolean(cli.dryRun),
+    });
+    ctx.setSummary(
+      cli.dryRun
+        ? `Dry-run completed. Extracted job listings across ${activeSources.join(", ")}.`
+        : `Scraped and saved ${totalNewJobsSaved} new job listing(s) across ${activeSources.join(", ")}.`
+    );
+  }
+}
+
+async function main() {
+  await withTelemetry(
+    {
+      workflowName: "Daily Job Scraper",
+      workflowId: "scrape_jobs",
+    },
+    async (ctx) => {
+      await runScraper(ctx);
+    }
+  );
 }
 
 main().catch((err) => {

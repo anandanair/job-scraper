@@ -224,6 +224,46 @@ COMMENT ON COLUMN "public"."app_settings"."last_scraped_at" IS 'Timestamp when t
 -- 2. Record this migration as applied
 INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261102_01_schedule_timezone_and_timing') ON CONFLICT DO NOTHING;`,
   },
+  {
+    id: "20261103_01_automation_runs_telemetry",
+    title: "Automation Execution Telemetry & Error Tracking",
+    description:
+      "Creates the automation_runs table to record workflow execution history, domain metrics, in-run non-fatal warnings (e.g. 429s), errors, and terminal logs.",
+    sql: `-- 1. Create automation_runs table
+CREATE TABLE IF NOT EXISTS "public"."automation_runs" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "workflow_name" text NOT NULL,
+    "workflow_id" text NOT NULL,
+    "status" text NOT NULL,
+    "trigger_type" text NOT NULL,
+    "started_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "completed_at" timestamp with time zone,
+    "duration_seconds" integer,
+    "summary" text,
+    "metrics" jsonb DEFAULT '{}'::jsonb,
+    "error_count" integer DEFAULT 0 NOT NULL,
+    "warning_count" integer DEFAULT 0 NOT NULL,
+    "error_message" text,
+    "errors_list" jsonb DEFAULT '[]'::jsonb,
+    "log_output" text,
+    "github_run_id" text,
+    "github_run_number" text,
+    "github_run_url" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- 2. Indexes for efficient lookup and pruning
+CREATE INDEX IF NOT EXISTS "idx_automation_runs_started_at" ON "public"."automation_runs" ("started_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_automation_runs_workflow_id" ON "public"."automation_runs" ("workflow_id");
+CREATE INDEX IF NOT EXISTS "idx_automation_runs_status" ON "public"."automation_runs" ("status");
+
+-- 3. Security & permissions
+ALTER TABLE "public"."automation_runs" ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE "public"."automation_runs" TO "anon", "authenticated", "service_role";
+
+-- 4. Record this migration as applied
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261103_01_automation_runs_telemetry') ON CONFLICT DO NOTHING;`,
+  },
 ];
 
 /**

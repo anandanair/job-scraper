@@ -11,6 +11,7 @@ if (fs.existsSync(rootEnv)) dotenv.config({ path: rootEnv });
 import { createSupabaseStaticClient } from "../src/utils/supabase/server";
 import { formatResumeToText, scoreJobWithResume } from "../src/lib/llm";
 import { Resume } from "../src/types";
+import { withTelemetry, TelemetryContext } from "../src/lib/telemetry";
 
 const BATCH_LIMIT = 10;
 
@@ -18,7 +19,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function main() {
+async function runJobScorer(ctx?: TelemetryContext) {
   console.log("=== Starting Scheduled Job Scorer (TypeScript) ===");
   const supabase = createSupabaseStaticClient();
 
@@ -31,16 +32,17 @@ async function main() {
     .maybeSingle();
 
   if (!dbSettings?.llm_api_key) {
-    console.error("✗ Error: LLM API key not configured in Supabase 'app_settings'.");
-    console.error("  Please configure your AI provider and API key in Settings or complete the Setup Wizard.");
-    process.exit(1);
+    const errorMsg = "LLM API key not configured in Supabase 'app_settings'. Please configure your AI provider and API key in Settings.";
+    console.error(`✗ Error: ${errorMsg}`);
+    throw new Error(errorMsg);
   }
 
   const batchLimit = dbSettings.jobs_to_score_per_run || BATCH_LIMIT;
   const delayMs = (dbSettings.llm_request_delay_seconds ?? 8) * 1000;
+  const activeModel = dbSettings.llm_model || "gemini-3.8-flash";
 
   console.log(
-    `✓ Using AI Model: "${dbSettings.llm_model || "gemini-3.8-flash"}" from Supabase app_settings ` +
+    `✓ Using AI Model: "${activeModel}" from Supabase app_settings ` +
     `(Batch limit: ${batchLimit} jobs, Delay: ${delayMs / 1000}s).`
   );
 
@@ -71,8 +73,9 @@ async function main() {
   }
 
   if (!baseResume) {
-    console.error("ERROR: No base resume found in Supabase or locally. Please parse a resume first.");
-    process.exit(1);
+    const errorMsg = "No base resume found in Supabase or locally. Please parse a resume first.";
+    console.error(`ERROR: ${errorMsg}`);
+    throw new Error(errorMsg);
   }
 
   const baseResumeText = formatResumeToText(baseResume);
@@ -88,11 +91,13 @@ async function main() {
 
   if (fetchError) {
     console.error("Error fetching jobs to score:", fetchError);
-    process.exit(1);
+    throw fetchError;
   }
 
   if (!jobsToScore || jobsToScore.length === 0) {
     console.log("No jobs require initial scoring at this time.");
+    ctx?.setMetrics({ jobs_evaluated: 0, successful_scores: 0, failed_scores: 0, model: activeModel });
+    ctx?.setSummary("No jobs require initial scoring at this time.");
     return;
   }
 
@@ -146,6 +151,30 @@ async function main() {
   console.log("=== Job Scoring Finished ===");
   console.log(`Successfully scored: ${successfulScores}`);
   console.log(`Failed / Skipped: ${failedScores}`);
+
+  if (ctx) {
+    ctx.setMetrics({
+      jobs_evaluated: jobsToScore.length,
+      successful_scores: successfulScores,
+      failed_scores: failedScores,
+      model: activeModel,
+    });
+    ctx.setSummary(
+      `Evaluated ${jobsToScore.length} jobs with ${activeModel}: ${successfulScores} scored successfully, ${failedScores} failed/skipped.`
+    );
+  }
+}
+
+async function main() {
+  await withTelemetry(
+    {
+      workflowName: "AI Job Scorer",
+      workflowId: "score_jobs",
+    },
+    async (ctx) => {
+      await runJobScorer(ctx);
+    }
+  );
 }
 
 main().catch((err) => {

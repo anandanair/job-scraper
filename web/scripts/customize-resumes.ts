@@ -13,6 +13,7 @@ import { createSupabaseStaticClient } from "../src/utils/supabase/server";
 import { customizeResumeWithLLM, formatResumeToText, scoreJobWithResume } from "../src/lib/llm";
 import { getActiveResumeStyle } from "../src/lib/supabase/queries";
 import { Resume } from "../src/types";
+import { withTelemetry, TelemetryContext } from "../src/lib/telemetry";
 
 const MIN_SCORE_THRESHOLD = 60;
 
@@ -20,7 +21,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function main() {
+async function runResumeCustomizer(ctx?: TelemetryContext) {
   console.log("=== Starting Scheduled Resume Customizer (TypeScript) ===");
   const supabase = createSupabaseStaticClient();
 
@@ -33,16 +34,17 @@ async function main() {
     .maybeSingle();
 
   if (!dbSettings?.llm_api_key) {
-    console.error("✗ Error: LLM API key not configured in Supabase 'app_settings'.");
-    console.error("  Please configure your AI provider and API key in Settings or complete the Setup Wizard.");
-    process.exit(1);
+    const errorMsg = "LLM API key not configured in Supabase 'app_settings'. Please configure your AI provider and API key in Settings.";
+    console.error(`✗ Error: ${errorMsg}`);
+    throw new Error(errorMsg);
   }
 
   const batchLimit = dbSettings.jobs_to_customize_per_run || 2;
   const delayMs = (dbSettings.llm_request_delay_seconds ?? 8) * 1000;
+  const activeModel = dbSettings.llm_model || "gemini-3.8-flash";
 
   console.log(
-    `✓ Using AI Model: "${dbSettings.llm_model || "gemini-3.8-flash"}" from Supabase app_settings ` +
+    `✓ Using AI Model: "${activeModel}" from Supabase app_settings ` +
     `(Batch limit: ${batchLimit} resumes, Delay: ${delayMs / 1000}s).`
   );
 
@@ -73,8 +75,9 @@ async function main() {
   }
 
   if (!baseResume) {
-    console.error("ERROR: No base resume found in Supabase or locally. Please parse a resume first.");
-    process.exit(1);
+    const errorMsg = "No base resume found in Supabase or locally. Please parse a resume first.";
+    console.error(`ERROR: ${errorMsg}`);
+    throw new Error(errorMsg);
   }
 
   // 2. Fetch active resume style for theme snapshotting
@@ -95,15 +98,19 @@ async function main() {
 
   if (fetchError) {
     console.error("Error fetching jobs for resume customization:", fetchError);
-    process.exit(1);
+    throw fetchError;
   }
 
   if (!candidateJobs || candidateJobs.length === 0) {
     console.log("No high-matching jobs found needing customized resumes at this time.");
+    ctx?.setMetrics({ candidates_found: 0, resumes_tailored: 0, failed_count: 0, model: activeModel });
+    ctx?.setSummary("No high-matching jobs found needing customized resumes at this time.");
     return;
   }
 
   console.log(`Found ${candidateJobs.length} eligible jobs (score >= ${MIN_SCORE_THRESHOLD}, is_interested is not false) to customize.`);
+  let tailoredCount = 0;
+  let failedCount = 0;
 
   for (let i = 0; i < candidateJobs.length; i++) {
     const job = candidateJobs[i];
@@ -143,6 +150,7 @@ async function main() {
 
       if (insertError) {
         console.error(`  ✗ Failed to save customized resume in DB for ${job.job_id}:`, insertError.message);
+        failedCount++;
         continue;
       }
 
@@ -158,10 +166,12 @@ async function main() {
 
       if (jobUpdateError) {
         console.error(`  ✗ Failed to link customized resume to job ${job.job_id}:`, jobUpdateError.message);
+        failedCount++;
         continue;
       }
 
       console.log(`  ✓ Customized resume saved and linked to job ${job.job_id} (ID: ${customizedResumeId}).`);
+      tailoredCount++;
 
       // Step D: Stage 3: Re-score job with newly customized resume (The Evaluator)
       console.log("  Stage 3/3: Re-scoring job fit with customized resume (The Evaluator)...");
@@ -195,6 +205,7 @@ async function main() {
       }
     } catch (err: any) {
       console.error(`  ✗ Failed to process job ${job.job_id}:`, err.message);
+      failedCount++;
     }
 
     if (i < candidateJobs.length - 1) {
@@ -203,6 +214,31 @@ async function main() {
   }
 
   console.log("=== Resume Customization Cycle Completed ===");
+  console.log(`Successfully tailored: ${tailoredCount} | Failed: ${failedCount}`);
+
+  if (ctx) {
+    ctx.setMetrics({
+      candidates_found: candidateJobs.length,
+      resumes_tailored: tailoredCount,
+      failed_count: failedCount,
+      model: activeModel,
+    });
+    ctx.setSummary(
+      `Tailored ${tailoredCount} of ${candidateJobs.length} eligible job resume(s) (Model: ${activeModel}).`
+    );
+  }
+}
+
+async function main() {
+  await withTelemetry(
+    {
+      workflowName: "ATS Resume Tailor",
+      workflowId: "customize_resumes",
+    },
+    async (ctx) => {
+      await runResumeCustomizer(ctx);
+    }
+  );
 }
 
 main().catch((err) => {
