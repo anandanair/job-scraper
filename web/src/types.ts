@@ -223,6 +223,10 @@ export interface AppSettings {
   llm_max_rpm: number;
   llm_request_delay_seconds: number;
   llm_daily_request_budget: number;
+  schedule_timezone?: string;
+  schedule_hour?: number;
+  schedule_minute?: number;
+  last_scraped_at?: string | null;
   setup_step?: number;
   setup_completed?: boolean;
   created_at?: string;

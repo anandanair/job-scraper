@@ -288,7 +288,9 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
         <AutomationBudgetSettings settings={settings} onChange={handleFieldChange} />
       )}
 
-      {activeTab === "cloud" && <CloudWorkflowsSettings settings={settings} />}
+      {activeTab === "cloud" && (
+        <CloudWorkflowsSettings settings={settings} onChange={handleFieldChange} />
+      )}
 
       {/* Fixed Sticky Action Bar */}
       <SettingsStickyBar

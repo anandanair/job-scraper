@@ -205,6 +205,25 @@ GRANT ALL ON FUNCTION "public"."get_applied_jobs_sorted"("p_page_number" integer
 -- 4. Record this migration as applied
 INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261101_01_applied_jobs_tracking') ON CONFLICT DO NOTHING;`,
   },
+  {
+    id: "20261102_01_schedule_timezone_and_timing",
+    title: "Schedule Timezone and Daily Run Timing",
+    description:
+      "Adds schedule_timezone, schedule_hour, schedule_minute, and last_scraped_at to app_settings for personalized local timezone job scraping.",
+    sql: `-- 1. Add scheduling and last run tracking columns to app_settings
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "schedule_timezone" text NOT NULL DEFAULT 'Asia/Singapore';
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "schedule_hour" integer NOT NULL DEFAULT 19;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "schedule_minute" integer NOT NULL DEFAULT 0;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "last_scraped_at" timestamp with time zone;
+
+COMMENT ON COLUMN "public"."app_settings"."schedule_timezone" IS 'IANA timezone string (e.g. Asia/Singapore, Asia/Kolkata, America/New_York) for scheduling background jobs';
+COMMENT ON COLUMN "public"."app_settings"."schedule_hour" IS 'Preferred local hour (0-23) to run the daily job scraper';
+COMMENT ON COLUMN "public"."app_settings"."schedule_minute" IS 'Preferred local minute (0-59) to run the daily job scraper';
+COMMENT ON COLUMN "public"."app_settings"."last_scraped_at" IS 'Timestamp when the daily scraper last ran and saved jobs';
+
+-- 2. Record this migration as applied
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261102_01_schedule_timezone_and_timing') ON CONFLICT DO NOTHING;`,
+  },
 ];
 
 /**

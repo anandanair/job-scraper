@@ -68,7 +68,7 @@ graph TD
 ```
 .
 ├── .github/workflows/          # Automated GitHub Actions
-│   ├── scrape_jobs.yml         # Daily TypeScript job scraper (7:00 PM SGT)
+│   ├── scrape_jobs.yml         # Daily TypeScript job scraper (hourly gatekeeper evaluating user local timezone)
 │   ├── score_jobs.yml          # TypeScript AI job scorer (every 4 hrs)
 │   ├── hourly_resume_customization.yml # TypeScript resume tailor (every 4 hrs)
 │   ├── job_manager.yml         # TypeScript job status manager (daily)
@@ -83,10 +83,13 @@ graph TD
 │   └── resume_style_settings.sql # Resume style schema reference
 ├── web/                        # Next.js 16 Fullstack App & Automation Workers
 │   ├── scripts/                # TypeScript batch worker scripts (run via tsx)
+│   │   ├── check-schedule.ts   # Schedule gatekeeper for hourly local timezone workflow runs
 │   │   ├── customize-resumes.ts# Resume customization batch worker
 │   │   ├── job-manager.ts      # Job expiration & active status checker
+│   │   ├── migrate.ts          # Automated database schema migration runner
 │   │   ├── parse-resume.ts     # Resume PDF parser
-│   │   └── score-jobs.ts       # Job scoring batch worker
+│   │   ├── score-jobs.ts       # Job scoring batch worker
+│   │   └── scrape-jobs.ts      # TypeScript scraping engine worker
 │   ├── src/
 │   │   ├── app/                # App Router (Pages & REST API route handlers)
 │   │   │   ├── api/            # Server-side API endpoints
@@ -139,6 +142,7 @@ graph TD
    - Single-row table storing global application preferences:
      - AI provider (`gemini`, `fireworks`, `openai`, `anthropic`, `groq`), model name, API key, RPM rate limits, daily budget.
      - Search preferences: LinkedIn queries, GeoID, job type, date posted, CareersFuture queries, categories, active platforms.
+     - Scheduling (migration `20261102_01_schedule_timezone_and_timing`): `schedule_timezone` (text, default `'Asia/Singapore'`), `schedule_hour` (int, default `19`), `schedule_minute` (int, default `0`), `last_scraped_at` (timestamptz).
      - Onboarding status: `setup_step`, `setup_completed`.
 6. **`linkedin_geo_locations`**:
    - Pre-populated mapping of global locations to LinkedIn `geoId`s (e.g., Singapore `102454443`, United States `103644278`).

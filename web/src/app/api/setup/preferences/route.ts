@@ -16,6 +16,9 @@ export async function POST(req: Request) {
       scrapingSources = ["linkedin"],
       careersFutureSearchCategories = [],
       careersFutureSearchEmploymentTypes = ["Full Time"],
+      scheduleTimezone,
+      scheduleHour,
+      scheduleMinute,
     } = body;
 
     if (!Array.isArray(linkedinSearchQueries) || linkedinSearchQueries.length < 3 || linkedinSearchQueries.length > 5) {
@@ -45,6 +48,9 @@ export async function POST(req: Request) {
       careers_future_search_categories: careersFutureSearchCategories,
       careers_future_search_employment_types: careersFutureSearchEmploymentTypes,
       scraping_sources: scrapingSources,
+      ...(scheduleTimezone ? { schedule_timezone: scheduleTimezone } : {}),
+      ...(typeof scheduleHour === "number" ? { schedule_hour: scheduleHour } : {}),
+      ...(typeof scheduleMinute === "number" ? { schedule_minute: scheduleMinute } : {}),
     });
 
     return NextResponse.json({

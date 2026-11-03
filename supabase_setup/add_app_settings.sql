@@ -28,6 +28,12 @@ CREATE TABLE IF NOT EXISTS "public"."app_settings" (
     "llm_max_rpm" integer NOT NULL DEFAULT 10,
     "llm_request_delay_seconds" integer NOT NULL DEFAULT 8,
     "llm_daily_request_budget" integer NOT NULL DEFAULT 0,
+
+    -- Scheduling & Automation
+    "schedule_timezone" text NOT NULL DEFAULT 'Asia/Singapore',
+    "schedule_hour" integer NOT NULL DEFAULT 19,
+    "schedule_minute" integer NOT NULL DEFAULT 0,
+    "last_scraped_at" timestamp with time zone,
     
     -- Timestamps
     "created_at" timestamp with time zone DEFAULT now(),

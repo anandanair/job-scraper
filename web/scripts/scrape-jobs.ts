@@ -296,6 +296,27 @@ async function main() {
   console.log("\n=================================================================");
   console.log(`Job scraping complete. Total new jobs saved: ${totalNewJobsSaved}`);
   console.log("=================================================================\n");
+
+  if (!cli.dryRun) {
+    try {
+      const nowIso = new Date().toISOString();
+      const { data: currentSettings } = await supabase
+        .from("app_settings")
+        .select("id")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const targetId = currentSettings?.id || "00000000-0000-0000-0000-000000000001";
+      await supabase
+        .from("app_settings")
+        .update({ last_scraped_at: nowIso, updated_at: nowIso })
+        .eq("id", targetId);
+      console.log(`[Schedule] Stamped last_scraped_at to ${nowIso}`);
+    } catch (stampErr: any) {
+      console.warn("[WARN] Could not update last_scraped_at in app_settings:", stampErr?.message || stampErr);
+    }
+  }
 }
 
 main().catch((err) => {

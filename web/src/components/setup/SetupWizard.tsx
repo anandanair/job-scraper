@@ -9,6 +9,7 @@ import { Step3Preferences } from "./Step3Preferences";
 import { Step4ResumeStudio } from "./Step4ResumeStudio";
 import { Step5GitHub } from "./Step5GitHub";
 import { AppSettings } from "@/types";
+import { getDefaultScheduleTime } from "@/lib/schedule-utils";
 
 interface SetupWizardProps {
   initialStep?: 1 | 2 | 3 | 4 | 5;
@@ -167,6 +168,12 @@ export default function SetupWizard({
   }) => {
     setIsSavingPreferences(true);
     try {
+      let detectedTz = "Asia/Singapore";
+      try {
+        detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Singapore";
+      } catch {}
+      const defTime = getDefaultScheduleTime(detectedTz);
+
       const res = await fetch("/api/setup/preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -177,6 +184,9 @@ export default function SetupWizard({
           linkedinJobType: prefs.jobTypes,
           linkedinFWt: prefs.workplaceTypes,
           scrapingSources: prefs.scrapingSources,
+          scheduleTimezone: detectedTz,
+          scheduleHour: defTime.hour,
+          scheduleMinute: defTime.minute,
         }),
       });
 
