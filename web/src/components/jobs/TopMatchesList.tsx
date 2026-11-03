@@ -15,6 +15,7 @@ import {
   Link as SocialLink,
   Sparkles,
   RefreshCw,
+  Mail,
 } from "lucide-react";
 import MarkdownRenderer from "./MarkdownRenderer";
 import Toast, { ToastData } from "./applied/Toast";
@@ -607,6 +608,38 @@ export default function TopMatchesList({
                       : "Generate Custom Resume"}
                   </button>
                 )}
+
+                {/* Custom Cover Letter (On-Demand) */}
+                {(() => {
+                  const hasCoverLetter = Boolean(
+                    Array.isArray(selectedJob.cover_letters)
+                      ? selectedJob.cover_letters.length > 0
+                      : selectedJob.cover_letters?.id
+                  );
+                  return (
+                    <Link
+                      href={`/jobs/${selectedJob.job_id}/cover-letter`}
+                      className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 cursor-pointer ${
+                        hasCoverLetter
+                          ? "bg-purple-100 text-purple-800 hover:bg-purple-200 border border-purple-300 focus:ring-purple-500"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700 border border-transparent focus:ring-indigo-500 shadow-sm"
+                      }`}
+                      title={hasCoverLetter ? "View and edit tailored cover letter" : "Generate a custom cover letter with AI"}
+                    >
+                      {hasCoverLetter ? (
+                        <>
+                          <Mail size={16} className="mr-2 text-purple-700" />
+                          View Cover Letter
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} className="mr-2" />
+                          Generate Cover Letter
+                        </>
+                      )}
+                    </Link>
+                  );
+                })()}
 
                 {canRescore && (
                   <button

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Document, Page, pdfjs } from "react-pdf";
 import {
@@ -28,6 +29,7 @@ import {
   PanelLeftOpen,
   PanelLeftClose,
   AlertTriangle,
+  Mail,
 } from "lucide-react";
 
 import "react-pdf/dist/Page/AnnotationLayer.css";
@@ -405,6 +407,15 @@ export default function TailoredResumeStudio({
                 <Download className="w-5 h-5" />
               )}
             </button>
+
+            <Link
+              href={`/jobs/${jobId}/cover-letter`}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-all"
+              title="Go to Cover Letter for this job"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Cover Letter</span>
+            </Link>
 
             <button
               onClick={requestClose}

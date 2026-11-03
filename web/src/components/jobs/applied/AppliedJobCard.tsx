@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   Gauge,
   Undo2,
+  Mail,
 } from "lucide-react";
 import { Job } from "@/types";
 import {
@@ -316,6 +317,13 @@ export default function AppliedJobCard({
                   Tailored resume
                 </Link>
               )}
+              <Link
+                href={`/jobs/${job.job_id}/cover-letter`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 transition-colors hover:bg-purple-100"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                Cover letter
+              </Link>
               {job.status === "applied" && !job.follow_up_at && (
                 <button
                   onClick={() => onQuickFollowUp(job, 7)}

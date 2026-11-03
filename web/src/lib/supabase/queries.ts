@@ -39,7 +39,7 @@ export async function getTopScoredJobs(
 
   let query = supabase
     .from("jobs")
-    .select("*, customized_resumes(id, resume_link)")
+    .select("*, customized_resumes(id, resume_link), cover_letters(id, updated_at)")
     .eq("is_active", true)
     .eq("status", "new")
     .eq("job_state", "new")
@@ -148,7 +148,7 @@ export async function getNewJobs(
 
   let query = supabase
     .from("jobs")
-    .select("*, customized_resumes(id, resume_link)")
+    .select("*, customized_resumes(id, resume_link), cover_letters(id, updated_at)")
     .eq("is_active", true)
     .eq("status", "new") // Filter by status
     .eq("job_state", "new");
@@ -268,7 +268,7 @@ export async function getTailoredJobs(
 
   let query = supabase
     .from("jobs")
-    .select("*, customized_resumes(id, resume_link)")
+    .select("*, customized_resumes(id, resume_link), cover_letters(id, updated_at)")
     .eq("is_active", true)
     .in("status", ["new", "resume_generated"])
     .eq("job_state", "new")

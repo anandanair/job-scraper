@@ -416,13 +416,22 @@ export default function JobDetailsClient({
             href={`/jobs/${job.job_id}/cover-letter`}
             className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
               hasCoverLetter
-                ? "bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 focus:ring-purple-500"
-                : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 focus:ring-indigo-500 shadow-sm"
+                ? "bg-purple-100 text-purple-800 hover:bg-purple-200 border border-purple-300 focus:ring-purple-500"
+                : "bg-indigo-600 text-white hover:bg-indigo-700 border border-transparent focus:ring-indigo-500 shadow-sm"
             }`}
             title={hasCoverLetter ? "View and edit tailored cover letter" : "Generate a custom cover letter with AI"}
           >
-            <Mail size={16} className={`mr-2 ${hasCoverLetter ? "text-purple-600" : "text-gray-500"}`} />
-            {hasCoverLetter ? "View Cover Letter" : "Cover Letter"}
+            {hasCoverLetter ? (
+              <>
+                <Mail size={16} className="mr-2 text-purple-700" />
+                View Cover Letter
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} className="mr-2" />
+                Generate Cover Letter
+              </>
+            )}
           </Link>
 
           {/* Rescore with Custom Resume: ONLY rendered if custom resume exists AND score stage is still initial */}
