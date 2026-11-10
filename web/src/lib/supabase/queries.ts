@@ -32,6 +32,7 @@ export async function getTopScoredJobs(
   maxScore: number = 100, // Default maxScore
   isInterested?: boolean | null, // Optional interest filter (true, false, or null for 'not marked')
   searchQuery?: string, // Optional search query
+  sortBy: "total" | "dream" | "ats" = "total", // Ranking strategy: composite match, dream fit first, or ATS fit first
 ): Promise<Job[]> {
   const supabase = await createSupabaseServerClient();
   const from = (page - 1) * pageSize;
@@ -68,10 +69,26 @@ export async function getTopScoredJobs(
     );
   }
 
-  query = query
-    .order("resume_score", { ascending: false })
-    .order("scraped_at", { ascending: false })
-    .range(from, to);
+  if (sortBy === "dream") {
+    query = query
+      .order("dream_score", { ascending: false, nullsFirst: false })
+      .order("total_score", { ascending: false, nullsFirst: false })
+      .order("resume_score", { ascending: false })
+      .order("scraped_at", { ascending: false });
+  } else if (sortBy === "ats") {
+    query = query
+      .order("resume_score", { ascending: false })
+      .order("total_score", { ascending: false, nullsFirst: false })
+      .order("scraped_at", { ascending: false });
+  } else {
+    // Default: Overall composite match score (50% ATS + 50% Dream)
+    query = query
+      .order("total_score", { ascending: false, nullsFirst: false })
+      .order("resume_score", { ascending: false })
+      .order("scraped_at", { ascending: false });
+  }
+
+  query = query.range(from, to);
 
   const response = await query;
   const data = await handleResponse(response);

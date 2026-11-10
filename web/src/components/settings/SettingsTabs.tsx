@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { Bot, Briefcase, Zap, GitFork, Terminal } from "lucide-react";
+import { Bot, Briefcase, Zap, GitFork, Terminal, Flame } from "lucide-react";
 
-export type SettingsTabId = "ai" | "search" | "automation" | "cloud" | "logs";
+export type SettingsTabId = "ai" | "search" | "dream" | "automation" | "cloud" | "logs";
 
 interface SettingsTabsProps {
   activeTab: SettingsTabId;
@@ -13,6 +13,7 @@ interface SettingsTabsProps {
 const TABS: { id: SettingsTabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "ai", label: "AI Engine & Models", icon: Bot },
   { id: "search", label: "Job Search Preferences", icon: Briefcase },
+  { id: "dream", label: "Strategy & Dream Checklist", icon: Flame },
   { id: "automation", label: "Automation & Budget", icon: Zap },
   { id: "cloud", label: "Cloud Workflows", icon: GitFork },
   { id: "logs", label: "Execution Logs", icon: Terminal },

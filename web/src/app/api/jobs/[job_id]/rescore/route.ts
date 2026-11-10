@@ -5,8 +5,9 @@ import {
   updateJobById,
   getCustomizedResumeById,
   getUserProfileByEmail,
+  getAppSettings,
 } from "@/lib/supabase/queries";
-import { formatResumeToText, scoreJobWithResume } from "@/lib/llm";
+import { formatResumeToText, evaluateJobFit } from "@/lib/llm";
 
 export async function POST(
   request: Request,
@@ -47,16 +48,22 @@ export async function POST(
       );
     }
 
+    const settings = await getAppSettings();
     const resumeText = formatResumeToText(resumeData);
-    const score = await scoreJobWithResume(resumeText, {
-      job_id: job.job_id,
-      job_title: job.job_title,
-      company: job.company,
-      level: job.level,
-      description: job.description,
-    });
+    const evalResult = await evaluateJobFit(
+      resumeText,
+      {
+        job_id: job.job_id,
+        job_title: job.job_title,
+        company: job.company,
+        level: job.level,
+        description: job.description,
+      },
+      settings?.dream_job_profile,
+      settings?.job_search_mode || "get_hired_fast"
+    );
 
-    if (score === null) {
+    if (!evalResult) {
       return NextResponse.json(
         { error: "AI failed to evaluate a score for this job" },
         { status: 502 }
@@ -65,7 +72,10 @@ export async function POST(
 
     // Update job in Supabase
     await updateJobById(job_id, {
-      resume_score: score,
+      resume_score: evalResult.resume_score,
+      dream_score: evalResult.dream_score,
+      total_score: evalResult.total_score,
+      score_breakdown: evalResult.score_breakdown,
       resume_score_stage: stage,
     });
 
@@ -79,7 +89,14 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { success: true, job_id, resume_score: score, resume_score_stage: stage },
+      {
+        success: true,
+        job_id,
+        resume_score: evalResult.resume_score,
+        dream_score: evalResult.dream_score,
+        score_breakdown: evalResult.score_breakdown,
+        resume_score_stage: stage,
+      },
       { status: 200 }
     );
   } catch (error: any) {

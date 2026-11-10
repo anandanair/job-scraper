@@ -67,7 +67,7 @@ export function Step4ResumeStudio({ onBack, onNextStep }: Step4ResumeStudioProps
         <div>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-100/70 text-indigo-800 text-[11px] font-bold uppercase tracking-wider mb-1">
             <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            Step 4: Master Resume Studio & Typography
+            Step 5: Master Resume Studio & Typography
           </div>
           <h2 className="text-base font-bold text-slate-900 tracking-tight">
             Verify Parsed Details & Set Preferred ATS Style

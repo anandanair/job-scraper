@@ -9,7 +9,7 @@ import { getSetupState } from "@/lib/setup/setupState";
 export const dynamic = "force-dynamic";
 
 async function getInitialSetupStatus(): Promise<{
-  initialStep: 1 | 2 | 3 | 4 | 5;
+  initialStep: 1 | 2 | 3 | 4 | 5 | 6;
   supabaseConnected: boolean;
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
@@ -26,7 +26,7 @@ async function getInitialSetupStatus(): Promise<{
 
   if (setupState.isCompleted) {
     return {
-      initialStep: 5,
+      initialStep: 6,
       supabaseConnected: true,
       supabaseUrl: "",
       supabaseServiceRoleKey: "",
@@ -161,9 +161,13 @@ async function getInitialSetupStatus(): Promise<{
         };
       }
 
-      // Advance to Step 5 if setupState step is 5 or db indicates step 5
-      const resolvedStep: 1 | 2 | 3 | 4 | 5 =
-        setupState.step === 5 || (settings as any)?.setup_step === 5 ? 5 : 4;
+      // Advance to Step 6 if setupState step is 6 or db indicates step 6
+      const resolvedStep: 1 | 2 | 3 | 4 | 5 | 6 =
+        setupState.step === 6 || (settings as any)?.setup_step === 6
+          ? 6
+          : setupState.step === 5 || (settings as any)?.setup_step === 5
+          ? 5
+          : 4;
 
       return {
         initialStep: resolvedStep,

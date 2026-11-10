@@ -8,11 +8,11 @@ export async function POST(req: Request) {
     const body = await req.json();
     const step = Number(body?.step);
 
-    if (!step || step < 1 || step > 5) {
-      return NextResponse.json({ error: "Invalid step number (1-5)." }, { status: 400 });
+    if (!step || step < 1 || step > 6) {
+      return NextResponse.json({ error: "Invalid step number (1-6)." }, { status: 400 });
     }
 
-    await saveSetupStep(step as 1 | 2 | 3 | 4 | 5);
+    await saveSetupStep(step as 1 | 2 | 3 | 4 | 5 | 6);
 
     return NextResponse.json({ success: true, step });
   } catch (err: any) {

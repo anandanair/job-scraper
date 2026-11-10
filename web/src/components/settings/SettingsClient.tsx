@@ -7,6 +7,7 @@ import { SettingsHeader } from "./SettingsHeader";
 import { SettingsTabs, SettingsTabId } from "./SettingsTabs";
 import { AiEngineSettings } from "./AiEngineSettings";
 import { JobSearchSettings } from "./JobSearchSettings";
+import { DreamJobSettings } from "./DreamJobSettings";
 import { AutomationBudgetSettings } from "./AutomationBudgetSettings";
 import { CloudWorkflowsSettings } from "./CloudWorkflowsSettings";
 import { ExecutionLogsTab } from "./ExecutionLogsTab";
@@ -285,12 +286,20 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
         <JobSearchSettings settings={settings} onChange={handleFieldChange} />
       )}
 
+      {activeTab === "dream" && (
+        <DreamJobSettings settings={settings} onChange={handleFieldChange} />
+      )}
+
       {activeTab === "automation" && (
         <AutomationBudgetSettings settings={settings} onChange={handleFieldChange} />
       )}
 
       {activeTab === "cloud" && (
-        <CloudWorkflowsSettings settings={settings} onChange={handleFieldChange} />
+        <CloudWorkflowsSettings
+          settings={settings}
+          onChange={handleFieldChange}
+          onNavigateToLogs={() => setActiveTab("logs")}
+        />
       )}
 
       {activeTab === "logs" && (

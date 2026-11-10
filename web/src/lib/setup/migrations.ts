@@ -289,6 +289,98 @@ GRANT ALL ON TABLE "public"."cover_letters" TO "anon", "authenticated", "service
 -- 4. Record this migration as applied
 INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261103_02_cover_letters') ON CONFLICT DO NOTHING;`,
   },
+  {
+    id: "20261109_01_dream_job_enhancements",
+    title: "Dream Job Engine (Salary, Workplace Type, Dual Scores & Interview Prep)",
+    description:
+      "Adds salary_min, salary_max, salary_currency, salary_period, workplace_type, dream_score, score_breakdown, and application_url to jobs; adds dream_job_profile and search_locations to app_settings; creates job_interview_prep table.",
+    sql: `-- 1. Add salary, workplace, dream score, and breakdown to jobs
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "salary_min" numeric;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "salary_max" numeric;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "salary_currency" text;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "salary_period" text;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "workplace_type" text;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "dream_score" smallint;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "score_breakdown" jsonb;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "application_url" text;
+
+COMMENT ON COLUMN "public"."jobs"."salary_min" IS 'Minimum salary/compensation if provided';
+COMMENT ON COLUMN "public"."jobs"."salary_max" IS 'Maximum salary/compensation if provided';
+COMMENT ON COLUMN "public"."jobs"."salary_currency" IS 'Currency code, e.g. SGD, USD, EUR, INR';
+COMMENT ON COLUMN "public"."jobs"."salary_period" IS 'Salary period: month, year, or hour';
+COMMENT ON COLUMN "public"."jobs"."workplace_type" IS 'Workplace arrangement: remote, hybrid, or onsite';
+COMMENT ON COLUMN "public"."jobs"."dream_score" IS 'AI fit score (0-100) evaluated against user dream job criteria';
+COMMENT ON COLUMN "public"."jobs"."score_breakdown" IS 'Detailed AI evaluation: matched skills, skill gaps, red flags, pros/cons';
+COMMENT ON COLUMN "public"."jobs"."application_url" IS 'Direct external application URL if different from provider view URL';
+
+-- 2. Add dream profile and multi-region locations to app_settings
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "dream_job_profile" jsonb DEFAULT '{}'::jsonb;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "search_locations" jsonb DEFAULT '[]'::jsonb;
+
+-- 3. Create job_interview_prep table for on-demand interview preparation
+CREATE TABLE IF NOT EXISTS "public"."job_interview_prep" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "job_id" text NOT NULL UNIQUE REFERENCES "public"."jobs"("job_id") ON DELETE CASCADE,
+    "technical_questions" jsonb DEFAULT '[]'::jsonb,
+    "behavioral_star" jsonb DEFAULT '[]'::jsonb,
+    "reverse_questions" jsonb DEFAULT '[]'::jsonb,
+    "company_brief" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- 4. Create indexes for efficient filtering and sorting
+CREATE INDEX IF NOT EXISTS "idx_jobs_dream_score" ON "public"."jobs" ("dream_score" DESC);
+CREATE INDEX IF NOT EXISTS "idx_jobs_workplace_type" ON "public"."jobs" ("workplace_type");
+CREATE INDEX IF NOT EXISTS "idx_jobs_salary_min" ON "public"."jobs" ("salary_min");
+CREATE INDEX IF NOT EXISTS "idx_job_interview_prep_job_id" ON "public"."job_interview_prep" ("job_id");
+
+-- 5. Security & permissions
+ALTER TABLE "public"."job_interview_prep" ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE "public"."job_interview_prep" TO "anon", "authenticated", "service_role";
+
+-- 6. Record this migration as applied
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261109_01_dream_job_enhancements') ON CONFLICT DO NOTHING;`,
+  },
+  {
+    id: "20261110_01_composite_score_and_dream_gating",
+    title: "Composite Match Scoring (50/50 Blended) and Dream Gating",
+    description:
+      "Adds total_score column to jobs combining ATS qualification and dream alignment, creates index for top matches sorting, and backfills existing scored jobs.",
+    sql: `-- 1. Add total_score column to jobs
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "total_score" smallint;
+COMMENT ON COLUMN "public"."jobs"."total_score" IS 'Composite score (0-100) combining ATS qualification (resume_score) and dream checklist fit (dream_score)';
+
+-- 2. Index for fast top-match composite sorting
+CREATE INDEX IF NOT EXISTS "idx_jobs_total_score" ON "public"."jobs" ("total_score" DESC);
+
+-- 3. Backfill existing scored jobs
+UPDATE "public"."jobs"
+SET "total_score" = ROUND(
+  ("resume_score" * 0.5) + (COALESCE("dream_score", "resume_score") * 0.5)
+)::smallint
+WHERE "resume_score" IS NOT NULL;
+
+-- 4. Record this migration as applied
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261110_01_composite_score_and_dream_gating') ON CONFLICT DO NOTHING;`,
+  },
+  {
+    id: "20261110_02_job_search_mode_and_strategy",
+    title: "Job Search Strategy Mode (Get Hired Fast vs Dream Hunter)",
+    description:
+      "Adds job_search_mode column to app_settings defaulting to 'get_hired_fast', allowing users to toggle between pure ATS qualification fit and strict dream checklist gating.",
+    sql: `-- 1. Add job_search_mode column to app_settings
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "job_search_mode" text DEFAULT 'get_hired_fast';
+COMMENT ON COLUMN "public"."app_settings"."job_search_mode" IS 'Job search strategy mode: get_hired_fast (pure ATS fit) or dream_hunter (blended ATS + dream checklist)';
+
+-- 2. Backfill existing rows to get_hired_fast if null
+UPDATE "public"."app_settings"
+SET "job_search_mode" = 'get_hired_fast'
+WHERE "job_search_mode" IS NULL;
+
+-- 3. Record this migration as applied
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261110_02_job_search_mode_and_strategy') ON CONFLICT DO NOTHING;`,
+  },
 ];
 
 /**

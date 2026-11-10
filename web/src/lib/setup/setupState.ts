@@ -3,7 +3,7 @@ import path from "path";
 import { updateAppSettings, getAppSettings } from "@/lib/supabase/queries";
 
 export interface SetupState {
-  step: 1 | 2 | 3 | 4 | 5;
+  step: 1 | 2 | 3 | 4 | 5 | 6;
   isCompleted: boolean;
 }
 
@@ -56,12 +56,12 @@ export async function getSetupState(): Promise<SetupState> {
     const settings = await getAppSettings();
     if (settings) {
       if ((settings as any).setup_completed) {
-        return { step: 5, isCompleted: true };
+        return { step: 6, isCompleted: true };
       }
       if ((settings as any).setup_step) {
         const dbStep = (settings as any).setup_step;
-        if (dbStep >= 1 && dbStep <= 5) {
-          return { step: dbStep as 1 | 2 | 3 | 4 | 5, isCompleted: false };
+        if (dbStep >= 1 && dbStep <= 6) {
+          return { step: dbStep as 1 | 2 | 3 | 4 | 5 | 6, isCompleted: false };
         }
       }
     }
@@ -76,7 +76,7 @@ export async function getSetupState(): Promise<SetupState> {
  * Saves active setup step directly to Supabase app_settings table (Single Source of Truth).
  * Does NOT touch .env files to prevent Next.js dev server hot-restarts.
  */
-export async function saveSetupStep(step: 1 | 2 | 3 | 4 | 5): Promise<void> {
+export async function saveSetupStep(step: 1 | 2 | 3 | 4 | 5 | 6): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       await updateAppSettings({
@@ -102,7 +102,7 @@ export async function saveSetupStep(step: 1 | 2 | 3 | 4 | 5): Promise<void> {
 export async function markSetupComplete(): Promise<void> {
   try {
     await updateAppSettings({
-      setup_step: 5,
+      setup_step: 6,
       setup_completed: true,
     } as any);
   } catch (err: any) {

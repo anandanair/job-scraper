@@ -314,7 +314,7 @@ export function Step5GitHub({
       <div>
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold uppercase tracking-wider mb-2">
           <Bot className="w-3.5 h-3.5" />
-          Step 5: Cloud Scheduling & Rate-Limit Quotas
+          Step 6: Cloud Scheduling & Rate-Limit Quotas
         </div>
         <h2 className="text-xl font-bold text-slate-900 tracking-tight">
           Calibrate Daily Volumes & Connect GitHub Actions

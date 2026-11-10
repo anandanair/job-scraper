@@ -681,7 +681,7 @@ export function Step3Preferences({
             </>
           ) : (
             <>
-              <span>Save & Continue to Step 4 (Resume Studio)</span>
+              <span>Save & Continue to Step 4 (Search Strategy)</span>
               <ArrowRight className="w-4 h-4" />
             </>
           )}

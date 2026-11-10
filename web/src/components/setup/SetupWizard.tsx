@@ -6,13 +6,14 @@ import { SetupStepper } from "./SetupStepper";
 import { Step1Database } from "./Step1Database";
 import { Step2AiEngine } from "./Step2AiEngine";
 import { Step3Preferences } from "./Step3Preferences";
+import { Step4SearchStrategy } from "./Step4SearchStrategy";
 import { Step4ResumeStudio } from "./Step4ResumeStudio";
 import { Step5GitHub } from "./Step5GitHub";
 import { AppSettings } from "@/types";
 import { getDefaultScheduleTime } from "@/lib/schedule-utils";
 
 interface SetupWizardProps {
-  initialStep?: 1 | 2 | 3 | 4 | 5;
+  initialStep?: 1 | 2 | 3 | 4 | 5 | 6;
   initialSupabaseConnected?: boolean;
   initialSupabaseUrl?: string;
   initialSupabaseServiceRoleKey?: string;
@@ -38,7 +39,7 @@ export default function SetupWizard({
   initialAiTier,
   initialSettings = null,
 }: SetupWizardProps) {
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(initialStep);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(initialStep);
   const [supabaseConnected, setSupabaseConnected] = useState(initialSupabaseConnected);
   const [connectedSupabaseUrl, setConnectedSupabaseUrl] = useState(initialSupabaseUrl);
   const [connectedServiceRoleKey, setConnectedServiceRoleKey] = useState(initialSupabaseServiceRoleKey);
@@ -75,8 +76,8 @@ export default function SetupWizard({
   const [isSavingPreferences, setIsSavingPreferences] = useState(false);
 
   // Calculate highest step user can freely click into
-  const maxAccessibleStep: 1 | 2 | 3 | 4 | 5 = preferencesSaved || initialStep >= 4
-    ? 5
+  const maxAccessibleStep: 1 | 2 | 3 | 4 | 5 | 6 = preferencesSaved || initialStep >= 4
+    ? 6
     : (aiConnected || !!aiConfig.apiKey)
     ? 3
     : supabaseConnected
@@ -144,7 +145,7 @@ export default function SetupWizard({
       .catch((err) => console.warn("Setup status fetch error:", err));
   }, [initialStep]);
 
-  const updateStepRemote = (step: 1 | 2 | 3 | 4 | 5) => {
+  const updateStepRemote = (step: 1 | 2 | 3 | 4 | 5 | 6) => {
     fetch("/api/setup/step", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -152,7 +153,7 @@ export default function SetupWizard({
     }).catch(console.warn);
   };
 
-  const handleStepTransition = (step: 1 | 2 | 3 | 4 | 5) => {
+  const handleStepTransition = (step: 1 | 2 | 3 | 4 | 5 | 6) => {
     updateStepRemote(step);
     setCurrentStep(step);
   };
@@ -290,15 +291,23 @@ export default function SetupWizard({
           )}
 
           {currentStep === 4 && (
-            <Step4ResumeStudio
+            <Step4SearchStrategy
+              initialSettings={savedSettings}
               onBack={() => setCurrentStep(3)}
               onNextStep={() => handleStepTransition(5)}
             />
           )}
 
           {currentStep === 5 && (
-            <Step5GitHub
+            <Step4ResumeStudio
               onBack={() => setCurrentStep(4)}
+              onNextStep={() => handleStepTransition(6)}
+            />
+          )}
+
+          {currentStep === 6 && (
+            <Step5GitHub
+              onBack={() => setCurrentStep(5)}
               onFinish={handleLaunchDashboard}
               supabaseUrl={connectedSupabaseUrl}
               supabaseServiceRoleKey={connectedServiceRoleKey}

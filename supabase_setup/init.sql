@@ -85,7 +85,16 @@ CREATE TABLE IF NOT EXISTS "public"."jobs" (
     "follow_up_at" timestamp with time zone,
     "next_event_at" timestamp with time zone,
     "next_event_label" "text",
-    "status_history" "jsonb" DEFAULT '[]'::"jsonb"
+    "status_history" "jsonb" DEFAULT '[]'::"jsonb",
+    "salary_min" numeric,
+    "salary_max" numeric,
+    "salary_currency" "text",
+    "salary_period" "text",
+    "workplace_type" "text",
+    "dream_score" smallint,
+    "total_score" smallint,
+    "score_breakdown" "jsonb",
+    "application_url" "text"
 );
 
 -- Upgrade existing jobs tables if columns are missing from earlier versions
@@ -111,6 +120,15 @@ ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "follow_up_at" timestamp wi
 ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "next_event_at" timestamp with time zone;
 ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "next_event_label" "text";
 ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "status_history" "jsonb" DEFAULT '[]'::"jsonb";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "salary_min" numeric;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "salary_max" numeric;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "salary_currency" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "salary_period" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "workplace_type" "text";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "dream_score" smallint;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "total_score" smallint;
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "score_breakdown" "jsonb";
+ALTER TABLE "public"."jobs" ADD COLUMN IF NOT EXISTS "application_url" "text";
 
 
 ALTER TABLE "public"."jobs" OWNER TO "postgres";
@@ -564,6 +582,8 @@ CREATE INDEX IF NOT EXISTS "idx_jobs_provider" ON "public"."jobs" USING "btree" 
 CREATE INDEX IF NOT EXISTS "idx_jobs_application_date" ON "public"."jobs" USING "btree" ("application_date");
 CREATE INDEX IF NOT EXISTS "idx_jobs_follow_up_at" ON "public"."jobs" USING "btree" ("follow_up_at");
 CREATE INDEX IF NOT EXISTS "idx_jobs_next_event_at" ON "public"."jobs" USING "btree" ("next_event_at");
+CREATE INDEX IF NOT EXISTS "idx_jobs_total_score" ON "public"."jobs" ("total_score" DESC);
+CREATE INDEX IF NOT EXISTS "idx_jobs_dream_score" ON "public"."jobs" ("dream_score" DESC);
 CREATE INDEX IF NOT EXISTS "idx_jobs_active_status_state" ON "public"."jobs" ("is_active", "status", "job_state");
 
 
@@ -778,6 +798,9 @@ CREATE TABLE IF NOT EXISTS "public"."app_settings" (
     "schedule_hour" integer NOT NULL DEFAULT 19,
     "schedule_minute" integer NOT NULL DEFAULT 0,
     "last_scraped_at" timestamp with time zone,
+    "dream_job_profile" jsonb DEFAULT '{}'::jsonb,
+    "search_locations" jsonb DEFAULT '[]'::jsonb,
+    "job_search_mode" text DEFAULT 'get_hired_fast',
     "setup_step" integer NOT NULL DEFAULT 1,
     "setup_completed" boolean NOT NULL DEFAULT false,
     "created_at" timestamp with time zone DEFAULT now(),
@@ -806,6 +829,9 @@ ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "max_jobs_per_searc
 ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "llm_max_rpm" integer NOT NULL DEFAULT 10;
 ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "llm_request_delay_seconds" integer NOT NULL DEFAULT 8;
 ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "llm_daily_request_budget" integer NOT NULL DEFAULT 0;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "dream_job_profile" jsonb DEFAULT '{}'::jsonb;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "search_locations" jsonb DEFAULT '[]'::jsonb;
+ALTER TABLE "public"."app_settings" ADD COLUMN IF NOT EXISTS "job_search_mode" text DEFAULT 'get_hired_fast';
 
 -- Seed singleton default configuration if no row exists
 INSERT INTO "public"."app_settings" (id)
@@ -975,6 +1001,28 @@ CREATE INDEX IF NOT EXISTS "idx_cover_letters_job_id" ON "public"."cover_letters
 
 ALTER TABLE "public"."cover_letters" ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE "public"."cover_letters" TO "anon", "authenticated", "service_role";
+
+-- ============================================================================
+-- JOB INTERVIEW PREP (On-demand custom interview preparation guides per job)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "public"."job_interview_prep" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "job_id" text NOT NULL UNIQUE REFERENCES "public"."jobs"("job_id") ON DELETE CASCADE,
+    "technical_questions" jsonb DEFAULT '[]'::jsonb,
+    "behavioral_star" jsonb DEFAULT '[]'::jsonb,
+    "reverse_questions" jsonb DEFAULT '[]'::jsonb,
+    "company_brief" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "idx_job_interview_prep_job_id" ON "public"."job_interview_prep" ("job_id");
+CREATE INDEX IF NOT EXISTS "idx_jobs_dream_score" ON "public"."jobs" ("dream_score" DESC);
+CREATE INDEX IF NOT EXISTS "idx_jobs_workplace_type" ON "public"."jobs" ("workplace_type");
+CREATE INDEX IF NOT EXISTS "idx_jobs_salary_min" ON "public"."jobs" ("salary_min");
+
+ALTER TABLE "public"."job_interview_prep" ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE "public"."job_interview_prep" TO "anon", "authenticated", "service_role";
 
 
 
