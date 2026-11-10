@@ -8,7 +8,7 @@
 ## 1. System Overview
 
 **JobTrack** is an autonomous job discovery, AI suitability evaluation, resume customization, and ATS typesetting platform. It consists of:
-1. **TypeScript Scraping Engine (`web/src/lib/scraper/` & `web/scripts/scrape-jobs.ts`)**: Collects job listings from LinkedIn (via guest endpoints with `impit` native Chrome TLS/JA3/JA4 fingerprint impersonation) and CareersFuture (typed REST API) into Supabase PostgreSQL with local `node-html-markdown` conversion. Eliminates Python runtimes and pip dependencies completely.
+1. **TypeScript Scraping Engine (`web/src/lib/scraper/` & `web/scripts/scrape-jobs.ts`)**: Collects job listings from LinkedIn (via guest endpoints with `impit` native Chrome TLS/JA3/JA4 fingerprint impersonation), CareersFuture (typed REST API), Direct ATS job boards (Greenhouse, Lever, Ashby for target dream companies), and RemoteOK open feeds into Supabase PostgreSQL with local `node-html-markdown` conversion. Eliminates Python runtimes and pip dependencies completely.
 2. **Fullstack Next.js Application (`web/`)**: Provides an interactive setup wizard, master resume studio, ATS visual theme designer, job dashboard, and REST API route handlers.
 3. **TypeScript Batch Workers (`web/scripts/`)**: Autonomous worker processes for scraping, AI job scoring, custom resume generation, posting expiration checks, and master resume parsing.
 4. **Supabase Backend**: Hosts application data (`jobs`, `base_resume`, `customized_resumes`, `resume_style_settings`, `app_settings`, `linkedin_geo_locations`). Storage buckets are deprecated in favor of on-demand in-memory PDF streaming.
@@ -95,11 +95,11 @@ graph TD
 │   │   │   ├── api/            # Server-side API endpoints
 │   │   │   │   ├── base-resume/       # Base resume CRUD
 │   │   │   │   ├── customized_resumes/# Tailored resume endpoints
-│   │   │   │   ├── jobs/              # Job actions, rescore, customize, cover-letter, cover-letter/pdf
+│   │   │   │   ├── jobs/              # Job actions, rescore, customize, import, outreach, interview-prep, cover-letter
 │   │   │   │   ├── resume-style/      # ATS style configuration
 │   │   │   │   ├── settings/          # App settings & LLM test
 │   │   │   │   ├── setup/             # Setup wizard endpoints
-│   │   │   │   └── system/            # Schema status & Automation runs telemetry
+│   │   │   │   └── system/            # Schema status, Automation runs telemetry & local workflow triggers
 │   │   │   ├── jobs/           # Job dashboard views (new, top-matches, tailored, applied, [id], [id]/cover-letter)
 │   │   │   ├── resume-studio/  # Master Dual-Mode Resume Studio
 │   │   │   ├── resume-style/   # ATS visual theme designer
@@ -132,7 +132,7 @@ graph TD
 
 ### Tables
 1. **`jobs`**:
-   - Scraped postings with `job_id`, `company`, `job_title`, `level`, `location`, `description` (Markdown), `status`, `is_active`, `resume_score`, `provider` (`linkedin` or `careers_future`), `is_interested`, `customized_resume_id`, `scraped_at`, `last_checked`.
+   - Scraped listings with `job_id`, `company`, `job_title`, `level`, `location`, `description` (Markdown), `status`, `is_active`, `resume_score` (ATS fit 0-100), `dream_score` (user dream alignment 0-100), `total_score` (composite 50/50 match 0-100), `score_breakdown` (JSONB rubric evaluation), `provider` (`linkedin`, `careers_future`, `greenhouse`, `lever`, `ashby`, `remote_ok`, `imported`), `salary_min`, `salary_max`, `salary_currency`, `salary_period`, `workplace_type` (`remote`, `hybrid`, `on-site`), `application_url`, `is_interested`, `customized_resume_id`, `scraped_at`, `last_checked`.
 2. **`base_resume`**:
    - Master resume profile parsed from user's master PDF. Fields: `id`, `name`, `email`, `phone`, `location`, `summary`, `skills` (text array), `education`, `experience`, `projects`, `certifications`, `languages`, `links` (JSONB), `parsed_at`.
 3. **`customized_resumes`**:
@@ -142,25 +142,31 @@ graph TD
 5. **`app_settings`**:
    - Single-row table storing global application preferences:
      - AI provider (`gemini`, `fireworks`, `openai`, `anthropic`, `groq`), model name, API key, RPM rate limits, daily budget.
-     - Search preferences: LinkedIn queries, GeoID, job type, date posted, CareersFuture queries, categories, active platforms.
+     - Search preferences: LinkedIn queries, GeoID, job type, date posted, CareersFuture queries, categories, active platforms (`linkedin`, `careers_future`, `ats_boards`, `remote_ok`).
+      - Search strategy mode (migration `20261110_02_job_search_mode_and_strategy`): `job_search_mode` (text, default 'get_hired_fast'). Supports 'get_hired_fast' (pure ATS qualification, dream checklist dormant, zero gating penalty) and 'dream_hunter' (dual ATS + dream checklist evaluation, strict gating).
+     - Multi-country preferences (migration `20261109_01_dream_job_enhancements`): `search_locations` (JSONB array of `{label, country, query, active}`).
+     - Dream Job Checklist (migration `20261109_01_dream_job_enhancements`): `dream_job_profile` (JSONB: desired titles, min salary, preferred work modes, company tiers/target companies, must-have skills, dealbreakers).
      - Scheduling (migration `20261102_01_schedule_timezone_and_timing`): `schedule_timezone` (text, default `'Asia/Singapore'`), `schedule_hour` (int, default `19`), `schedule_minute` (int, default `0`), `last_scraped_at` (timestamptz).
      - Onboarding status: `setup_step`, `setup_completed`.
 6. **`linkedin_geo_locations`**:
    - Pre-populated mapping of global locations to LinkedIn `geoId`s (e.g., Singapore `102454443`, United States `103644278`).
-6. **`jobs` application-tracking columns** (migration `20261101_01_applied_jobs_tracking`):
+7. **`jobs` application-tracking columns** (migration `20261101_01_applied_jobs_tracking`):
    - `follow_up_at` (timestamptz): user-set follow-up reminder; surfaced as due/overdue badges on the Applied page.
    - `next_event_at` (timestamptz) + `next_event_label` (text): next scheduled event (e.g., interview round) with countdown banner.
    - `status_history` (jsonb, default `[]`): append-only array of `{from, to, at, note}` transitions, auto-appended by the `PATCH /api/jobs/[job_id]` route (transient `note` body field) and rendered as a timeline.
    - Applied-page statuses are `applied`, `interviewing`, `offer`, `rejected` (the RPC `get_applied_jobs_sorted` includes `rejected` in its default set and supports `p_sort_by = 'follow_up_at'`).
 
-7. **`automation_runs`** (migration `20261103_01_automation_runs_telemetry`):
+8. **`automation_runs`** (migration `20261103_01_automation_runs_telemetry`):
    - Telemetry execution records for GitHub Action workflows (`scrape_jobs`, `score_jobs`, `customize_resumes`, `job_manager`).
-   - Fields: `id` (uuid), `workflow_name`, `workflow_id`, `status` (`running`, `success`, `warning`, `failed`, `skipped`), `trigger_type` (`schedule`, `workflow_dispatch`, `local_cli`), `started_at`, `completed_at`, `duration_seconds`, `summary`, `metrics` (jsonb), `error_count`, `warning_count`, `error_message`, `errors_list` (text array), `log_output` (text), `github_run_id`, `github_run_number`, `github_run_url`, `created_at`.
    - Retention: Auto-prunes to latest 100 actual worker runs. Skipped hourly schedule checks are excluded from logging to preserve telemetry capacity.
 
-8. **`cover_letters`** (migration `20261103_02_cover_letters`):
+9. **`cover_letters`** (migration `20261103_02_cover_letters`):
    - On-demand custom tailored cover letters. Links 1:1 to `jobs.job_id` with cascade delete.
    - Fields: `id` (uuid), `job_id` (text unique fk), `content` (text), `tone` (text, e.g. `confident_professional`, `executive`, `technical`, `short_note`), `created_at`, `updated_at`.
+
+10. **`job_interview_prep`** (migration `20261109_01_dream_job_enhancements`):
+   - On-demand AI interview preparation guides. Links 1:1 to `jobs.job_id` with cascade delete.
+   - Fields: `id` (uuid), `job_id` (text unique fk), `guide` (JSONB: company_overview, 30_second_pitch, technical_questions with key focus, behavioral_star_answers with STAR breakdown, smart_questions_to_ask), `created_at`, `updated_at`.
 
 ### Storage Architecture (On-Demand Streaming)
 - **Supabase Storage Buckets (`resumes`, `personalized_resumes`)**: Fully deprecated.
@@ -202,6 +208,19 @@ graph TD
 - **On-Demand Cover Letter Engine (`generateCoverLetterWithLLM`)**:
   - Generated exclusively on-demand (never during batch runs) using base resume and job description.
   - Features anti-hallucination enforcement, anti-cliché bans, user-chosen tones (`confident_professional`, `executive`, `technical`, `short_note`), and optional custom guidance context.
+- **Dual-Mode AI Job Evaluation (`evaluateJobFit`)**:
+  - Respects user's active `app_settings.job_search_mode`:
+    - **Get Hired Fast** (default): Focuses 100% on qualification and ATS fit (`resume_score`), completely omitting dream checklist from prompt to reduce token consumption and latency. `dream_score` is stored as `null`, and `total_score = resume_score`. Automated tailoring requires only `resume_score >= 60`.
+    - **Dream Hunter**: Computes both `resume_score` and `dream_score` against dream checklist criteria (titles, salary floor, remote/hybrid, tech stack, dealbreakers). `total_score = round(resume_score*0.5 + dream_score*0.5)`, and automated tailoring gates on `dream_score >= 60`.
+  - Computes two distinct scores simultaneously: `resume_score` (0-100 ATS qualification fit against base resume) and `dream_score` (0-100 alignment against user's Dream Job Checklist: titles, minimum salary, work modes, target companies/tiers, dealbreakers).
+  - Produces structured `score_breakdown` with `must_haves` (met/missing), `nice_to_haves`, `dealbreakers_triggered`, and `red_flags` (e.g. unrealistic responsibilities, churn signals).
+- **On-Demand Recruiter Outreach Copilot (`generateOutreachNotesWithLLM`)**:
+  - Generates 3 tailored networking assets on-demand: (1) LinkedIn Connection Note (<300 chars, concise, hook-driven), (2) InMail / Cold Email (structured pain-point pitch), and (3) Mutual Connection Referral Request.
+  - User chooses tone (`direct_impactful`, `friendly_warm`, `executive`), recipient name, and custom context before triggering generation.
+- **On-Demand AI Interview Prep Copilot (`generateInterviewPrepWithLLM`)**:
+  - Compiles comprehensive, customized interview prep guides: company snapshot & culture notes, 30-second elevator pitch, targeted technical questions with key focus areas, behavioral questions with tailored STAR-framework answer scripts, and smart reverse questions to ask the interviewer.
+  - Supports configurable interview tones (`balanced`, `technical`, `behavioral`, `executive`) and custom candidate notes selected before generation.
+  - Persisted 1:1 in `job_interview_prep` table for instant recall; modal checks existing records via GET without consuming LLM quota.
 - Single source of truth: Supabase `app_settings.llm_api_key` (environment variables strictly contain Supabase connection keys only).
 
 ---
@@ -231,14 +250,20 @@ npm run install:web      # Install web dependencies (npm --prefix web install)
 
 # --- Job Scraper ---
 npm run scrape           # Run TypeScript scraper using settings from Supabase (impit + cheerio)
+npm run scrape:force     # Run scraper bypassing daily scraped caps and calendar day limits
 npm run test:scraper     # Run diagnostic and live parity tests on scraping engine
-npm run scrape -- --source linkedin --query "Frontend Engineer" --limit 10
+npm run scrape -- --force --source linkedin --query "Frontend Engineer" --limit 10
 
 # --- TypeScript Automation Workers ---
 npm run score            # Evaluate unscored jobs against master resume (0-100 score)
-npm run customize        # Tailor custom resumes for top matches (score >= 70)
+npm run score:force      # Evaluate jobs bypassing default batch limits
+npm run customize        # Tailor custom resumes for top matches (score >= 60)
 npm run manage           # Verify job availability & expire listings >30 days
 npm run parse-resume     # Parse master resume.pdf into base_resume table
+
+# --- On-Demand Local Automation Runner (Web UI) ---
+# Accessible directly in Settings -> Cloud Workflows & Execution Logs tabs.
+# Spawns isolated worker processes via POST /api/system/trigger-workflow with live telemetry streaming.
 ```
 
 ---
@@ -266,6 +291,11 @@ npm run parse-resume     # Parse master resume.pdf into base_resume table
    - **`ResumeStyleSidebar` (`web/src/components/resume-studio/ResumeStyleSidebar.tsx`)**: reusable "Design & Style" panels (personas, presets, colors, typography, heading style, layout, section order). Fully controlled via `onThemeChange` + persona callbacks. `showPersonaManagement=false` renders personas as read-only "apply a copy" sources (used by the tailored studio so global personas can never be activated/deleted from a per-resume context).
    - **Master studio (`web/src/components/resume-studio/ResumeStudioClient.tsx`)**: slim orchestrator composing the above; saves content to `base_resume` and style to the selected persona (`resume_style_settings`) as before.
    - **Tailored Resume Studio (`web/src/components/jobs/TailoredResumeStudio.tsx`)**: full-screen studio at `/jobs/[job_id]/resumes/[id]` replacing the old `CustomPdfViewer` + separate `/edit` page. Sidebar closed by default (glance/download); the toolbar toggle opens the editor (Content / Design & Style tabs) with live preview. Saves content AND the `theme_config` snapshot via `PATCH /api/customized_resumes/[id]` — scoped to that customized resume only; master profile and global personas are never touched. Includes unsaved-changes guard (`beforeunload` + close dialog with Save & close / Discard), dirty-state "Unsaved" badge, Live Preview vs True PDF (react-pdf on the streaming endpoint) view toggle, and persona "apply a copy" behavior. `/jobs/[job_id]/resumes/[id]/edit` remains as a permanent redirect for old links. `CustomPdfViewer.tsx`, `ResumeEditClient.tsx`, and the dead `ResumeStyleClient.tsx` were removed.
+7. **Job Navigation & Return-Route Contract (`source` query param)**:
+   - Sub-pages (`/jobs/[job_id]`, `/jobs/[job_id]/cover-letter`, `/jobs/[job_id]/resumes/[id]`) receive a `?source=<return-path>` query param containing the originating page and query string (e.g. `/jobs/new?selectedJobId=...` or `/jobs/applied`).
+   - Back buttons on sub-pages resolve destination dynamically from `source` rather than hardcoded URLs or naive `router.back()`, preventing infinite browser history loops.
+   - Master-detail lists (`TopMatchesList`) provide a dedicated "Full Page" button (`Maximize2`) in the right pane header for seamless transition into the standalone `/jobs/[job_id]` view.
+   - Both the master-detail split pane (`TopMatchesList.tsx`) and the standalone page (`JobDetailsClient.tsx`) maintain 100% feature parity: AI Match Analysis (core skills, skill gaps, red flags, advice), Recruiter Outreach Note Copilot, and AI Interview Prep Copilot.
 
 ---
 
