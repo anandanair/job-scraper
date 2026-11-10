@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { ScrapedJob, LinkedInConfig, CareersFutureConfig } from "./types";
+import { DreamJobProfile, SearchLocation } from "@/types";
 
 export interface LoadedScraperSettings {
   scrapingSources: string[];
@@ -8,6 +9,9 @@ export interface LoadedScraperSettings {
   linkedinConfig: LinkedInConfig;
   careersFutureQueries: string[];
   careersFutureConfig: CareersFutureConfig;
+  dreamJobProfile?: DreamJobProfile | null;
+  searchLocations?: SearchLocation[];
+  targetAtsCompanies?: string[];
 }
 
 // Module-level cache for in-memory deduplication across multiple queries in a single execution
@@ -131,6 +135,11 @@ export async function loadScraperSettings(
         categories: data.careers_future_search_categories || [],
         employmentTypes: data.careers_future_search_employment_types || [],
       },
+      dreamJobProfile: data.dream_job_profile || null,
+      searchLocations: Array.isArray(data.search_locations) ? data.search_locations : [],
+      targetAtsCompanies: Array.isArray(data.dream_job_profile?.target_ats_companies)
+        ? data.dream_job_profile.target_ats_companies
+        : [],
     };
   } catch (err) {
     console.warn("⚠️ Error fetching app_settings from Supabase:", err);
@@ -234,6 +243,12 @@ export async function saveJobsToSupabase(
       description: j.description,
       provider: j.provider,
       posted_at: j.posted_at || null,
+      salary_min: j.salary_min ?? null,
+      salary_max: j.salary_max ?? null,
+      salary_currency: j.salary_currency ?? null,
+      salary_period: j.salary_period ?? null,
+      workplace_type: j.workplace_type ?? null,
+      application_url: j.application_url ?? null,
       scraped_at: new Date().toISOString(),
       last_checked: new Date().toISOString(),
     }));

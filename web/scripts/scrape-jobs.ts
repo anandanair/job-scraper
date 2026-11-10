@@ -14,6 +14,8 @@ import {
   loadScraperSettings,
   processLinkedInQuery,
   processCareersFutureQuery,
+  scrapeTargetCompanies,
+  fetchRemoteOkJobs,
   saveJobsToSupabase,
   SAFE_MAX_SCRAPE_PER_SOURCE,
 } from "../src/lib/scraper";
@@ -28,10 +30,11 @@ function randomBetween(min: number, max: number): number {
 }
 
 interface CliArgs {
-  source?: "all" | "linkedin" | "careers_future";
+  source?: "all" | "linkedin" | "careers_future" | "ats" | "remote_ok";
   query?: string;
   limit?: number;
   dryRun?: boolean;
+  force?: boolean;
 }
 
 function parseCliArgs(): CliArgs {
@@ -43,14 +46,16 @@ function parseCliArgs(): CliArgs {
     const arg = args[i];
     if (arg === "--dry-run") {
       result.dryRun = true;
+    } else if (arg === "--force" || arg === "-f" || arg === "--ignore-daily-cap" || arg === "--bypass-schedule") {
+      result.force = true;
     } else if (arg.startsWith("--source=")) {
-      const src = arg.split("=")[1].toLowerCase();
-      if (src === "all" || src === "linkedin" || src === "careers_future") {
+      const src = arg.split("=")[1].toLowerCase() as CliArgs["source"];
+      if (["all", "linkedin", "careers_future", "ats", "remote_ok"].includes(src || "")) {
         result.source = src;
       }
     } else if (arg === "--source" && args[i + 1]) {
-      const src = args[++i].toLowerCase();
-      if (src === "all" || src === "linkedin" || src === "careers_future") {
+      const src = args[++i].toLowerCase() as CliArgs["source"];
+      if (["all", "linkedin", "careers_future", "ats", "remote_ok"].includes(src || "")) {
         result.source = src;
       }
     } else if (arg.startsWith("--query=")) {
@@ -76,7 +81,9 @@ function parseCliArgs(): CliArgs {
   if (positional.length > 0) {
     for (const p of positional) {
       const lower = p.toLowerCase();
-      if (!result.source && (lower === "linkedin" || lower === "careers_future" || lower === "all")) {
+      if (!result.force && (lower === "--force" || lower === "-f" || lower === "force")) {
+        result.force = true;
+      } else if (!result.source && (lower === "linkedin" || lower === "careers_future" || lower === "all")) {
         result.source = lower;
       } else if (!result.limit && /^\d+$/.test(p)) {
         result.limit = parseInt(p, 10);
@@ -95,7 +102,7 @@ async function runScraper(ctx?: any) {
   console.log("=================================================================\n");
 
   const cli = parseCliArgs();
-  console.log(`[CLI] Options: source=${cli.source ?? "all (configured)"}, query=${cli.query ? `"${cli.query}"` : "all (configured)"}, limit=${cli.limit ?? "default"}, dryRun=${Boolean(cli.dryRun)}`);
+  console.log(`[CLI] Options: source=${cli.source ?? "all (configured)"}, query=${cli.query ? `"${cli.query}"` : "all (configured)"}, limit=${cli.limit ?? "default"}, dryRun=${Boolean(cli.dryRun)}, force=${Boolean(cli.force)}`);
   const supabase = createSupabaseStaticClient();
 
   // Load dynamic configuration from Supabase app_settings (or defaults if unconfigured)
@@ -150,10 +157,17 @@ async function runScraper(ctx?: any) {
       // Non-fatal fallback
     }
 
-    const remainingDailyTarget = Math.max(0, dailyTarget - alreadyScrapedToday);
-    console.log(`[LinkedIn] Daily cap: ${dailyTarget} jobs | Already scraped today: ${alreadyScrapedToday} | Remaining quota for today: ${remainingDailyTarget}`);
+    const remainingDailyTarget = cli.force
+      ? (cli.limit ? Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, cli.limit) : dailyTarget)
+      : Math.max(0, dailyTarget - alreadyScrapedToday);
 
-    if (remainingDailyTarget <= 0) {
+    if (cli.force) {
+      console.log(`[LinkedIn] [FORCE BYPASS] Bypassing daily scraped count (${alreadyScrapedToday} already scraped today). Target limit for this run: ${remainingDailyTarget}`);
+    } else {
+      console.log(`[LinkedIn] Daily cap: ${dailyTarget} jobs | Already scraped today: ${alreadyScrapedToday} | Remaining quota for today: ${remainingDailyTarget}`);
+    }
+
+    if (!cli.force && remainingDailyTarget <= 0) {
       console.log(`[LinkedIn] Daily safety limit of ${dailyTarget} jobs already reached today. Halting LinkedIn scraping.`);
     } else {
       let totalLinkedinScrapedThisRun = 0;
@@ -241,10 +255,17 @@ async function runScraper(ctx?: any) {
       // Non-fatal fallback
     }
 
-    const remainingDailyTarget = Math.max(0, dailyTarget - alreadyScrapedToday);
-    console.log(`[CareersFuture] Daily cap: ${dailyTarget} jobs | Already scraped today: ${alreadyScrapedToday} | Remaining quota for today: ${remainingDailyTarget}`);
+    const remainingDailyTarget = cli.force
+      ? (cli.limit ? Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, cli.limit) : dailyTarget)
+      : Math.max(0, dailyTarget - alreadyScrapedToday);
 
-    if (remainingDailyTarget <= 0) {
+    if (cli.force) {
+      console.log(`[CareersFuture] [FORCE BYPASS] Bypassing daily scraped count (${alreadyScrapedToday} already scraped today). Target limit for this run: ${remainingDailyTarget}`);
+    } else {
+      console.log(`[CareersFuture] Daily cap: ${dailyTarget} jobs | Already scraped today: ${alreadyScrapedToday} | Remaining quota for today: ${remainingDailyTarget}`);
+    }
+
+    if (!cli.force && remainingDailyTarget <= 0) {
       console.log(`[CareersFuture] Daily safety limit of ${dailyTarget} jobs already reached today. Halting CareersFuture scraping.`);
     } else {
       let totalCfScrapedThisRun = 0;
@@ -292,6 +313,46 @@ async function runScraper(ctx?: any) {
     }
   } else {
     console.log("\nℹ️ Skipping CareersFuture Scraping (disabled in arguments / settings).");
+  }
+
+  // 3. Direct ATS Target Companies (Greenhouse / Lever / Ashby)
+  const targetCompanies = settings.targetAtsCompanies || [];
+  if (targetCompanies.length > 0 || activeSources.includes("ats")) {
+    console.log("\n============= Starting Direct ATS Scraping (Target Companies) =============");
+    console.log(`Target Companies: ${targetCompanies.join(", ") || "None configured"}`);
+    if (targetCompanies.length > 0) {
+      const queries = cli.query ? [cli.query] : settings.linkedinQueries;
+      const atsJobs = await scrapeTargetCompanies(targetCompanies, queries);
+      if (atsJobs.length > 0) {
+        if (!cli.dryRun) {
+          const savedCount = await saveJobsToSupabase(supabase, atsJobs);
+          totalNewJobsSaved += savedCount;
+        } else {
+          console.log(`[Dry-Run] Extracted ${atsJobs.length} ATS jobs across target companies.`);
+          atsJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+        }
+      } else {
+        console.log("ℹ️ No new jobs found across configured target companies.");
+      }
+    }
+  }
+
+  // 4. Remote Feeds (RemoteOK)
+  if (activeSources.includes("remote_ok")) {
+    console.log("\n=================== Starting Remote Feeds (RemoteOK) ===================");
+    const queries = cli.query ? [cli.query] : settings.linkedinQueries;
+    const remoteJobs = await fetchRemoteOkJobs(queries, 10);
+    if (remoteJobs.length > 0) {
+      if (!cli.dryRun) {
+        const savedCount = await saveJobsToSupabase(supabase, remoteJobs);
+        totalNewJobsSaved += savedCount;
+      } else {
+        console.log(`[Dry-Run] Extracted ${remoteJobs.length} RemoteOK jobs.`);
+        remoteJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+      }
+    } else {
+      console.log("ℹ️ No new jobs found from RemoteOK.");
+    }
   }
 
   console.log("\n=================================================================");

@@ -25,6 +25,28 @@ export interface Job {
   next_event_label?: string | null;
   status_history?: StatusHistoryEntry[] | null;
   cover_letters?: CoverLetter | { id: string; updated_at?: string } | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  salary_currency?: string | null;
+  salary_period?: string | null;
+  workplace_type?: "remote" | "hybrid" | "onsite" | null;
+  dream_score?: number | null;
+  total_score?: number | null;
+  score_breakdown?: ScoreBreakdown | null;
+  application_url?: string | null;
+  job_interview_prep?: JobInterviewPrep | null;
+}
+
+export interface ScoreBreakdown {
+  hard_skills_score?: number;
+  experience_score?: number;
+  seniority_score?: number;
+  culture_fit_score?: number;
+  matched_skills: string[];
+  skill_gaps: string[];
+  key_strengths?: string[];
+  red_flags?: string[];
+  actionable_advice?: string;
 }
 
 // Append-only record of a single status transition
@@ -202,9 +224,11 @@ export type LLMProvider =
   | "groq"
   | "anthropic";
 export type LLMTier = "free" | "paid";
+export type JobSearchMode = "get_hired_fast" | "dream_hunter";
 
 export interface AppSettings {
   id?: string;
+  job_search_mode?: JobSearchMode;
   llm_provider: LLMProvider;
   llm_model: string;
   llm_api_key?: string | null;
@@ -229,6 +253,8 @@ export interface AppSettings {
   schedule_hour?: number;
   schedule_minute?: number;
   last_scraped_at?: string | null;
+  dream_job_profile?: DreamJobProfile | null;
+  search_locations?: SearchLocation[] | null;
   setup_step?: number;
   setup_completed?: boolean;
   created_at?: string;
@@ -237,7 +263,7 @@ export interface AppSettings {
 
 // --- Automation Runs & Telemetry Interfaces ---
 
-export type AutomationRunStatus = "running" | "success" | "warning" | "failed" | "skipped";
+export type AutomationRunStatus = "running" | "success" | "warning" | "failed" | "skipped" | "stopped";
 export type AutomationWorkflowId = "scrape_jobs" | "score_jobs" | "customize_resumes" | "job_manager";
 
 export interface AutomationRun {
@@ -245,7 +271,7 @@ export interface AutomationRun {
   workflow_name: string;
   workflow_id: AutomationWorkflowId;
   status: AutomationRunStatus;
-  trigger_type: "schedule" | "workflow_dispatch" | "local_cli";
+  trigger_type: "schedule" | "workflow_dispatch" | "local_cli" | "local_web";
   started_at: string;
   completed_at?: string | null;
   duration_seconds?: number | null;
@@ -275,6 +301,67 @@ export interface CoverLetter {
   job_id: string;
   content: string;
   tone: CoverLetterTone;
+  created_at: string;
+  updated_at: string;
+}
+
+// --- Dream Job Profile & Multi-Region Interfaces ---
+
+export interface SearchLocation {
+  id: string;
+  name: string;
+  country: string;
+  geoId?: string | number;
+  enabled: boolean;
+}
+
+export interface DreamJobProfile {
+  target_titles: string[];
+  target_seniorities: string[]; // "junior" | "mid" | "senior" | "lead" | "manager"
+  workplace_models: string[]; // "remote" | "hybrid" | "onsite"
+  relocation_preference?: string[];
+  salary_floor_min?: number | null;
+  salary_floor_currency?: string;
+  salary_floor_period?: "month" | "year";
+  favorite_tech_stack: string[];
+  dealbreaker_tech_stack: string[];
+  company_stages?: string[]; // "startup" | "scaleup" | "enterprise"
+  culture_priorities?: string[]; // "wlb" | "ai_rd" | "autonomy" | "equity" | "mentorship"
+  blacklisted_companies?: string[];
+  target_ats_companies?: string[]; // Greenhouse/Lever/Ashby slugs e.g. ["grab", "stripe", "carousell"]
+}
+
+// --- On-Demand Outreach & Networking Interfaces ---
+
+export interface OutreachVariants {
+  linkedin_connection_note: string; // Under 300 characters
+  cold_inmail: string; // ~150 words
+  referral_request: string; // Warm referral message
+}
+
+// --- On-Demand Interview Preparation Interfaces ---
+
+export interface BehavioralStarAnswer {
+  question: string;
+  situation: string;
+  task: string;
+  action: string;
+  result: string;
+}
+
+export interface TechnicalQuestionItem {
+  question: string;
+  topic: string;
+  answer_guide: string;
+}
+
+export interface JobInterviewPrep {
+  id: string;
+  job_id: string;
+  technical_questions: TechnicalQuestionItem[];
+  behavioral_star: BehavioralStarAnswer[];
+  reverse_questions: string[];
+  company_brief?: string | null;
   created_at: string;
   updated_at: string;
 }

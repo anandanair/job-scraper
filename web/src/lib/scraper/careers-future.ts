@@ -38,6 +38,13 @@ interface CFJobDetailResponse {
   hiringCompany?: CFCompany;
   postedCompany?: CFCompany;
   positionLevels?: Array<{ position?: string }>;
+  salary?: {
+    minimum?: number;
+    maximum?: number;
+    type?: {
+      salaryType?: string;
+    };
+  };
   metadata?: {
     createdAt?: string;
   };
@@ -191,8 +198,24 @@ export async function fetchCareersFutureJobDetails(
       return null;
     }
 
+    const finalJobId = jobData.uuid || jobId;
+    const descLower = markdown.toLowerCase();
+    let workplaceType: "remote" | "hybrid" | "onsite" = "onsite";
+    if (descLower.includes("fully remote") || descLower.includes("100% remote") || descLower.includes("work from home")) {
+      workplaceType = "remote";
+    } else if (descLower.includes("hybrid") || descLower.includes("flexible work")) {
+      workplaceType = "hybrid";
+    }
+
+    const salaryTypeStr = jobData.salary?.type?.salaryType?.toLowerCase() || "monthly";
+    const salaryPeriod = salaryTypeStr.includes("annual") || salaryTypeStr.includes("year")
+      ? "year"
+      : salaryTypeStr.includes("hour")
+        ? "hour"
+        : "month";
+
     return {
-      job_id: jobData.uuid || jobId,
+      job_id: finalJobId,
       company: getCompanyName(jobData),
       job_title: jobData.title || null,
       location: "Singapore",
@@ -200,6 +223,12 @@ export async function fetchCareersFutureJobDetails(
       provider: "careers_future",
       description: markdown,
       posted_at: jobData.metadata?.createdAt || new Date().toISOString(),
+      salary_min: jobData.salary?.minimum ? Number(jobData.salary.minimum) : null,
+      salary_max: jobData.salary?.maximum ? Number(jobData.salary.maximum) : null,
+      salary_currency: "SGD",
+      salary_period: salaryPeriod,
+      workplace_type: workplaceType,
+      application_url: `https://www.mycareersfuture.gov.sg/job/${finalJobId}`,
     };
   } catch (err) {
     console.error(`[CareersFuture] Error fetching details for job ID ${jobId}:`, err);

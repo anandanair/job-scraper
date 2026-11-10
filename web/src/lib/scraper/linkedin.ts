@@ -299,6 +299,40 @@ export async function fetchLinkedInJobDetails(
       return null;
     }
 
+    // Extract Workplace Type & Salary
+    let workplaceType: "remote" | "hybrid" | "onsite" | null = null;
+    const combinedText = `${jobTitle || ""} ${location || ""} ${markdown.slice(0, 1500)}`.toLowerCase();
+    if (combinedText.includes("remote")) {
+      workplaceType = "remote";
+    } else if (combinedText.includes("hybrid")) {
+      workplaceType = "hybrid";
+    } else if (location) {
+      workplaceType = "onsite";
+    }
+
+    let salaryMin: number | null = null;
+    let salaryMax: number | null = null;
+    let salaryCurrency: string | null = null;
+    let salaryPeriod: string | null = null;
+
+    // Try extracting compensation from top-card text or criteria
+    const compensationText = $("div.salary, span.compensation__salary, div.topcard__flavor-row").text();
+    const searchSalaryText = compensationText + " " + markdown.slice(0, 1000);
+    const salaryMatch = searchSalaryText.match(/([$€£]|SGD|USD|EUR|INR)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)\s*(?:-|to)\s*([$€£]|SGD|USD|EUR|INR)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)\s*(?:\/|\s+per\s+)?(yr|year|annum|mo|month|hr|hour)?/i);
+
+    if (salaryMatch) {
+      const rawCurr = salaryMatch[1];
+      salaryCurrency = rawCurr === "$" ? "USD" : rawCurr === "€" ? "EUR" : rawCurr === "£" ? "GBP" : rawCurr.toUpperCase();
+      salaryMin = parseFloat(salaryMatch[2].replace(/,/g, ""));
+      salaryMax = parseFloat(salaryMatch[4].replace(/,/g, ""));
+      const rawPeriod = (salaryMatch[5] || "").toLowerCase();
+      salaryPeriod = rawPeriod.startsWith("yr") || rawPeriod.startsWith("annum") || rawPeriod.startsWith("year")
+        ? "year"
+        : rawPeriod.startsWith("hr") || rawPeriod.startsWith("hour")
+          ? "hour"
+          : "month";
+    }
+
     return {
       job_id: jobId,
       company,
@@ -308,6 +342,12 @@ export async function fetchLinkedInJobDetails(
       provider: "linkedin",
       description: markdown,
       posted_at: new Date().toISOString(),
+      salary_min: salaryMin,
+      salary_max: salaryMax,
+      salary_currency: salaryCurrency,
+      salary_period: salaryPeriod,
+      workplace_type: workplaceType,
+      application_url: `https://www.linkedin.com/jobs/view/${jobId}`,
     };
   } catch (err) {
     console.error(`[LinkedIn] Error parsing details for job ID ${jobId}:`, err);

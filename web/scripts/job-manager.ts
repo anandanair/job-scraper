@@ -10,13 +10,15 @@ if (fs.existsSync(rootEnv)) dotenv.config({ path: rootEnv });
 
 import { createSupabaseStaticClient } from "../src/utils/supabase/server";
 import { withTelemetry, TelemetryContext } from "../src/lib/telemetry";
+import { Impit } from "impit";
 
-const USER_AGENTS = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0",
-];
+let linkedinSession: Impit | null = null;
+function getLinkedInClient(): Impit {
+  if (!linkedinSession) {
+    linkedinSession = new Impit({ browser: "chrome" });
+  }
+  return linkedinSession;
+}
 
 const INACTIVE_KEYWORDS = [
   "this job is no longer available",
@@ -24,27 +26,88 @@ const INACTIVE_KEYWORDS = [
   "no longer accepting applications",
 ];
 
-function getRandomUserAgent() {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-}
-
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function checkJobActive(jobId: string): Promise<boolean | null> {
-  const url = `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${jobId}`;
+interface ManagerCliArgs {
+  limit?: number;
+  force?: boolean;
+  dryRun?: boolean;
+}
 
+function parseManagerCliArgs(): ManagerCliArgs {
+  const args = process.argv.slice(2);
+  const result: ManagerCliArgs = {};
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--dry-run") {
+      result.dryRun = true;
+    } else if (arg === "--force" || arg === "-f") {
+      result.force = true;
+    } else if (arg.startsWith("--limit=")) {
+      const lim = parseInt(arg.split("=")[1], 10);
+      if (!isNaN(lim) && lim > 0) result.limit = lim;
+    } else if (arg === "--limit" && args[i + 1]) {
+      const lim = parseInt(args[++i], 10);
+      if (!isNaN(lim) && lim > 0) result.limit = lim;
+    }
+  }
+  return result;
+}
+
+async function checkJobActive(jobId: string, provider?: string | null): Promise<boolean | null> {
+  // 1. CareersFuture Liveness Check
+  if (provider === "careers_future") {
+    const cfUrl = `https://api.mycareersfuture.gov.sg/v2/jobs/${jobId.trim()}`;
+    try {
+      const res = await fetch(cfUrl, {
+        method: "GET",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(12000),
+      });
+
+      if (res.status === 404) {
+        return false; // Confirmed closed/removed
+      }
+
+      if (res.status >= 400) {
+        return null; // Server or rate error, inconclusive
+      }
+
+      const data = await res.json().catch(() => null);
+      if (!data) return null;
+
+      if (data.status === "closed" || data.isClosed === true) {
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      console.warn(`  [CareersFuture] Network check error for ${jobId}:`, err.message);
+      return null;
+    }
+  }
+
+  // 2. Direct ATS Boards (Greenhouse, Lever, Ashby)
+  if (provider === "greenhouse" || provider === "lever" || provider === "ashby") {
+    // Direct ATS jobs are actively verified during ATS fetch cycles
+    return true;
+  }
+
+  // 3. LinkedIn Guest Liveness Check
+  const url = `https://www.linkedin.com/jobs/view/${jobId}/`;
   try {
-    const res = await fetch(url, {
+    const client = getLinkedInClient();
+    const res = await client.fetch(url, {
       method: "GET",
       headers: {
-        "User-Agent": getRandomUserAgent(),
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
       },
-      redirect: "follow",
-      signal: AbortSignal.timeout(12000),
     });
 
     if (res.status === 404) {
@@ -52,7 +115,7 @@ async function checkJobActive(jobId: string): Promise<boolean | null> {
     }
 
     if (res.status >= 400) {
-      // 429 or server error, assume inconclusive
+      // 429 or server error, assume inconclusive to protect from false expiration
       return null;
     }
 
@@ -65,25 +128,34 @@ async function checkJobActive(jobId: string): Promise<boolean | null> {
 
     return true; // Still active
   } catch (err: any) {
-    console.warn(`  Network check error for ${jobId}:`, err.message);
+    console.warn(`  [LinkedIn] Network check error for ${jobId}:`, err.message);
     return null;
   }
 }
 
 async function runJobManager(ctx?: TelemetryContext) {
   console.log("=== Starting Job Liveness Manager (TypeScript) ===");
+  const cli = parseManagerCliArgs();
+  console.log(`[CLI] Options: limit=${cli.limit ?? "default (20)"}, force=${Boolean(cli.force)}, dryRun=${Boolean(cli.dryRun)}`);
+
   const supabase = createSupabaseStaticClient();
 
   // Find active jobs that haven't been checked recently (older than 3 days, or null last_checked)
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const limitCount = cli.limit || 20;
 
-  const { data: jobsToCheck, error } = await supabase
+  let query = supabase
     .from("jobs")
-    .select("job_id, job_title, company, last_checked")
-    .eq("is_active", true)
-    .or(`last_checked.is.null,last_checked.lt.${threeDaysAgo}`)
-    .order("last_checked", { ascending: true, nullsFirst: true })
-    .limit(20);
+    .select("job_id, job_title, company, last_checked, provider")
+    .eq("is_active", true);
+
+  if (!cli.force) {
+    query = query.or(`last_checked.is.null,last_checked.lt.${threeDaysAgo}`);
+  }
+
+  query = query.order("last_checked", { ascending: true, nullsFirst: true }).limit(limitCount);
+
+  const { data: jobsToCheck, error } = await query;
 
   if (error) {
     console.error("Error fetching jobs to check:", error.message);
@@ -104,29 +176,37 @@ async function runJobManager(ctx?: TelemetryContext) {
 
   for (let i = 0; i < jobsToCheck.length; i++) {
     const job = jobsToCheck[i];
-    console.log(`[${i + 1}/${jobsToCheck.length}] Checking job ${job.job_id} ("${job.job_title}" at "${job.company}")...`);
+    console.log(`[${i + 1}/${jobsToCheck.length}] Checking job ${job.job_id} ("${job.job_title}" at "${job.company}", Provider: ${job.provider || "linkedin"})...`);
 
-    const isActive = await checkJobActive(job.job_id);
+    const isActive = await checkJobActive(job.job_id, job.provider);
 
     if (isActive === false) {
       console.log(`  ✗ Job ${job.job_id} is CLOSED / INACTIVE. Marking is_active=false.`);
-      await supabase
-        .from("jobs")
-        .update({
-          is_active: false,
-          job_state: "closed",
-          last_checked: new Date().toISOString(),
-        })
-        .eq("job_id", job.job_id);
+      if (!cli.dryRun) {
+        await supabase
+          .from("jobs")
+          .update({
+            is_active: false,
+            job_state: "closed",
+            last_checked: new Date().toISOString(),
+          })
+          .eq("job_id", job.job_id);
+      } else {
+        console.log(`  [Dry-Run] Would mark job ${job.job_id} as closed.`);
+      }
       closedCount++;
     } else if (isActive === true) {
       console.log(`  ✓ Job ${job.job_id} is still ACTIVE.`);
-      await supabase
-        .from("jobs")
-        .update({
-          last_checked: new Date().toISOString(),
-        })
-        .eq("job_id", job.job_id);
+      if (!cli.dryRun) {
+        await supabase
+          .from("jobs")
+          .update({
+            last_checked: new Date().toISOString(),
+          })
+          .eq("job_id", job.job_id);
+      } else {
+        console.log(`  [Dry-Run] Would update last_checked for job ${job.job_id}.`);
+      }
       activeCount++;
     } else {
       console.log(`  ⚠ Check for job ${job.job_id} inconclusive, skipping.`);
@@ -148,9 +228,12 @@ async function runJobManager(ctx?: TelemetryContext) {
       jobs_active: activeCount,
       jobs_closed: closedCount,
       inconclusive: skippedCount,
+      dry_run: Boolean(cli.dryRun),
     });
     ctx.setSummary(
-      `Checked ${jobsToCheck.length} jobs: ${activeCount} active, ${closedCount} expired/closed, ${skippedCount} inconclusive.`
+      cli.dryRun
+        ? `[Dry-Run] Checked ${jobsToCheck.length} jobs: ${activeCount} active, ${closedCount} expired/closed, ${skippedCount} inconclusive.`
+        : `Checked ${jobsToCheck.length} jobs: ${activeCount} active, ${closedCount} expired/closed, ${skippedCount} inconclusive.`
     );
   }
 }

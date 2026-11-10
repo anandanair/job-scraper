@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     config.resolve.alias.canvas = false;
     return config;
   },
-  serverExternalPackages: ["pdfkit", "pdfjs-dist"],
+  serverExternalPackages: ["pdfkit", "pdfjs-dist", "impit"],
 };
 
 export default nextConfig;

@@ -5,8 +5,14 @@ export interface ScrapedJob {
   level: string | null;
   location: string | null;
   description: string | null;
-  provider: "linkedin" | "careers_future";
+  provider: "linkedin" | "careers_future" | "greenhouse" | "lever" | "ashby" | "remote_ok" | "imported" | string;
   posted_at?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  salary_currency?: string | null;
+  salary_period?: string | null;
+  workplace_type?: "remote" | "hybrid" | "onsite" | null;
+  application_url?: string | null;
 }
 
 export interface CandidateJob {
