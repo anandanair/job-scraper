@@ -309,19 +309,19 @@ export default function FilterButton({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg border transition-colors shadow-2xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed ${
           isActive
-            ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm"
-            : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm"
+            ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs"
+            : "bg-white border-zinc-200/90 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300"
         } ${className}`}
       >
-        <Filter className="h-4 w-4" />
+        <Filter className={`h-3.5 w-3.5 ${isActive ? "text-indigo-600" : "text-zinc-500"}`} />
         <span>{buttonText}</span>
-        {isActive && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
+        {isActive && <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full"></div>}
         <ChevronDown
-          className={`h-4 w-4 transition-transform duration-200 ${
+          className={`h-3.5 w-3.5 transition-transform duration-200 ${
             isOpen ? "rotate-180" : ""
-          }`}
+          } ${isActive ? "text-indigo-600" : "text-zinc-400"}`}
         />
       </button>
 
@@ -337,19 +337,19 @@ export default function FilterButton({
           {/* Responsive dropdown */}
           <div
             ref={dropdownRef}
-            className="fixed z-50 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden"
+            className="fixed z-50 bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden"
             style={getDropdownStyles()}
           >
             {/* Header */}
-            <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex-shrink-0">
+            <div className="px-4 sm:px-6 py-3.5 border-b border-zinc-100 bg-indigo-50/30 flex-shrink-0">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+                <h3 className="text-sm font-bold text-zinc-900">Filters</h3>
                 {isActive && (
                   <button
                     onClick={handleClearFilters}
-                    className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
                   >
-                    Clear all
+                    Reset all
                   </button>
                 )}
               </div>
@@ -372,26 +372,24 @@ export default function FilterButton({
             >
               {/* Provider Filter Section */}
               {providerOptions && (
-                <div className="p-4 sm:p-6 border-b border-gray-100">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">
-                    Provider
+                <div className="p-4 sm:p-5 border-b border-zinc-100">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900/80 mb-2.5">
+                    Platform / Provider
                   </h4>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5">
                     {PROVIDER_OPTIONS.map((option) => (
                       <button
                         key={option.value}
                         onClick={() => handleProviderSelect(option.value)}
-                        className={`text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 flex items-center justify-between group ${
+                        className={`text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-between group cursor-pointer ${
                           selectedProvider === option.value
-                            ? "bg-blue-50 text-blue-700 border border-blue-200"
-                            : "text-gray-700 hover:bg-gray-50 border border-transparent"
+                            ? "bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold"
+                            : "text-zinc-700 hover:bg-zinc-100/70 border border-transparent"
                         }`}
                       >
-                        <span className="font-medium truncate">
-                          {option.label}
-                        </span>
+                        <span className="truncate">{option.label}</span>
                         {selectedProvider === option.value && (
-                          <Check className="h-4 w-4 text-blue-600 flex-shrink-0 ml-2" />
+                          <Check className="h-3.5 w-3.5 text-indigo-600 flex-shrink-0 ml-2" />
                         )}
                       </button>
                     ))}
@@ -401,26 +399,24 @@ export default function FilterButton({
 
               {/* Interest Filter Section */}
               {interestOptions && (
-                <div className="p-4 sm:p-6 border-b border-gray-100">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">
+                <div className="p-4 sm:p-5 border-b border-zinc-100">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900/80 mb-2.5">
                     Interest Status
                   </h4>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5">
                     {INTEREST_OPTIONS.map((option) => (
                       <button
                         key={option.value}
                         onClick={() => handleInterestSelect(option.value)}
-                        className={`text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 flex items-center justify-between group ${
+                        className={`text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-between group cursor-pointer ${
                           selectedInterest === option.value
-                            ? "bg-blue-50 text-blue-700 border border-blue-200"
-                            : "text-gray-700 hover:bg-gray-50 border border-transparent"
+                            ? "bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold"
+                            : "text-zinc-700 hover:bg-zinc-100/70 border border-transparent"
                         }`}
                       >
-                        <span className="font-medium truncate">
-                          {option.label}
-                        </span>
+                        <span className="truncate">{option.label}</span>
                         {selectedInterest === option.value && (
-                          <Check className="h-4 w-4 text-blue-600 flex-shrink-0 ml-2" />
+                          <Check className="h-3.5 w-3.5 text-indigo-600 flex-shrink-0 ml-2" />
                         )}
                       </button>
                     ))}
@@ -430,28 +426,26 @@ export default function FilterButton({
 
               {/* Application Status Filter Section (New) */}
               {applicationStatusOptions && (
-                <div className="p-4 sm:p-6 border-b border-gray-100">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">
+                <div className="p-4 sm:p-5 border-b border-zinc-100">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900/80 mb-2.5">
                     Application Status
                   </h4>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5">
                     {APPLICATION_STATUS_OPTIONS.map((option) => (
                       <button
                         key={option.value}
                         onClick={() =>
                           handleApplicationStatusSelect(option.value)
                         }
-                        className={`text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 flex items-center justify-between group ${
+                        className={`text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-between group cursor-pointer ${
                           selectedApplicationStatus === option.value
-                            ? "bg-blue-50 text-blue-700 border border-blue-200"
-                            : "text-gray-700 hover:bg-gray-50 border border-transparent"
+                            ? "bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold"
+                            : "text-zinc-700 hover:bg-zinc-100/70 border border-transparent"
                         }`}
                       >
-                        <span className="font-medium truncate">
-                          {option.label}
-                        </span>
+                        <span className="truncate">{option.label}</span>
                         {selectedApplicationStatus === option.value && (
-                          <Check className="h-4 w-4 text-blue-600 flex-shrink-0 ml-2" />
+                          <Check className="h-3.5 w-3.5 text-indigo-600 flex-shrink-0 ml-2" />
                         )}
                       </button>
                     ))}
@@ -461,14 +455,14 @@ export default function FilterButton({
 
               {/* Score Filter Section */}
               {scoreOptions && (
-                <div className="p-4 sm:p-6">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">
-                    Resume Score Range
+                <div className="p-4 sm:p-5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900/80 mb-2.5">
+                    Resume Score Range (0 - 100)
                   </h4>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-2">
+                        <label className="block text-xs font-semibold text-zinc-600 mb-1">
                           Minimum
                         </label>
                         <input
@@ -477,12 +471,12 @@ export default function FilterButton({
                           max="100"
                           value={minScore}
                           onChange={(e) => setMinScore(e.target.value)}
-                          className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition-colors"
+                          className="w-full px-3 py-1.5 border border-zinc-200 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm"
                           placeholder="0"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-2">
+                        <label className="block text-xs font-semibold text-zinc-600 mb-1">
                           Maximum
                         </label>
                         <input
@@ -491,14 +485,10 @@ export default function FilterButton({
                           max="100"
                           value={maxScore}
                           onChange={(e) => setMaxScore(e.target.value)}
-                          className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition-colors"
+                          className="w-full px-3 py-1.5 border border-zinc-200 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm"
                           placeholder="100"
                         />
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>0</span>
-                      <span>100</span>
                     </div>
                   </div>
                 </div>
@@ -506,17 +496,17 @@ export default function FilterButton({
             </div>
 
             {/* Footer */}
-            <div className="px-4 sm:px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex-shrink-0">
-              <div className="flex gap-3">
+            <div className="px-4 sm:px-6 py-3 border-t border-zinc-100 bg-zinc-50/60 flex-shrink-0">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-3 py-2 text-xs font-medium text-zinc-700 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleApplyFilters}
-                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-xs cursor-pointer"
                 >
                   Apply Filters
                 </button>

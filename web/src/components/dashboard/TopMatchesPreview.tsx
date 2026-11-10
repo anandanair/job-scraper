@@ -4,6 +4,7 @@ import {
   MapPinIcon,
   ArrowRight,
   Star,
+  Flame,
   Inbox,
 } from "lucide-react";
 import type { Job } from "@/types";
@@ -81,12 +82,31 @@ export default function TopMatchesPreview({ jobs }: TopMatchesPreviewProps) {
                       ✨ Tailored
                     </span>
                   )}
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold tabular-nums ${getScoreBadgeClasses(job.resume_score ?? 0)}`}
-                  >
-                    <Star className="h-3 w-3" />
-                    {job.resume_score ?? "—"}
-                  </span>
+                  {job.dream_score !== null && job.dream_score !== undefined && (
+                    <span
+                      title={`Dream Company/Role Score: ${job.dream_score}%`}
+                      className="hidden rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 sm:inline-flex items-center gap-0.5"
+                    >
+                      <Flame className="h-2.5 w-2.5 text-amber-500 fill-amber-400" />
+                      {job.dream_score}%
+                    </span>
+                  )}
+                  {(() => {
+                    const displayScore = job.total_score ?? job.resume_score;
+                    return (
+                      <span
+                        title={
+                          job.total_score != null
+                            ? `Overall Fit: ${job.total_score}% (ATS: ${job.resume_score ?? "—"}%, Dream: ${job.dream_score ?? "—"}%)`
+                            : `ATS Score: ${job.resume_score ?? "—"}%`
+                        }
+                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold tabular-nums ${getScoreBadgeClasses(displayScore ?? 0)}`}
+                      >
+                        <Star className="h-3 w-3" />
+                        {displayScore != null ? `${displayScore}%` : "—"}
+                      </span>
+                    );
+                  })()}
                 </div>
               </Link>
             </li>

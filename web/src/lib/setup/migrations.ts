@@ -417,6 +417,84 @@ END $$;
 -- 3. Record migration
 INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261110_03_company_profiles_and_grounded_scoring') ON CONFLICT DO NOTHING;`,
   },
+  {
+    id: "20261110_04_realtime_jobs_publication",
+    title: "Supabase Realtime Publication for Jobs",
+    description:
+      "Enables Realtime postgres_changes publication on jobs table, sets replica identity to full, and ensures public RLS policy for browser WebSocket subscriptions.",
+    sql: `-- 1. Ensure jobs table has RLS policy allowing public access for WebSocket streaming
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'jobs' AND policyname = 'Allow public all access on jobs'
+    ) THEN
+        CREATE POLICY "Allow public all access on jobs" ON "public"."jobs" FOR ALL USING (true);
+    END IF;
+END $$;
+
+-- 2. Add jobs table to supabase_realtime publication
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'jobs'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE "public"."jobs";
+    END IF;
+END $$;
+
+-- 3. Set REPLICA IDENTITY FULL so updates broadcast old and new values
+ALTER TABLE "public"."jobs" REPLICA IDENTITY FULL;
+
+-- 4. Record migration
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261110_04_realtime_jobs_publication') ON CONFLICT DO NOTHING;`,
+  },
+  {
+    id: "20261110_05_dashboard_stats_ats_remoteok",
+    title: "Dashboard Stats for RemoteOK & Direct ATS and Composite Score Migration",
+    description:
+      "Populates total_score on legacy scored jobs, updates get_dashboard_stats RPC to count RemoteOK and Direct ATS providers, and measures Top Matches by composite match score.",
+    sql: `-- 1. Ensure any legacy scored jobs have total_score initialized
+UPDATE "public"."jobs"
+SET "total_score" = "resume_score"
+WHERE "resume_score" IS NOT NULL AND "total_score" IS NULL;
+
+-- 2. Update get_dashboard_stats to include RemoteOK, Direct ATS, and count totalTopMatches by composite match
+CREATE OR REPLACE FUNCTION "public"."get_dashboard_stats"(
+    "p_today_start" timestamp with time zone,
+    "p_today_end" timestamp with time zone
+) RETURNS "json"
+    LANGUAGE "plpgsql" STABLE
+    AS $$
+DECLARE
+    result json;
+BEGIN
+    SELECT json_build_object(
+        'totalNewJobs', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new'),
+        'totalAppliedJobs', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new'),
+        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND (total_score >= 50 OR (total_score IS NULL AND resume_score >= 50))),
+        'expiredJobsCount', count(*) FILTER (WHERE job_state = 'expired'),
+        'pendingScoreJobsCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NULL),
+        'scoredJobsCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL),
+        'customResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NOT NULL),
+        'noCustomResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NULL),
+        'scoredWithOriginalResumeCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'initial'),
+        'scoredWithCustomResumeCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'custom'),
+        'linkedInJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'linkedin'),
+        'careersFutureJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'careers_future'),
+        'remoteOkJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'remote_ok'),
+        'atsJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider IN ('greenhouse', 'lever', 'ashby')),
+        'appliedTodayCount', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new' AND application_date >= p_today_start AND application_date < p_today_end)
+    )
+    INTO result
+    FROM "public"."jobs";
+
+    RETURN result;
+END;
+$$;
+
+ALTER FUNCTION "public"."get_dashboard_stats"("p_today_start" timestamp with time zone, "p_today_end" timestamp with time zone) OWNER TO "postgres";
+
+-- 3. Record migration
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261110_05_dashboard_stats_ats_remoteok') ON CONFLICT DO NOTHING;`,
+  },
 ];
 
 /**

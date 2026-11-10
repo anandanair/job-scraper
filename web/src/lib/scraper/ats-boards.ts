@@ -243,10 +243,14 @@ export async function fetchAshbyCompanyJobs(
  */
 export async function scrapeTargetCompanies(
   companies: string[],
-  filterKeywords: string[] = []
+  filterKeywords: string[] = [],
+  limit?: number
 ): Promise<ScrapedJob[]> {
   const allJobs: ScrapedJob[] = [];
+  const maxLimit = typeof limit === "number" && limit > 0 ? limit : Infinity;
+
   for (const company of companies) {
+    if (allJobs.length >= maxLimit) break;
     const clean = company.trim().toLowerCase();
     if (!clean) continue;
 
@@ -262,5 +266,5 @@ export async function scrapeTargetCompanies(
     }
     allJobs.push(...found);
   }
-  return allJobs;
+  return allJobs.slice(0, maxLimit);
 }

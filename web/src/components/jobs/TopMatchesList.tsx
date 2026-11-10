@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import PaginationControls from "./PaginationControls";
 import {
@@ -9,20 +9,19 @@ import {
   ThumbsUp,
   ThumbsDown,
   BuildingIcon,
-  MapPinIcon,
-  BarChart3Icon,
   FileText,
-  Link as SocialLink,
-  Sparkles,
   RefreshCw,
   Mail,
-  Flame,
   Maximize2,
   Send,
   Award,
-  Banknote,
-  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   AlertTriangle,
+  Flame,
+  CheckCircle2,
+  Sparkles,
+  Banknote,
 } from "lucide-react";
 import MarkdownRenderer from "./MarkdownRenderer";
 import Toast, { ToastData } from "./applied/Toast";
@@ -31,6 +30,7 @@ import { InterviewPrepModal } from "./InterviewPrepModal";
 import { CompanyIntelModal } from "./CompanyIntelModal";
 import { Job } from "@/types";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useRealtimeJobs } from "@/components/providers/RealtimeJobsProvider";
 
 interface TopMatchesListProps {
   jobs: Job[];
@@ -53,7 +53,9 @@ export default function TopMatchesList({
 }: TopMatchesListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { markJobMutated } = useRealtimeJobs();
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [isInsightsExpanded, setIsInsightsExpanded] = useState(true);
 
   const handleSortChange = (newSort: string) => {
     const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
@@ -65,13 +67,65 @@ export default function TopMatchesList({
     params.set("page", "1");
     router.push(`/jobs/top-matches?${params.toString()}`);
   };
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isUpdatingInterest, setIsUpdatingInterest] = useState(false);
-  const [isGeneratingResume, setIsGeneratingResume] = useState(false);
-  const [isRescoring, setIsRescoring] = useState(false);
+
+  const [generatingResumeJobIds, setGeneratingResumeJobIds] = useState<Record<string, boolean>>({});
+  const [rescoringJobIds, setRescoringJobIds] = useState<Record<string, boolean>>({});
+  const [updatingAppliedJobIds, setUpdatingAppliedJobIds] = useState<Record<string, boolean>>({});
+  const [updatingInterestJobIds, setUpdatingInterestJobIds] = useState<Record<string, boolean>>({});
+  const [jobOverrides, setJobOverrides] = useState<Record<string, Partial<Job>>>({});
+
   const [isOutreachOpen, setIsOutreachOpen] = useState(false);
   const [isInterviewPrepOpen, setIsInterviewPrepOpen] = useState(false);
   const [isCompanyIntelOpen, setIsCompanyIntelOpen] = useState(false);
+
+  const mergedJob = useCallback(
+    (job: Job): Job => {
+      const override = jobOverrides[job.job_id];
+      return override ? { ...job, ...override } : job;
+    },
+    [jobOverrides]
+  );
+
+  const activeInterestFilter = searchParams.get("interest");
+
+  const visibleJobs = useMemo(() => {
+    return jobs
+      .map(mergedJob)
+      .filter((job) => {
+        if (activeInterestFilter === "false") {
+          return job.is_interested === false;
+        }
+        if (activeInterestFilter === "true") {
+          return job.is_interested === true;
+        }
+        if (activeInterestFilter === "null") {
+          return job.is_interested === null;
+        }
+
+        if (job.is_interested === false) {
+          return false;
+        }
+
+        if (job.status === "applied") {
+          return false;
+        }
+
+        return true;
+      });
+  }, [jobs, mergedJob, activeInterestFilter]);
+
+  const isSelectedJobGeneratingResume = Boolean(
+    selectedJob?.job_id && generatingResumeJobIds[selectedJob.job_id]
+  );
+  const isSelectedJobRescoring = Boolean(
+    selectedJob?.job_id && rescoringJobIds[selectedJob.job_id]
+  );
+  const isSelectedJobUpdatingApplied = Boolean(
+    selectedJob?.job_id && updatingAppliedJobIds[selectedJob.job_id]
+  );
+  const isSelectedJobUpdatingInterest = Boolean(
+    selectedJob?.job_id && updatingInterestJobIds[selectedJob.job_id]
+  );
 
   const hasCustomResume = Boolean(
     selectedJob?.customized_resume_id ||
@@ -88,69 +142,117 @@ export default function TopMatchesList({
       : selectedJob?.cover_letters?.id
   );
 
-  const canRescore = Boolean(
-    hasCustomResume && selectedJob?.resume_score_stage === "initial"
-  );
-
   const handleGenerateCustomResume = async () => {
     if (!selectedJob) return;
+    const targetJobId = selectedJob.job_id;
     if (selectedJob.is_interested === false) {
       showToast("Cannot customize resume: this job is marked as Not Interested.", "error");
       return;
     }
-    setIsGeneratingResume(true);
+    if (generatingResumeJobIds[targetJobId]) return;
+
+    markJobMutated(targetJobId);
+    setGeneratingResumeJobIds((prev) => ({ ...prev, [targetJobId]: true }));
     try {
-      const res = await fetch(`/api/jobs/${selectedJob.job_id}/customize-resume`, {
+      const res = await fetch(`/api/jobs/${targetJobId}/customize-resume`, {
         method: "POST",
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || data.details || "Failed to customize resume");
       }
+
+      const patch: Partial<Job> = {
+        customized_resume_id: data.customized_resume_id,
+        resume_link: data.resume_link,
+        customized_resumes: {
+          id: data.customized_resume_id,
+          resume_link: data.resume_link,
+        } as any,
+        resume_score: data.resume_score,
+        resume_score_stage: data.resume_score_stage,
+        dream_score: data.dream_score,
+        total_score: data.total_score,
+        score_breakdown: data.score_breakdown,
+      };
+
+      setJobOverrides((prev) => ({
+        ...prev,
+        [targetJobId]: {
+          ...prev[targetJobId],
+          ...patch,
+        },
+      }));
+
       setSelectedJob((prev) =>
-        prev
+        prev && prev.job_id === targetJobId
           ? {
               ...prev,
-              customized_resume_id: data.customized_resume_id,
-              resume_link: data.resume_link,
-              resume_score: data.resume_score ?? prev.resume_score,
-              resume_score_stage: data.resume_score_stage ?? prev.resume_score_stage,
+              ...patch,
+              resume_score: patch.resume_score ?? prev.resume_score,
+              resume_score_stage: patch.resume_score_stage ?? prev.resume_score_stage,
+              dream_score: patch.dream_score !== undefined ? patch.dream_score : prev.dream_score,
+              total_score: patch.total_score !== undefined ? patch.total_score : prev.total_score,
+              score_breakdown: patch.score_breakdown ?? prev.score_breakdown,
             }
-          : null
+          : prev
       );
+
       showToast("Custom resume generated and job rescored successfully!", "success");
       router.refresh();
     } catch (err: any) {
       console.error("Error generating resume:", err);
       showToast(err.message, "error");
     } finally {
-      setIsGeneratingResume(false);
+      setGeneratingResumeJobIds((prev) => {
+        const next = { ...prev };
+        delete next[targetJobId];
+        return next;
+      });
     }
   };
 
   const handleRescore = async () => {
     if (!selectedJob) return;
-    setIsRescoring(true);
+    const targetJobId = selectedJob.job_id;
+    if (rescoringJobIds[targetJobId]) return;
+
+    markJobMutated(targetJobId);
+    setRescoringJobIds((prev) => ({ ...prev, [targetJobId]: true }));
     try {
-      const res = await fetch(`/api/jobs/${selectedJob.job_id}/rescore`, {
+      const res = await fetch(`/api/jobs/${targetJobId}/rescore`, {
         method: "POST",
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || data.details || "Failed to rescore job");
       }
+
+      const patch: Partial<Job> = {
+        resume_score: data.resume_score,
+        dream_score: data.dream_score,
+        total_score: data.total_score,
+        score_breakdown: data.score_breakdown,
+        resume_score_stage: data.resume_score_stage,
+      };
+
+      setJobOverrides((prev) => ({
+        ...prev,
+        [targetJobId]: {
+          ...prev[targetJobId],
+          ...patch,
+        },
+      }));
+
       setSelectedJob((prev) =>
-        prev
+        prev && prev.job_id === targetJobId
           ? {
               ...prev,
-              resume_score: data.resume_score,
-              dream_score: data.dream_score,
-              total_score: data.total_score,
-              score_breakdown: data.score_breakdown,
-              resume_score_stage: data.resume_score_stage,
+              ...patch,
             }
-          : null
+          : prev
       );
+
       const scoreDetail = data.dream_score !== null
         ? `Overall: ${data.total_score ?? data.resume_score}% (ATS: ${data.resume_score}, Dream: ${data.dream_score})`
         : `ATS Score: ${data.resume_score}/100`;
@@ -161,7 +263,11 @@ export default function TopMatchesList({
       console.error("Error rescoring job:", err);
       showToast(err.message, "error");
     } finally {
-      setIsRescoring(false);
+      setRescoringJobIds((prev) => {
+        const next = { ...prev };
+        delete next[targetJobId];
+        return next;
+      });
     }
   };
 
@@ -170,41 +276,56 @@ export default function TopMatchesList({
     let jobToSelect: Job | null = null;
 
     if (selectedJobIdFromUrl) {
-      // Try to find the job from the URL ID in the *current* jobs list
       jobToSelect =
-        jobs.find((job) => job.job_id === selectedJobIdFromUrl) || null;
+        visibleJobs.find((job) => job.job_id === selectedJobIdFromUrl) || null;
     }
 
-    // If job from URL ID is not found (jobToSelect is null) or no ID in URL,
-    // and there are jobs in the list, default to the first job.
-    if (!jobToSelect && jobs.length > 0) {
-      jobToSelect = jobs[0];
-      // Update URL with the default selected job ID if it's missing
-      if (!selectedJobIdFromUrl) {
+    if (!jobToSelect && visibleJobs.length > 0) {
+      jobToSelect = visibleJobs[0];
+      if (!selectedJobIdFromUrl || selectedJobIdFromUrl !== jobToSelect.job_id) {
         const params = new URLSearchParams(searchParams.toString());
         params.set("selectedJobId", jobToSelect.job_id);
         router.replace(`${window.location.pathname}?${params.toString()}`, {
           scroll: false,
         });
       }
-    }
-    // If jobs list is empty, ensure jobToSelect is null.
-    else if (jobs.length === 0) {
+    } else if (visibleJobs.length === 0) {
       jobToSelect = null;
+      if (selectedJobIdFromUrl) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("selectedJobId");
+        router.replace(`${window.location.pathname}?${params.toString()}`, {
+          scroll: false,
+        });
+      }
     }
 
-    // Update state only if the selected job (by ID) is different,
-    // or if jobToSelect is null and selectedJob is not (or vice-versa).
-    if (selectedJob?.job_id !== jobToSelect?.job_id) {
-      setSelectedJob(jobToSelect);
+    if (jobToSelect) {
+      const merged = mergedJob(jobToSelect);
+      setSelectedJob((prev) => {
+        if (
+          !prev ||
+          prev.job_id !== merged.job_id ||
+          prev.customized_resume_id !== merged.customized_resume_id ||
+          prev.resume_score !== merged.resume_score ||
+          prev.total_score !== merged.total_score ||
+          prev.dream_score !== merged.dream_score ||
+          prev.status !== merged.status ||
+          prev.is_interested !== merged.is_interested
+        ) {
+          return merged;
+        }
+        return prev;
+      });
+    } else {
+      setSelectedJob((prev) => (prev !== null ? null : prev));
     }
-  }, [jobs, searchParams]); // Dependencies are jobs and searchParams
+  }, [visibleJobs, searchParams, mergedJob, router]);
 
   const handleViewResume = (
     job_id: string,
     resume_id: string | null | undefined,
   ) => {
-    // Preserve current search params and add source page info
     const params = new URLSearchParams(searchParams.toString());
     params.set("selectedJobId", job_id);
     const queryString = params.toString();
@@ -217,11 +338,9 @@ export default function TopMatchesList({
   };
 
   const handleJobSelect = (job: Job) => {
-    setSelectedJob(job);
-    // Update URL with selected job ID without adding to history
+    setSelectedJob(mergedJob(job));
     const params = new URLSearchParams(searchParams.toString());
     params.set("selectedJobId", job.job_id);
-    // Use replace to avoid polluting browser history for selections on the same page
     router.replace(`${window.location.pathname}?${params.toString()}`, {
       scroll: false,
     });
@@ -231,11 +350,41 @@ export default function TopMatchesList({
     if (!selectedJob || selectedJob.status === "applied") {
       return;
     }
+    const targetJobId = selectedJob.job_id;
+    if (updatingAppliedJobIds[targetJobId]) return;
 
-    setIsUpdating(true);
+    markJobMutated(targetJobId);
+    setUpdatingAppliedJobIds((prev) => ({ ...prev, [targetJobId]: true }));
+
+    const currentIndex = visibleJobs.findIndex((j) => j.job_id === targetJobId);
+    const nextCandidate =
+      currentIndex !== -1
+        ? (visibleJobs[currentIndex + 1] ?? visibleJobs[currentIndex - 1] ?? null)
+        : null;
+
+    const currentDate = new Date().toISOString();
+    setJobOverrides((prev) => ({
+      ...prev,
+      [targetJobId]: {
+        ...prev[targetJobId],
+        status: "applied",
+        application_date: currentDate,
+      },
+    }));
+
+    if (nextCandidate) {
+      handleJobSelect(nextCandidate);
+    } else {
+      setSelectedJob(null);
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("selectedJobId");
+      router.replace(`${window.location.pathname}?${params.toString()}`, {
+        scroll: false,
+      });
+    }
+
     try {
-      const currentDate = new Date().toISOString();
-      const response = await fetch(`/api/jobs/${selectedJob.job_id}`, {
+      const response = await fetch(`/api/jobs/${targetJobId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -254,39 +403,105 @@ export default function TopMatchesList({
       }
 
       const updatedJob: Job = await response.json();
-      setSelectedJob(updatedJob);
-      // Toast with Undo so accidental applications can be reverted
+      setJobOverrides((prev) => ({
+        ...prev,
+        [targetJobId]: {
+          ...prev[targetJobId],
+          status: updatedJob.status,
+          application_date: updatedJob.application_date,
+        },
+      }));
+
       showToast("Job marked as applied successfully!", "success", () =>
         handleUndoApplied(updatedJob)
       );
-      router.refresh(); // Refresh the page to show updated jobs
+      router.refresh();
     } catch (error) {
       console.error("Error marking job as applied:", error);
+      setJobOverrides((prev) => {
+        const copy = { ...prev };
+        delete copy[targetJobId];
+        return copy;
+      });
       const message =
         error instanceof Error ? error.message : "An unknown error occurred.";
       showToast(`Error: ${message}`, "error");
     } finally {
-      setIsUpdating(false);
+      setUpdatingAppliedJobIds((prev) => {
+        const next = { ...prev };
+        delete next[targetJobId];
+        return next;
+      });
     }
   };
 
-  const handleSetInterest = async (newInterestValue: boolean | null) => {
-    if (!selectedJob) {
-      return;
-    }
+  const handleSetInterest = async (
+    newInterestValue: boolean | null,
+    specificJobId?: string
+  ) => {
+    const targetJob = specificJobId
+      ? visibleJobs.find((j) => j.job_id === specificJobId) ||
+        jobs.map(mergedJob).find((j) => j.job_id === specificJobId) ||
+        selectedJob
+      : selectedJob;
 
-    setIsUpdatingInterest(true);
+    if (!targetJob) return;
+    const targetJobId = targetJob.job_id;
+    if (updatingInterestJobIds[targetJobId]) return;
+
+    markJobMutated(targetJobId);
+    setUpdatingInterestJobIds((prev) => ({ ...prev, [targetJobId]: true }));
     let finalInterestValue: boolean | null;
 
-    // If the button clicked matches the current state, set to null (toggle off)
-    if (selectedJob.is_interested === newInterestValue) {
+    if (targetJob.is_interested === newInterestValue) {
       finalInterestValue = null;
     } else {
       finalInterestValue = newInterestValue;
     }
 
+    const willBeExcluded =
+      (finalInterestValue === false && activeInterestFilter !== "false") ||
+      (finalInterestValue === true && activeInterestFilter === "false") ||
+      (finalInterestValue === null && (activeInterestFilter === "true" || activeInterestFilter === "false"));
+
+    let nextJobToSelect: Job | null = null;
+    if (willBeExcluded && selectedJob?.job_id === targetJobId) {
+      const currentIndex = visibleJobs.findIndex((j) => j.job_id === targetJobId);
+      if (currentIndex !== -1) {
+        nextJobToSelect =
+          visibleJobs[currentIndex + 1] ?? visibleJobs[currentIndex - 1] ?? null;
+      }
+    }
+
+    setJobOverrides((prev) => ({
+      ...prev,
+      [targetJobId]: {
+        ...prev[targetJobId],
+        is_interested: finalInterestValue,
+      },
+    }));
+
+    if (willBeExcluded && selectedJob?.job_id === targetJobId) {
+      if (nextJobToSelect) {
+        handleJobSelect(nextJobToSelect);
+      } else {
+        setSelectedJob(null);
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("selectedJobId");
+        router.replace(`${window.location.pathname}?${params.toString()}`, {
+          scroll: false,
+        });
+      }
+    } else {
+      setSelectedJob((prev) =>
+        prev && prev.job_id === targetJobId
+          ? { ...prev, is_interested: finalInterestValue }
+          : prev
+      );
+    }
+
     try {
-      const response = await fetch(`/api/jobs/${selectedJob.job_id}`, {
+      const response = await fetch(`/api/jobs/${targetJobId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -304,28 +519,44 @@ export default function TopMatchesList({
       }
 
       const updatedJob: Job = await response.json();
-      setSelectedJob(updatedJob);
+      setJobOverrides((prev) => ({
+        ...prev,
+        [targetJobId]: {
+          ...prev[targetJobId],
+          is_interested: updatedJob.is_interested,
+        },
+      }));
 
-      // Show toast instead of alert
-      const message =
-        finalInterestValue === true
-          ? "Marked as interested"
-          : finalInterestValue === false
-            ? "Marked as not interested"
-            : "Interest status cleared";
-      showToast(message, "success");
-      router.refresh(); // Refresh the page to show updated jobs
+      if (finalInterestValue === false) {
+        showToast("Marked as not interested", "success", () =>
+          handleUndoInterest(targetJobId)
+        );
+      } else if (finalInterestValue === true) {
+        showToast("Marked as interested", "success");
+      } else {
+        showToast("Interest status cleared", "success");
+      }
+
+      router.refresh();
     } catch (error) {
       console.error("Error updating job interest:", error);
+      setJobOverrides((prev) => {
+        const copy = { ...prev };
+        delete copy[targetJobId];
+        return copy;
+      });
       const message =
         error instanceof Error ? error.message : "An unknown error occurred.";
       showToast(`Error: ${message}`, "error");
     } finally {
-      setIsUpdatingInterest(false);
+      setUpdatingInterestJobIds((prev) => {
+        const next = { ...prev };
+        delete next[targetJobId];
+        return next;
+      });
     }
   };
 
-  // Toast state: real notifications with optional Undo action
   const [toast, setToast] = useState<ToastData | null>(null);
   const showToast = (
     message: string,
@@ -335,10 +566,38 @@ export default function TopMatchesList({
     setToast({ id: Date.now(), message, type, onUndo });
   };
 
-  // Revert a job out of the applied pipeline (toast Undo action)
-  const handleUndoApplied = async (job: Job) => {
+  const handleUndoInterest = async (jobId: string) => {
+    markJobMutated(jobId);
     try {
-      const response = await fetch(`/api/jobs/${job.job_id}`, {
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_interested: null }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to restore job interest");
+      }
+      const updatedJob: Job = await response.json();
+      setJobOverrides((prev) => ({
+        ...prev,
+        [jobId]: {
+          ...prev[jobId],
+          is_interested: null,
+        },
+      }));
+      handleJobSelect(updatedJob);
+      showToast("Job restored to your active matches", "success");
+      router.refresh();
+    } catch (err: any) {
+      showToast(err.message || "Failed to restore job", "error");
+    }
+  };
+
+  const handleUndoApplied = async (job: Job) => {
+    const targetJobId = job.job_id;
+    markJobMutated(targetJobId);
+    try {
+      const response = await fetch(`/api/jobs/${targetJobId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -355,6 +614,19 @@ export default function TopMatchesList({
           errorData?.error || `HTTP error! status: ${response.status}`
         );
       }
+      const updatedJob: Job = await response.json();
+      setJobOverrides((prev) => ({
+        ...prev,
+        [targetJobId]: {
+          ...prev[targetJobId],
+          status: updatedJob.status ?? "new",
+          application_date: updatedJob.application_date,
+          follow_up_at: updatedJob.follow_up_at ?? null,
+          next_event_at: updatedJob.next_event_at ?? null,
+          next_event_label: updatedJob.next_event_label ?? null,
+        },
+      }));
+      handleJobSelect(updatedJob);
       showToast("Application reverted — job is back in your pipeline", "success");
       router.refresh();
     } catch (error) {
@@ -364,22 +636,33 @@ export default function TopMatchesList({
     }
   };
 
-  // Function to determine badge color based on resume score (0 - 100)
   const getScoreBadgeColor = (score: number) => {
-    if (score >= 80) return "bg-emerald-100 text-emerald-800 border-emerald-300";
-    if (score >= 60) return "bg-blue-100 text-blue-800 border-blue-300";
-    if (score >= 40) return "bg-amber-100 text-amber-800 border-amber-300";
-    return "bg-rose-100 text-rose-800 border-rose-300";
+    if (score >= 80) return "bg-emerald-50 text-emerald-800 border-emerald-300";
+    if (score >= 60) return "bg-blue-50 text-blue-800 border-blue-300";
+    if (score >= 40) return "bg-amber-50 text-amber-900 border-amber-300";
+    return "bg-rose-50 text-rose-800 border-rose-300";
   };
 
-  // Placeholder for empty state
+  const getJobListingUrl = (job: Job): string => {
+    if (job.application_url && job.application_url.startsWith("http")) {
+      return job.application_url;
+    }
+    if (job.provider === "careers_future") {
+      return `https://www.mycareersfuture.gov.sg/job/${job.job_id}`;
+    }
+    if (job.provider === "remote_ok") {
+      return `https://remoteok.com/remote-jobs/${job.job_id}`;
+    }
+    return `https://www.linkedin.com/jobs/view/${job.job_id}`;
+  };
+
   const EmptyState = () => (
     <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-      <div className="bg-gray-100 p-6 rounded-full mb-4">
-        <BuildingIcon className="h-12 w-12 text-gray-400" />
+      <div className="bg-indigo-50 p-5 rounded-2xl mb-3 border border-indigo-100">
+        <BuildingIcon className="h-8 w-8 text-indigo-400" />
       </div>
-      <h3 className="text-lg font-medium text-gray-900 mb-2">{emptyTitle}</h3>
-      <p className="text-gray-500 max-w-sm">{emptyMessage}</p>
+      <h3 className="text-sm font-semibold text-zinc-900 mb-1">{emptyTitle}</h3>
+      <p className="text-xs text-zinc-500 max-w-xs">{emptyMessage}</p>
     </div>
   );
 
@@ -396,157 +679,169 @@ export default function TopMatchesList({
   })();
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-17.5rem)] bg-gray-50 rounded-lg overflow-hidden shadow-sm">
-      {/* Left Column: Job List */}
-      <div className="w-full md:w-1/3 bg-white border-r border-gray-100 flex flex-col">
-        <div className="p-3.5 border-b border-gray-100 flex items-center justify-between gap-2">
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-13.5rem)] min-h-[620px] bg-white border border-zinc-200/90 rounded-2xl shadow-xs overflow-hidden">
+      {/* Left Column: Job List Feed */}
+      <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 border-b lg:border-b-0 lg:border-r border-zinc-200/80 flex flex-col bg-zinc-50/50">
+        <div className="px-4 py-3 border-b border-zinc-200/70 bg-white flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold text-gray-900">{title}</h2>
-            <p className="text-[11px] text-gray-500">
-              {jobs.length} {jobs.length === 1 ? "result" : "results"}
+            <h2 className="text-xs font-bold uppercase tracking-wider text-indigo-900/80">{title}</h2>
+            <p className="text-[11px] text-zinc-400 mt-0.5">
+              {visibleJobs.length} {visibleJobs.length === 1 ? "listing" : "listings"}
             </p>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-gray-400 font-medium">Rank:</span>
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <span className="font-medium text-[11px] text-zinc-400">Sort:</span>
             <select
               value={currentSort || "total"}
               onChange={(e) => handleSortChange(e.target.value)}
-              className="px-2 py-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+              className="px-2 py-1 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-semibold text-zinc-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
             >
-              <option value="total">⭐ Overall Fit</option>
-              <option value="dream">🔥 Dream First</option>
-              <option value="ats">📄 ATS First</option>
+              <option value="total">Overall Match</option>
+              <option value="dream">Dream Alignment</option>
+              <option value="ats">ATS Resume Fit</option>
             </select>
           </div>
         </div>
 
-        {jobs.length > 0 ? (
+        {visibleJobs.length > 0 ? (
           <>
-            <ul className="divide-y divide-gray-100 overflow-y-auto flex-grow">
-              {jobs.map((job) => (
-                <li
-                  key={job.job_id}
-                  onClick={() => handleJobSelect(job)}
-                  className={`p-4 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${
-                    selectedJob?.job_id === job.job_id
-                      ? "bg-indigo-50 border-l-4 border-indigo-500"
-                      : "border-l-4 border-transparent"
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-md font-medium text-gray-900 truncate">
-                        {job.job_title}
-                      </h3>
-                      <div className="mt-1 flex items-center text-sm text-gray-500">
-                        <BuildingIcon className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
-                        <span className="truncate">{job.company}</span>
-                      </div>
-                      <div className="mt-1 flex items-center text-sm text-gray-500">
-                        <MapPinIcon className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
-                        <span className="truncate">{job.location}</span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
-                        <span className="capitalize truncate">
-                          {job.provider === "careers_future"
-                            ? "MyCareersFuture"
-                            : job.provider === "remote_ok"
-                              ? "RemoteOK"
-                              : job.provider}
-                        </span>
-                        {job.workplace_type && (
-                          <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-gray-100 text-gray-700 capitalize">
-                            {job.workplace_type}
+            <ul className="divide-y divide-zinc-100 overflow-y-auto flex-grow">
+              {visibleJobs.map((job) => {
+                const isSelected = selectedJob?.job_id === job.job_id;
+                const totalScore = job.total_score ?? job.resume_score;
+
+                return (
+                  <li
+                    key={job.job_id}
+                    onClick={() => handleJobSelect(job)}
+                    className={`p-3.5 sm:p-4 cursor-pointer transition-all duration-150 ${
+                      isSelected
+                        ? "bg-indigo-50/40 border-l-[3px] border-l-indigo-600 shadow-2xs"
+                        : "hover:bg-zinc-100/70 border-l-[3px] border-l-transparent"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className={`text-sm font-semibold truncate ${isSelected ? "text-indigo-950" : "text-zinc-900"}`}>
+                          {job.job_title}
+                        </h3>
+                        <p className="mt-0.5 text-xs text-zinc-500 truncate">
+                          <span className="font-medium text-zinc-700">{job.company}</span>
+                          <span className="text-zinc-300 mx-1.5">·</span>
+                          <span>{job.location || "Remote"}</span>
+                        </p>
+
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="text-[11px] text-indigo-700/80 font-medium capitalize">
+                            {job.provider === "careers_future"
+                              ? "CareersFuture"
+                              : job.provider === "remote_ok"
+                                ? "RemoteOK"
+                                : job.provider}
                           </span>
-                        )}
-                        {(job.salary_min || job.salary_max) && (
-                          <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                            {job.salary_currency || "$"}{job.salary_min ? (job.salary_min > 1000 ? `${Math.round(job.salary_min / 1000)}k` : job.salary_min) : ""}{job.salary_min && job.salary_max ? "-" : ""}{job.salary_max ? (job.salary_max > 1000 ? `${Math.round(job.salary_max / 1000)}k` : job.salary_max) : ""}
+                          {job.workplace_type && (
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${
+                              job.workplace_type === "remote"
+                                ? "bg-purple-50 text-purple-700 border border-purple-200/70"
+                                : job.workplace_type === "hybrid"
+                                  ? "bg-sky-50 text-sky-700 border border-sky-200/70"
+                                  : "bg-slate-100 text-slate-700"
+                            }`}>
+                              {job.workplace_type}
+                            </span>
+                          )}
+                          {(job.salary_min || job.salary_max) && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+                              {job.salary_currency || "$"}{job.salary_min ? (job.salary_min > 1000 ? `${Math.round(job.salary_min / 1000)}k` : job.salary_min) : ""}{job.salary_min && job.salary_max ? "-" : ""}{job.salary_max ? (job.salary_max > 1000 ? `${Math.round(job.salary_max / 1000)}k` : job.salary_max) : ""}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Color-Coded Score Badge */}
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        {totalScore !== undefined && totalScore !== null ? (
+                          <>
+                            <div
+                              className={`px-2 py-0.5 rounded-md text-xs font-bold tabular-nums border shadow-2xs ${getScoreBadgeColor(
+                                totalScore
+                              )}`}
+                            >
+                              {totalScore}%
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px]">
+                              <span className="text-zinc-500 font-medium" title="ATS Resume Score">
+                                ATS {job.resume_score}%
+                              </span>
+                              {job.dream_score !== undefined && job.dream_score !== null && (
+                                <span
+                                  className="text-amber-800 font-bold bg-amber-50 border border-amber-200/80 px-1 py-0.2 rounded"
+                                  title="Dream Match Score"
+                                >
+                                  ★ {job.dream_score}%
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            Pending
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                      {job.resume_score !== undefined && job.resume_score !== null ? (
-                        <>
-                          <div
-                            className={`px-2 py-0.5 rounded-full text-xs font-bold border ${getScoreBadgeColor(
-                              job.total_score ?? job.resume_score,
-                            )}`}
-                          >
-                            {job.total_score ?? job.resume_score}%
-                          </div>
-                          <div className="flex items-center gap-1 text-[10px]">
-                            <span className="text-gray-500 font-medium" title="ATS Resume Score">
-                              📄 {job.resume_score}%
-                            </span>
-                            {job.dream_score !== undefined && job.dream_score !== null && (
-                              <span
-                                className="inline-flex items-center gap-0.5 font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded"
-                                title="Dream Match Score"
-                              >
-                                <Flame size={9} className="text-amber-600" />
-                                {job.dream_score}%
-                              </span>
-                            )}
-                            {job.score_breakdown?.company_intel?.glassdoor_rating && (
-                              <span
-                                className="inline-flex items-center gap-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-1 py-0.2 rounded"
-                                title={`Glassdoor Rating: ${job.score_breakdown.company_intel.glassdoor_rating}/5.0`}
-                              >
-                                ★ {job.score_breakdown.company_intel.glassdoor_rating.toFixed(1)}
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full whitespace-nowrap">
-                          ⏳ Pending
+                    {/* Status badges */}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {generatingResumeJobIds[job.job_id] ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-300 animate-pulse">
+                          <RefreshCw size={10} className="animate-spin text-purple-500" />
+                          Tailoring...
+                        </span>
+                      ) : Boolean(
+                        job.customized_resume_id ||
+                          job.resume_link ||
+                          (job.customized_resumes &&
+                            ((Array.isArray(job.customized_resumes) &&
+                              job.customized_resumes.length > 0) ||
+                              typeof job.customized_resumes === "object"))
+                      ) ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-800 border border-purple-200">
+                          <FileText size={10} className="text-purple-600" />
+                          Tailored
+                        </span>
+                      ) : null}
+                      {rescoringJobIds[job.job_id] && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
+                          <RefreshCw size={10} className="animate-spin text-amber-600" />
+                          Rescoring...
+                        </span>
+                      )}
+                      {job.status === "applied" && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <CheckCircle size={10} className="text-emerald-600" />
+                          Applied
+                        </span>
+                      )}
+                      {job.is_interested === true && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          <ThumbsUp size={10} className="text-blue-600" />
+                          Interested
+                        </span>
+                      )}
+                      {job.is_interested === false && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                          <ThumbsDown size={10} className="text-rose-600" />
+                          Not Interested
                         </span>
                       )}
                     </div>
-                  </div>
-
-                  {/* Status indicators */}
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {Boolean(
-                      job.customized_resume_id ||
-                        job.resume_link ||
-                        (job.customized_resumes &&
-                          ((Array.isArray(job.customized_resumes) &&
-                            job.customized_resumes.length > 0) ||
-                            typeof job.customized_resumes === "object"))
-                    ) && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        <Sparkles className="h-3 w-3 mr-1" />
-                        Custom Resume
-                      </span>
-                    )}
-                    {job.status === "applied" && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Applied
-                      </span>
-                    )}
-                    {job.is_interested === true && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        <ThumbsUp className="h-3 w-3 mr-1" />
-                        Interested
-                      </span>
-                    )}
-                    {job.is_interested === false && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                        <ThumbsDown className="h-3 w-3 mr-1" />
-                        Not Interested
-                      </span>
-                    )}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
             {totalPages > 1 && (
-              <div className="p-4 border-t border-gray-100 bg-white">
+              <div className="p-3 border-t border-zinc-200/70 bg-white">
                 <PaginationControls
                   currentPage={currentPage}
                   totalPages={totalPages}
@@ -559,417 +854,395 @@ export default function TopMatchesList({
         )}
       </div>
 
-      {/* Right Column: Job Details */}
-      <div className="w-full md:w-2/3 bg-white overflow-y-auto">
+      {/* Right Column: Clean Job Details & Action Center */}
+      <div className="w-full lg:flex-1 bg-white overflow-y-auto">
         {selectedJob ? (
           <div className="h-full flex flex-col">
-            {/* Header section with fixed position */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex-1 min-w-0 pr-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-2xl font-bold text-gray-900">
+            {/* Sticky Header: Metadata & Clean Actions */}
+            <div className="sticky top-0 bg-white/95 backdrop-blur-xs border-b border-zinc-200/80 p-5 sm:p-6 z-10 space-y-4">
+              {/* Row 1: Title, Meta and Color-Coded Match Score */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight leading-snug truncate">
                       {selectedJob.job_title}
-                    </h2>
+                    </h1>
                     <Link
                       href={`/jobs/${selectedJob.job_id}?source=${encodeURIComponent(currentPathWithSearch)}`}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200 shadow-2xs shrink-0 cursor-pointer"
-                      title="Open full page view for this job"
+                      className="p-1.5 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors shrink-0"
+                      title="Open full page view"
                     >
-                      <Maximize2 size={13} />
-                      <span className="hidden sm:inline">Full Page</span>
+                      <Maximize2 size={16} />
                     </Link>
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center text-gray-600 gap-y-1.5 gap-x-4 text-sm">
-                    <div className="flex items-center">
-                      <BuildingIcon className="h-4 w-4 mr-1.5 text-gray-500 shrink-0" />
-                      <span>{selectedJob.company}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <MapPinIcon className="h-4 w-4 mr-1.5 text-gray-500 shrink-0" />
-                      <span>{selectedJob.location}</span>
-                    </div>
+
+                  <div className="mt-1.5 flex flex-wrap items-center text-xs text-zinc-600 gap-y-1.5 gap-x-2">
+                    <span className="font-semibold text-zinc-900">{selectedJob.company}</span>
+                    <span className="text-zinc-300">·</span>
+                    <span>{selectedJob.location || "Remote"}</span>
                     {selectedJob.workplace_type && (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold uppercase tracking-wider ${
-                        selectedJob.workplace_type === "remote"
-                          ? "bg-purple-100 text-purple-800 border border-purple-200"
-                          : selectedJob.workplace_type === "hybrid"
-                            ? "bg-blue-100 text-blue-800 border border-blue-200"
-                            : "bg-gray-100 text-gray-800 border border-gray-200"
-                      }`}>
-                        {selectedJob.workplace_type === "remote" ? "🌐 100% Remote" : selectedJob.workplace_type === "hybrid" ? "🏢 Hybrid" : "📍 On-Site"}
-                      </span>
+                      <>
+                        <span className="text-zinc-300">·</span>
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wider ${
+                          selectedJob.workplace_type === "remote"
+                            ? "bg-purple-50 text-purple-700 border border-purple-200/70"
+                            : selectedJob.workplace_type === "hybrid"
+                              ? "bg-sky-50 text-sky-700 border border-sky-200/70"
+                              : "bg-slate-100 text-slate-700"
+                        }`}>
+                          {selectedJob.workplace_type}
+                        </span>
+                      </>
                     )}
                     {(selectedJob.salary_min || selectedJob.salary_max) && (
-                      <div className="flex items-center text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-xs">
-                        <Banknote className="h-3.5 w-3.5 mr-1 text-emerald-600 shrink-0" />
-                        <span>
+                      <>
+                        <span className="text-zinc-300">·</span>
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <Banknote size={12} className="inline mr-1 text-emerald-600" />
                           {selectedJob.salary_currency || "USD"}{" "}
                           {selectedJob.salary_min ? selectedJob.salary_min.toLocaleString() : ""}
                           {selectedJob.salary_min && selectedJob.salary_max ? " - " : ""}
                           {selectedJob.salary_max ? selectedJob.salary_max.toLocaleString() : ""}{" "}
                           / {selectedJob.salary_period || "mo"}
                         </span>
-                      </div>
+                      </>
                     )}
-                    <div className="flex items-center">
-                      <SocialLink className="h-4 w-4 mr-1.5 text-gray-500 shrink-0" />
-                      <span className="capitalize truncate">
-                        {selectedJob.provider === "careers_future"
-                          ? "MyCareersFuture"
-                          : selectedJob.provider === "remote_ok"
-                            ? "RemoteOK"
-                            : selectedJob.provider || "LinkedIn"}
-                      </span>
-                    </div>
+                    <span className="text-zinc-300">·</span>
+                    <span className="text-indigo-700/80 font-medium capitalize">
+                      via {selectedJob.provider === "careers_future" ? "CareersFuture" : selectedJob.provider === "remote_ok" ? "RemoteOK" : selectedJob.provider || "LinkedIn"}
+                    </span>
                   </div>
                 </div>
 
-                {/* Prominent Score & Stage Display */}
-                <div className="flex-shrink-0 flex items-center space-x-3">
-                  {selectedJob.resume_score !== undefined &&
-                  selectedJob.resume_score !== null ? (
-                    <div className="flex items-center space-x-3 bg-white px-3.5 py-2 rounded-xl border border-gray-200 shadow-sm">
-                      <div
-                        className={`p-2 rounded-lg ${
-                          selectedJob.resume_score_stage === "custom"
-                            ? "bg-emerald-50 text-emerald-600"
-                            : "bg-indigo-50 text-indigo-600"
-                        }`}
-                      >
-                        <BarChart3Icon className="h-5 w-5" />
+                {/* Score Card with Tinted Palette */}
+                {selectedJob.resume_score !== undefined && selectedJob.resume_score !== null ? (
+                  <div className={`flex-shrink-0 flex items-center gap-3 px-3.5 py-2 rounded-xl border shadow-xs ${
+                    (selectedJob.total_score ?? selectedJob.resume_score) >= 80
+                      ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                      : (selectedJob.total_score ?? selectedJob.resume_score) >= 60
+                        ? "bg-indigo-50/70 border-indigo-200 text-indigo-950"
+                        : "bg-amber-50/70 border-amber-200 text-amber-950"
+                  }`}>
+                    <div className="text-right">
+                      <div className="text-lg font-bold leading-tight flex items-baseline justify-end gap-1">
+                        <span>{selectedJob.total_score ?? selectedJob.resume_score}%</span>
+                        <span className="text-xs font-semibold opacity-75">Match</span>
                       </div>
-                      <div>
-                        <div className="flex items-baseline space-x-1.5">
-                          <span className="text-xl font-bold text-gray-900">
-                            {selectedJob.total_score ?? selectedJob.resume_score}%
+                      <div className="text-[10px] font-medium mt-0.5 flex items-center gap-1.5 justify-end">
+                        <span className="text-blue-700 font-semibold">ATS {selectedJob.resume_score}%</span>
+                        {selectedJob.dream_score !== null && selectedJob.dream_score !== undefined && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCompanyIntelOpen(true)}
+                            className="text-amber-800 font-bold hover:underline cursor-pointer"
+                            title="Click to view transparent Dream Match breakdown & company reviews"
+                          >
+                            ★ Dream {selectedJob.dream_score}%
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800">
+                    Pending Score
+                  </div>
+                )}
+              </div>
+
+              {/* Row 2: Primary Workflow Actions (Distinct Functional Colors) */}
+              <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Primary Action: View / Apply on Job Listing (Indigo Brand) */}
+                  <Link
+                    href={getJobListingUrl(selectedJob)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors shadow-xs"
+                  >
+                    <span>View Job Listing</span>
+                    <ExternalLink size={14} />
+                  </Link>
+
+                  {/* Tailored Resume Action (Emerald when ready / Purple when tailor available) */}
+                  {hasCustomResume ? (
+                    <button
+                      onClick={() =>
+                        handleViewResume(
+                          selectedJob.job_id,
+                          selectedJob.customized_resume_id ||
+                            (selectedJob.customized_resumes as any)?.id
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors shadow-xs cursor-pointer"
+                    >
+                      <FileText size={15} />
+                      <span>View Custom Resume</span>
+                    </button>
+                  ) : selectedJob.is_interested === false ? (
+                    <button
+                      disabled
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-zinc-100 text-zinc-400 text-xs sm:text-sm font-medium rounded-lg cursor-not-allowed border border-zinc-200"
+                    >
+                      <ThumbsDown size={14} className="text-zinc-400" />
+                      <span>Excluded (Pass)</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleGenerateCustomResume}
+                      disabled={isSelectedJobGeneratingResume}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs sm:text-sm font-semibold rounded-lg transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSelectedJobGeneratingResume ? (
+                        <>
+                          <RefreshCw size={14} className="animate-spin text-purple-600" />
+                          <span>Tailoring...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileText size={14} className="text-purple-600" />
+                          <span>Tailor Resume</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Mark as Applied Action (Blue when unapplied / Emerald when applied) */}
+                  {selectedJob.status !== "applied" ? (
+                    <button
+                      onClick={handleMarkAsApplied}
+                      disabled={isSelectedJobUpdatingApplied}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs sm:text-sm font-semibold rounded-lg transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
+                    >
+                      <CheckCircle size={15} className="text-blue-500" />
+                      <span>{isSelectedJobUpdatingApplied ? "Updating..." : "Mark Applied"}</span>
+                    </button>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold text-xs sm:text-sm rounded-lg">
+                      <CheckCircle size={15} className="text-emerald-600" />
+                      <span>Applied</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: Interested / Pass toggle */}
+                <div className="inline-flex rounded-lg border border-zinc-200 bg-white p-0.5 shadow-2xs">
+                  <button
+                    onClick={() => handleSetInterest(true)}
+                    disabled={isSelectedJobUpdatingInterest}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      selectedJob.is_interested === true
+                        ? "bg-blue-600 text-white shadow-2xs"
+                        : "text-zinc-600 hover:text-blue-700 hover:bg-blue-50"
+                    }`}
+                    title="Mark as Interested"
+                  >
+                    <ThumbsUp
+                      size={13}
+                      fill={selectedJob.is_interested === true ? "currentColor" : "none"}
+                    />
+                    <span>Interested</span>
+                  </button>
+                  <button
+                    onClick={() => handleSetInterest(false)}
+                    disabled={isSelectedJobUpdatingInterest}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      selectedJob.is_interested === false
+                        ? "bg-rose-600 text-white shadow-2xs"
+                        : "text-zinc-600 hover:text-rose-700 hover:bg-rose-50"
+                    }`}
+                    title="Mark as Not Interested"
+                  >
+                    <ThumbsDown
+                      size={13}
+                      fill={selectedJob.is_interested === false ? "currentColor" : "none"}
+                    />
+                    <span>Pass</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Row 3: Tinted Secondary Preparation Toolkit */}
+              <div className="flex items-center gap-2 pt-2.5 border-t border-zinc-100 flex-wrap">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mr-1">
+                  Tools:
+                </span>
+
+                {/* Cover Letter (Violet) */}
+                <Link
+                  href={`/jobs/${selectedJob.job_id}/cover-letter?source=${encodeURIComponent(currentPathWithSearch)}`}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors shadow-2xs ${
+                    hasCoverLetter
+                      ? "border-violet-300 bg-violet-100 text-violet-900 hover:bg-violet-200"
+                      : "border-violet-200/80 bg-violet-50/70 hover:bg-violet-100 text-violet-700"
+                  }`}
+                  title={hasCoverLetter ? "View and edit tailored cover letter" : "Draft a tailored cover letter"}
+                >
+                  <Mail size={13} className="text-violet-600" />
+                  <span>{hasCoverLetter ? "Cover Letter ✓" : "Cover Letter"}</span>
+                </Link>
+
+                {/* Outreach Note (Sky/Blue) */}
+                <button
+                  onClick={() => setIsOutreachOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-sky-200/80 bg-sky-50/70 hover:bg-sky-100 text-sky-700 transition-colors shadow-2xs cursor-pointer"
+                  title="Generate personalized networking message"
+                >
+                  <Send size={13} className="text-sky-600" />
+                  <span>Outreach Note</span>
+                </button>
+
+                {/* Interview Prep (Amber) */}
+                <button
+                  onClick={() => setIsInterviewPrepOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-amber-200/80 bg-amber-50/70 hover:bg-amber-100 text-amber-800 transition-colors shadow-2xs cursor-pointer"
+                  title="Generate technical questions and STAR preparation"
+                >
+                  <Award size={13} className="text-amber-600" />
+                  <span>Interview Prep</span>
+                </button>
+
+                {/* Company Intel (Slate with Gold Rating) */}
+                <button
+                  onClick={() => setIsCompanyIntelOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors shadow-2xs cursor-pointer"
+                  title="Inspect employer reviews and ratings"
+                >
+                  <BuildingIcon size={13} className="text-slate-600" />
+                  <span>Company Intel</span>
+                  {selectedJob.score_breakdown?.company_intel?.glassdoor_rating && (
+                    <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-200 px-1 py-0.2 rounded">
+                      ★ {selectedJob.score_breakdown.company_intel.glassdoor_rating.toFixed(1)}
+                    </span>
+                  )}
+                </button>
+
+                {/* Live Rescore (Orange) */}
+                <button
+                  onClick={handleRescore}
+                  disabled={isSelectedJobRescoring}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-orange-200/80 bg-orange-50/70 hover:bg-orange-100 text-orange-700 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                  title="Re-evaluate score against your resume and fresh intel"
+                >
+                  <RefreshCw
+                    size={13}
+                    className={`text-orange-500 ${isSelectedJobRescoring ? "animate-spin" : ""}`}
+                  />
+                  <span>{isSelectedJobRescoring ? "Rescoring..." : "Rescore"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Collapsible Match Analysis & Skill Insights Section */}
+            {selectedJob.score_breakdown && (
+              <div className="border-b border-indigo-100 bg-gradient-to-r from-indigo-50/20 via-white to-purple-50/20 p-5 sm:p-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-indigo-600" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-900">
+                      Match Insights & Skill Analysis
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer"
+                  >
+                    <span>{isInsightsExpanded ? "Hide Details" : "Show Details"}</span>
+                    {isInsightsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                </div>
+
+                {isInsightsExpanded && (
+                  <div className="space-y-3 pt-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Matched Skills */}
+                      <div className="bg-white p-3.5 rounded-xl border border-emerald-200/80 shadow-2xs space-y-2">
+                        <span className="text-xs font-bold text-emerald-800 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <CheckCircle2 size={13} className="text-emerald-600" />
+                            Matched Core Skills
                           </span>
-                          <span className="text-xs font-semibold text-gray-500">
-                            Match
+                          <span className="text-[11px] text-emerald-600 font-semibold">
+                            {selectedJob.score_breakdown.matched_skills?.length || 0} found
                           </span>
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-[10px]">
-                          <span className="text-gray-500 font-medium">📄 ATS: {selectedJob.resume_score}%</span>
-                          {selectedJob.dream_score !== undefined && selectedJob.dream_score !== null && (
-                            <button
-                              type="button"
-                              onClick={() => setIsCompanyIntelOpen(true)}
-                              className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 px-1.5 py-0.5 rounded cursor-pointer transition-colors group"
-                              title="Click to view transparent Dream Match breakdown & company reviews"
-                            >
-                              🔥 Dream: {selectedJob.dream_score}%
-                              <span className="text-[9px] text-amber-600 font-normal underline underline-offset-1 group-hover:text-amber-900">
-                                Intel →
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {(selectedJob.score_breakdown.matched_skills || []).length > 0 ? (
+                            selectedJob.score_breakdown.matched_skills.map((skill, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 text-xs font-semibold rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200"
+                              >
+                                {skill}
                               </span>
-                            </button>
+                            ))
+                          ) : (
+                            <span className="text-xs text-zinc-400">No direct skills extracted</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Skill Gaps */}
+                      <div className="bg-white p-3.5 rounded-xl border border-amber-200/80 shadow-2xs space-y-2">
+                        <span className="text-xs font-bold text-amber-900 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <AlertTriangle size={13} className="text-amber-600" />
+                            Missing / Skill Gaps
+                          </span>
+                          <span className="text-[11px] text-amber-700 font-semibold">
+                            {selectedJob.score_breakdown.skill_gaps?.length || 0} gaps
+                          </span>
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {(selectedJob.score_breakdown.skill_gaps || []).length > 0 ? (
+                            selectedJob.score_breakdown.skill_gaps.map((skill, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 text-xs font-semibold rounded-md bg-amber-50 text-amber-900 border border-amber-200"
+                              >
+                                {skill}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-emerald-700 font-semibold">
+                              No major missing skills identified
+                            </span>
                           )}
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    <div className="flex items-center space-x-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200">
-                      <BarChart3Icon className="h-5 w-5 text-gray-400" />
-                      <span className="text-xs font-medium text-gray-500">
-                        Not Scored
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Action buttons */}
-              <div className="flex flex-wrap gap-3 mt-5">
-                {(() => {
-                  // Determine the job listing URL based on the provider
-                  let jobUrl;
-                  if (selectedJob.provider === "careers_future") {
-                    jobUrl = `https://www.mycareersfuture.gov.sg/job/${selectedJob.job_id}`;
-                  } else {
-                    // Default to LinkedIn for "linkedin" provider or any other/undefined provider
-                    jobUrl = `https://www.linkedin.com/jobs/view/${selectedJob.job_id}`;
-                  }
-
-                  return (
-                    <Link
-                      href={jobUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      View Job Listing
-                      <ExternalLink size={16} className="ml-2" />
-                    </Link>
-                  );
-                })()}
-
-                {hasCustomResume ? (
-                  <button
-                    onClick={() =>
-                      handleViewResume(
-                        selectedJob.job_id,
-                        selectedJob.customized_resume_id ||
-                          (selectedJob.customized_resumes as any)?.id,
-                      )
-                    }
-                    className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 cursor-pointer"
-                  >
-                    View Customized Resume
-                    <FileText size={16} className="ml-2" />
-                  </button>
-                ) : selectedJob.is_interested === false ? (
-                  <button
-                    disabled
-                    className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-400 text-sm font-medium rounded-md cursor-not-allowed border border-gray-200"
-                    title="This job is marked as Not Interested. Mark as Interested or unmark to enable resume customization."
-                  >
-                    <ThumbsDown size={16} className="mr-2 text-red-400" />
-                    Excluded (Not Interested)
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleGenerateCustomResume}
-                    disabled={isGeneratingResume}
-                    className="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 cursor-pointer"
-                  >
-                    <Sparkles
-                      size={16}
-                      className={`mr-2 ${isGeneratingResume ? "animate-spin" : ""}`}
-                    />
-                    {isGeneratingResume
-                      ? "Tailoring..."
-                      : "Generate Custom Resume"}
-                  </button>
-                )}
-
-                {/* Custom Cover Letter (On-Demand) */}
-                <Link
-                  href={`/jobs/${selectedJob.job_id}/cover-letter?source=${encodeURIComponent(currentPathWithSearch)}`}
-                  className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 cursor-pointer ${
-                    hasCoverLetter
-                      ? "bg-purple-100 text-purple-800 hover:bg-purple-200 border border-purple-300 focus:ring-purple-500"
-                      : "bg-indigo-600 text-white hover:bg-indigo-700 border border-transparent focus:ring-indigo-500 shadow-sm"
-                  }`}
-                  title={hasCoverLetter ? "View and edit tailored cover letter" : "Generate a custom cover letter with AI"}
-                >
-                  {hasCoverLetter ? (
-                    <>
-                      <Mail size={16} className="mr-2 text-purple-700" />
-                      View Cover Letter
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={16} className="mr-2" />
-                      Generate Cover Letter
-                    </>
-                  )}
-                </Link>
-
-                {/* Outreach Copilot (On-Demand Networking) */}
-                <button
-                  onClick={() => setIsOutreachOpen(true)}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors shadow-2xs cursor-pointer"
-                  title="Generate personalized LinkedIn connection note or cold inmail"
-                >
-                  <Send size={16} className="mr-2" />
-                  Outreach Note
-                </button>
-
-                {/* Interview Prep Copilot (On-Demand Preparation) */}
-                <button
-                  onClick={() => setIsInterviewPrepOpen(true)}
-                  className="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 transition-colors shadow-2xs cursor-pointer"
-                  title="Generate role-specific technical questions and STAR answers"
-                >
-                  <Award size={16} className="mr-2" />
-                  Interview Prep
-                </button>
-
-                {/* Company Intelligence & Live Rescore Companion Group */}
-                <div className="inline-flex items-center rounded-xl p-1 bg-slate-900 border border-slate-800 shadow-2xs">
-                  <button
-                    onClick={() => setIsCompanyIntelOpen(true)}
-                    className="inline-flex items-center px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800/90 hover:bg-slate-700/90 text-white transition-all shadow-xs cursor-pointer gap-2"
-                    title="Inspect Glassdoor ratings, employee review sentiment, and transparent Dream Score rubric"
-                  >
-                    <BuildingIcon size={15} className="text-indigo-400" />
-                    <span>Company Intel</span>
-                    {selectedJob.score_breakdown?.company_intel?.glassdoor_rating ? (
-                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-bold border border-amber-400/30">
-                        ★ {selectedJob.score_breakdown.company_intel.glassdoor_rating.toFixed(1)}
-                      </span>
-                    ) : selectedJob.score_breakdown?.company_intel?.source_snippets?.length ? (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 text-[10px] font-semibold border border-emerald-400/30">
-                        Indexed
-                      </span>
-                    ) : null}
-                  </button>
-
-                  <div className="h-4 w-px bg-slate-700/80 mx-1" />
-
-                  <button
-                    onClick={handleRescore}
-                    disabled={isRescoring}
-                    className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-300 hover:text-amber-200 hover:bg-slate-800/80 transition-all disabled:opacity-50 cursor-pointer gap-1.5"
-                    title="Fetch fresh live employer reviews from the web and rescore this job immediately"
-                  >
-                    <RefreshCw
-                      size={14}
-                      className={`text-amber-400 ${isRescoring ? "animate-spin" : ""}`}
-                    />
-                    <span>{isRescoring ? "Rescoring..." : "Live Rescore"}</span>
-                  </button>
-                </div>
-
-                {selectedJob.status !== "applied" ? (
-                  <button
-                    onClick={handleMarkAsApplied}
-                    disabled={isUpdating}
-                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <CheckCircle size={16} className="mr-2" />
-                    {isUpdating ? "Updating..." : "Mark as Applied"}
-                  </button>
-                ) : (
-                  <div className="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 text-sm font-medium rounded-md">
-                    <CheckCircle size={16} className="mr-2" />
-                    Applied
-                  </div>
-                )}
-
-                {/* Interest buttons */}
-                <div className="inline-flex rounded-md shadow-sm">
-                  <button
-                    onClick={() => handleSetInterest(true)}
-                    disabled={isUpdatingInterest}
-                    className={`relative cursor-pointer inline-flex items-center px-3 py-2 rounded-l-md text-sm font-medium focus:z-10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed
-                      ${
-                        selectedJob.is_interested === true
-                          ? "bg-green-600 text-white hover:bg-green-700"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                  >
-                    <ThumbsUp
-                      size={16}
-                      className="mr-2"
-                      fill={
-                        selectedJob.is_interested === true
-                          ? "currentColor"
-                          : "none"
-                      }
-                    />
-                    Interested
-                  </button>
-
-                  <button
-                    onClick={() => handleSetInterest(false)}
-                    disabled={isUpdatingInterest}
-                    className={`relative cursor-pointer inline-flex items-center px-3 py-2 rounded-r-md text-sm font-medium focus:z-10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed border-l border-gray-300
-                      ${
-                        selectedJob.is_interested === false
-                          ? "bg-red-600 text-white hover:bg-red-700"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                  >
-                    <ThumbsDown
-                      size={16}
-                      className="mr-2"
-                      fill={
-                        selectedJob.is_interested === false
-                          ? "currentColor"
-                          : "none"
-                      }
-                    />
-                    Not Interested
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* AI Match Analysis & Skill Gap Drawer */}
-            {selectedJob.score_breakdown && (
-              <div className="bg-gradient-to-r from-gray-50 to-indigo-50/20 border-b border-gray-200 p-6 space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="h-5 w-5 text-indigo-600" />
-                  <h3 className="text-base font-bold text-gray-900">AI Match Analysis & Skill Insights</h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Matched Skills */}
-                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs space-y-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      Matched Core Skills ({selectedJob.score_breakdown.matched_skills?.length || 0})
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {(selectedJob.score_breakdown.matched_skills || []).length > 0 ? (
-                        selectedJob.score_breakdown.matched_skills.map((skill, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200"
-                          >
-                            {skill}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-gray-500">No direct skill keywords extracted</span>
+                    {/* Red flags warning if any */}
+                    {selectedJob.score_breakdown.red_flags &&
+                      selectedJob.score_breakdown.red_flags.length > 0 && (
+                        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 flex items-start gap-2 shadow-2xs">
+                          <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold block mb-0.5">Detected Red Flags:</span>
+                            <ul className="list-disc list-inside space-y-0.5">
+                              {selectedJob.score_breakdown.red_flags.map((rf, idx) => (
+                                <li key={idx}>{rf}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
                       )}
-                    </div>
-                  </div>
 
-                  {/* Skill Gaps */}
-                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs space-y-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      Missing / Skill Gaps ({selectedJob.score_breakdown.skill_gaps?.length || 0})
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {(selectedJob.score_breakdown.skill_gaps || []).length > 0 ? (
-                        selectedJob.score_breakdown.skill_gaps.map((skill, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 text-amber-800 border border-amber-200"
-                          >
-                            {skill}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-emerald-600 font-medium">No major missing skills identified!</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Red flags warning if any */}
-                {selectedJob.score_breakdown.red_flags && selectedJob.score_breakdown.red_flags.length > 0 && (
-                  <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 flex items-start space-x-2.5">
-                    <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold block mb-1">Detected Job Red Flags:</span>
-                      <ul className="list-disc list-inside space-y-0.5">
-                        {selectedJob.score_breakdown.red_flags.map((rf, idx) => (
-                          <li key={idx}>{rf}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-
-                {/* Actionable Advice */}
-                {selectedJob.score_breakdown.actionable_advice && (
-                  <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-100 text-xs text-indigo-900 leading-relaxed flex items-start space-x-2.5">
-                    <Sparkles className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold">Career Coach Recommendation: </span>
-                      <span>{selectedJob.score_breakdown.actionable_advice}</span>
-                    </div>
+                    {/* Recommendation */}
+                    {selectedJob.score_breakdown.actionable_advice && (
+                      <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-950 leading-relaxed shadow-2xs">
+                        <span className="font-bold text-indigo-900 block mb-0.5">Recommendation:</span>
+                        <span>{selectedJob.score_breakdown.actionable_advice}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
 
-            {/* Scrollable content for description */}
-            <div className="p-6 flex-grow">
-              <div className="prose max-w-none">
+            {/* Scrollable Job Description */}
+            <div className="p-6 sm:p-8 flex-grow">
+              <div className="prose prose-zinc prose-sm sm:prose-base max-w-none text-zinc-700 leading-relaxed">
                 <MarkdownRenderer content={selectedJob.description} />
               </div>
             </div>
@@ -999,7 +1272,7 @@ export default function TopMatchesList({
             isOpen={isCompanyIntelOpen}
             onClose={() => setIsCompanyIntelOpen(false)}
             onRescore={handleRescore}
-            isRescoring={isRescoring}
+            isRescoring={isSelectedJobRescoring}
           />
         </>
       )}

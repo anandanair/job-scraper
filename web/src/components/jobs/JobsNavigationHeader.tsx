@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Zap, Star, Sparkles, Plus } from "lucide-react";
+import { Clock, Star, FileCheck2, Plus } from "lucide-react";
 import SearchComponent from "./SearchComponent";
 import FilterButton from "./FilterButton";
 import RefreshButton from "./RefreshButton";
@@ -42,28 +42,46 @@ export default function JobsNavigationHeader({
     key: JobsTabKey;
     label: string;
     href: string;
-    icon: React.ReactNode;
+    icon: (isActive: boolean) => React.ReactNode;
+    activeBorder: string;
+    activeText: string;
+    activeBadge: string;
     count?: number;
   }[] = [
     {
       key: "new",
       label: "New Jobs",
       href: getTabHref("/jobs/new"),
-      icon: <Zap size={16} className={activeTab === "new" ? "text-amber-500" : ""} />,
+      activeBorder: "border-amber-500",
+      activeText: "text-amber-800",
+      activeBadge: "bg-amber-100 text-amber-900 border border-amber-200/80",
+      icon: (isActive) => (
+        <Clock size={15} className={isActive ? "text-amber-600" : "text-zinc-400"} />
+      ),
       count: tabCounts?.newCount,
     },
     {
       key: "top-matches",
       label: "Top Matches",
       href: getTabHref("/jobs/top-matches"),
-      icon: <Star size={16} className={activeTab === "top-matches" ? "text-indigo-600" : ""} />,
+      activeBorder: "border-indigo-600",
+      activeText: "text-indigo-700",
+      activeBadge: "bg-indigo-100 text-indigo-800 border border-indigo-200/80",
+      icon: (isActive) => (
+        <Star size={15} className={isActive ? "text-indigo-600 fill-indigo-100" : "text-zinc-400"} />
+      ),
       count: tabCounts?.matchesCount,
     },
     {
       key: "tailored",
       label: "Tailored & Ready",
       href: getTabHref("/jobs/tailored"),
-      icon: <Sparkles size={16} className={activeTab === "tailored" ? "text-emerald-600" : ""} />,
+      activeBorder: "border-emerald-600",
+      activeText: "text-emerald-800",
+      activeBadge: "bg-emerald-100 text-emerald-900 border border-emerald-200/80",
+      icon: (isActive) => (
+        <FileCheck2 size={15} className={isActive ? "text-emerald-600" : "text-zinc-400"} />
+      ),
       count: tabCounts?.tailoredCount,
     },
   ];
@@ -71,23 +89,23 @@ export default function JobsNavigationHeader({
   return (
     <div className="mb-6 space-y-4">
       {/* Top row: Title and Search / Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{title}</h1>
-          <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
+          <p className="mt-0.5 text-xs sm:text-sm text-zinc-500">{subtitle}</p>
         </div>
 
-        <div className="flex items-center space-x-3 flex-wrap">
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors"
-          >
-            <Plus size={16} />
-            Import Job
-          </button>
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
           <SearchComponent />
           <FilterButton />
           <RefreshButton currentPage={currentPage} />
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors cursor-pointer"
+          >
+            <Plus size={15} />
+            <span>Import Job</span>
+          </button>
         </div>
       </div>
 
@@ -96,9 +114,9 @@ export default function JobsNavigationHeader({
         onClose={() => setIsImportModalOpen(false)}
       />
 
-      {/* Segmented Tab Control */}
-      <div className="flex border-b border-gray-200">
-        <nav className="flex space-x-2 -mb-px" aria-label="Tabs">
+      {/* Modern Color-Coded Tabs */}
+      <div className="flex border-b border-zinc-200/80">
+        <nav className="flex space-x-1 sm:space-x-3 -mb-px" aria-label="Tabs">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.key;
             return (
@@ -106,20 +124,20 @@ export default function JobsNavigationHeader({
                 key={tab.key}
                 href={tab.href}
                 prefetch={true}
-                className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-all duration-150 ${
+                className={`flex items-center gap-2 py-2.5 px-3 sm:px-4 border-b-2 text-xs sm:text-sm transition-all duration-150 ${
                   isActive
-                    ? "border-indigo-600 text-indigo-600 font-semibold"
-                    : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
+                    ? `${tab.activeBorder} ${tab.activeText} font-semibold`
+                    : "border-transparent text-zinc-500 hover:text-zinc-900 hover:border-zinc-300 font-medium"
                 }`}
               >
-                {tab.icon}
+                {tab.icon(isActive)}
                 <span>{tab.label}</span>
                 {typeof tab.count === "number" && (
                   <span
-                    className={`ml-1.5 py-0.5 px-2 rounded-full text-xs font-medium transition-colors ${
+                    className={`ml-0.5 py-0.5 px-2 rounded-full text-[11px] font-medium transition-colors ${
                       isActive
-                        ? "bg-indigo-50 text-indigo-700 border border-indigo-200/80"
-                        : "bg-gray-100 text-gray-600"
+                        ? tab.activeBadge
+                        : "bg-zinc-100 text-zinc-600"
                     }`}
                   >
                     {tab.count}

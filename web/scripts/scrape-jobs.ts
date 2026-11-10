@@ -321,18 +321,54 @@ async function runScraper(ctx?: any) {
     console.log("\n============= Starting Direct ATS Scraping (Target Companies) =============");
     console.log(`Target Companies: ${targetCompanies.join(", ") || "None configured"}`);
     if (targetCompanies.length > 0) {
-      const queries = cli.query ? [cli.query] : settings.linkedinQueries;
-      const atsJobs = await scrapeTargetCompanies(targetCompanies, queries);
-      if (atsJobs.length > 0) {
-        if (!cli.dryRun) {
-          const savedCount = await saveJobsToSupabase(supabase, atsJobs);
-          totalNewJobsSaved += savedCount;
-        } else {
-          console.log(`[Dry-Run] Extracted ${atsJobs.length} ATS jobs across target companies.`);
-          atsJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+      const dailyTarget = Math.min(
+        SAFE_MAX_SCRAPE_PER_SOURCE,
+        settings.maxJobsPerSearch.daily_scrape_ats ?? 10
+      );
+
+      // Check how many ATS jobs have already been scraped today
+      let alreadyScrapedToday = 0;
+      try {
+        const todayStart = new Date();
+        todayStart.setUTCHours(0, 0, 0, 0);
+        const { count, error } = await supabase
+          .from("jobs")
+          .select("job_id", { count: "exact", head: true })
+          .in("provider", ["greenhouse", "lever", "ashby"])
+          .gte("scraped_at", todayStart.toISOString());
+        if (!error && typeof count === "number") {
+          alreadyScrapedToday = count;
         }
+      } catch {
+        // Non-fatal fallback
+      }
+
+      const remainingDailyTarget = cli.force
+        ? (cli.limit ? Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, cli.limit) : dailyTarget)
+        : Math.max(0, dailyTarget - alreadyScrapedToday);
+
+      if (cli.force) {
+        console.log(`[Direct ATS] [FORCE BYPASS] Bypassing daily scraped count (${alreadyScrapedToday} already scraped today). Target limit for this run: ${remainingDailyTarget}`);
       } else {
-        console.log("ℹ️ No new jobs found across configured target companies.");
+        console.log(`[Direct ATS] Daily cap: ${dailyTarget} jobs | Already scraped today: ${alreadyScrapedToday} | Remaining quota for today: ${remainingDailyTarget}`);
+      }
+
+      if (!cli.force && remainingDailyTarget <= 0) {
+        console.log(`[Direct ATS] Daily safety limit of ${dailyTarget} jobs already reached today. Halting Direct ATS scraping.`);
+      } else {
+        const queries = cli.query ? [cli.query] : settings.linkedinQueries;
+        const atsJobs = await scrapeTargetCompanies(targetCompanies, queries, remainingDailyTarget);
+        if (atsJobs.length > 0) {
+          if (!cli.dryRun) {
+            const savedCount = await saveJobsToSupabase(supabase, atsJobs);
+            totalNewJobsSaved += savedCount;
+          } else {
+            console.log(`[Dry-Run] Extracted ${atsJobs.length} ATS jobs across target companies.`);
+            atsJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+          }
+        } else {
+          console.log("ℹ️ No new jobs found across configured target companies.");
+        }
       }
     } else {
       console.log("ℹ️ Direct ATS is active, but no target company slugs are configured. Add slugs in Settings.");
@@ -344,19 +380,58 @@ async function runScraper(ctx?: any) {
   // 4. Remote Feeds (RemoteOK)
   if (activeSources.includes("remote_ok")) {
     console.log("\n=================== Starting Remote Feeds (RemoteOK) ===================");
-    const queries = cli.query ? [cli.query] : settings.linkedinQueries;
-    const remoteJobs = await fetchRemoteOkJobs(queries, 10);
-    if (remoteJobs.length > 0) {
-      if (!cli.dryRun) {
-        const savedCount = await saveJobsToSupabase(supabase, remoteJobs);
-        totalNewJobsSaved += savedCount;
-      } else {
-        console.log(`[Dry-Run] Extracted ${remoteJobs.length} RemoteOK jobs.`);
-        remoteJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+    const dailyTarget = Math.min(
+      SAFE_MAX_SCRAPE_PER_SOURCE,
+      settings.maxJobsPerSearch.daily_scrape_remote_ok ?? 10
+    );
+
+    // Check how many jobs for this provider have already been scraped today
+    let alreadyScrapedToday = 0;
+    try {
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const { count, error } = await supabase
+        .from("jobs")
+        .select("job_id", { count: "exact", head: true })
+        .eq("provider", "remote_ok")
+        .gte("scraped_at", todayStart.toISOString());
+      if (!error && typeof count === "number") {
+        alreadyScrapedToday = count;
       }
-    } else {
-      console.log("ℹ️ No new jobs found from RemoteOK.");
+    } catch {
+      // Non-fatal fallback
     }
+
+    const remainingDailyTarget = cli.force
+      ? (cli.limit ? Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, cli.limit) : dailyTarget)
+      : Math.max(0, dailyTarget - alreadyScrapedToday);
+
+    if (cli.force) {
+      console.log(`[RemoteOK] [FORCE BYPASS] Bypassing daily scraped count (${alreadyScrapedToday} already scraped today). Target limit for this run: ${remainingDailyTarget}`);
+    } else {
+      console.log(`[RemoteOK] Daily cap: ${dailyTarget} jobs | Already scraped today: ${alreadyScrapedToday} | Remaining quota for today: ${remainingDailyTarget}`);
+    }
+
+    if (!cli.force && remainingDailyTarget <= 0) {
+      console.log(`[RemoteOK] Daily safety limit of ${dailyTarget} jobs already reached today. Halting RemoteOK scraping.`);
+    } else {
+      const queries = cli.query ? [cli.query] : settings.linkedinQueries;
+      const favoriteTech = settings.dreamJobProfile?.favorite_tech_stack || [];
+      const remoteJobs = await fetchRemoteOkJobs(queries, remainingDailyTarget, favoriteTech);
+      if (remoteJobs.length > 0) {
+        if (!cli.dryRun) {
+          const savedCount = await saveJobsToSupabase(supabase, remoteJobs);
+          totalNewJobsSaved += savedCount;
+        } else {
+          console.log(`[Dry-Run] Extracted ${remoteJobs.length} RemoteOK jobs.`);
+          remoteJobs.forEach((j, idx) => console.log(`  ${idx + 1}. [${j.job_id}] ${j.job_title} @ ${j.company}`));
+        }
+      } else {
+        console.log("ℹ️ No new jobs found from RemoteOK.");
+      }
+    }
+  } else {
+    console.log("\nℹ️ Skipping Remote Feeds (disabled in arguments / settings).");
   }
 
   console.log("\n=================================================================");

@@ -57,6 +57,8 @@ export async function loadScraperSettings(
       careers_future: 5,
       daily_scrape_linkedin: 15,
       daily_scrape_careers_future: 15,
+      daily_scrape_remote_ok: 10,
+      daily_scrape_ats: 10,
     },
     linkedinQueries: [],
     linkedinConfig: { ...DEFAULT_LINKEDIN_CONFIG },
@@ -102,6 +104,20 @@ export async function loadScraperSettings(
         : (typeof rawMaxJobs.careers_future === "number" ? Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, rawMaxJobs.careers_future) : 15)
     );
 
+    const dailyScrapeRemoteOk = Math.min(
+      SAFE_MAX_SCRAPE_PER_SOURCE,
+      typeof rawMaxJobs.daily_scrape_remote_ok === "number"
+        ? rawMaxJobs.daily_scrape_remote_ok
+        : 10
+    );
+
+    const dailyScrapeAts = Math.min(
+      SAFE_MAX_SCRAPE_PER_SOURCE,
+      typeof rawMaxJobs.daily_scrape_ats === "number"
+        ? rawMaxJobs.daily_scrape_ats
+        : 10
+    );
+
     const linkedinPerQuery = Math.max(1, Math.floor(dailyScrapeLinkedin / Math.max(1, lQueries.length)));
     const cfPerQuery = Math.max(1, Math.floor(dailyScrapeCf / Math.max(1, cfQueries.length)));
 
@@ -109,6 +125,8 @@ export async function loadScraperSettings(
       ...rawMaxJobs,
       daily_scrape_linkedin: dailyScrapeLinkedin,
       daily_scrape_careers_future: dailyScrapeCf,
+      daily_scrape_remote_ok: dailyScrapeRemoteOk,
+      daily_scrape_ats: dailyScrapeAts,
       linkedin: Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, linkedinPerQuery),
       careers_future: Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, cfPerQuery),
     };

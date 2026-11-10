@@ -443,7 +443,7 @@ BEGIN
     SELECT json_build_object(
         'totalNewJobs', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new'),
         'totalAppliedJobs', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new'),
-        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score >= 50 AND resume_score <= 100),
+        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND (total_score >= 50 OR (total_score IS NULL AND resume_score >= 50))),
         'expiredJobsCount', count(*) FILTER (WHERE job_state = 'expired'),
         'pendingScoreJobsCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NULL),
         'scoredJobsCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL),
@@ -453,6 +453,8 @@ BEGIN
         'scoredWithCustomResumeCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'custom'),
         'linkedInJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'linkedin'),
         'careersFutureJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'careers_future'),
+        'remoteOkJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'remote_ok'),
+        'atsJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider IN ('greenhouse', 'lever', 'ashby')),
         'appliedTodayCount', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new' AND application_date >= p_today_start AND application_date < p_today_end)
     )
     INTO result
@@ -1051,6 +1053,26 @@ DO $$ BEGIN
         CREATE POLICY "Allow public all access on company_profiles" ON "public"."company_profiles" FOR ALL USING (true);
     END IF;
 END $$;
+
+-- Jobs RLS policy and Realtime publication
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'jobs' AND policyname = 'Allow public all access on jobs'
+    ) THEN
+        CREATE POLICY "Allow public all access on jobs" ON "public"."jobs" FOR ALL USING (true);
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'jobs'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE "public"."jobs";
+    END IF;
+END $$;
+
+ALTER TABLE "public"."jobs" REPLICA IDENTITY FULL;
+
 
 
 

@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
+import { Search, X } from "lucide-react";
 
 export default function SearchComponent() {
   const router = useRouter();
@@ -26,41 +27,29 @@ export default function SearchComponent() {
     router.push(`?${params.toString()}`);
   };
 
+  const handleClear = () => {
+    setSearchQuery("");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("query");
+    params.set("page", "1");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
-    <div className="w-80">
-      <form onSubmit={handleSearch} className="relative group">
+    <div className="w-full sm:w-60 lg:w-72">
+      <form onSubmit={handleSearch} className="relative">
         <div
-          className={`
-          relative flex items-center
-          bg-white/90 backdrop-blur-sm
-          border border-gray-200/60
-          rounded-xl
-          shadow-md shadow-black/5
-          transition-all duration-300 ease-out
-          ${
+          className={`relative flex items-center bg-white border rounded-lg transition-all shadow-2xs ${
             isFocused
-              ? "ring-2 ring-blue-500/20 border-blue-300/60 shadow-lg shadow-blue-500/10"
-              : "hover:border-gray-300/80 hover:shadow-lg hover:shadow-black/8"
-          }
-        `}
+              ? "border-indigo-600 ring-1 ring-indigo-500/20"
+              : "border-zinc-200/90 hover:border-zinc-300"
+          }`}
         >
           {/* Search Icon */}
-          <div className="absolute left-3 flex items-center pointer-events-none">
-            <svg
-              className={`w-4 h-4 transition-colors duration-200 ${
-                isFocused ? "text-blue-500" : "text-gray-400"
-              }`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
+          <div className={`absolute left-3 flex items-center pointer-events-none transition-colors ${
+            isFocused ? "text-indigo-600" : "text-zinc-400"
+          }`}>
+            <Search size={15} />
           </div>
 
           {/* Input Field */}
@@ -70,63 +59,22 @@ export default function SearchComponent() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
-            placeholder="Search jobs..."
-            className="
-              w-full
-              pl-10 pr-16 py-2.5
-              bg-transparent
-              text-gray-800 placeholder-gray-500
-              text-sm font-medium
-              border-none outline-none
-              rounded-xl
-            "
+            placeholder="Search title, company, skills..."
+            className="w-full pl-9 pr-8 py-2 bg-transparent text-zinc-900 placeholder-zinc-400 text-xs sm:text-sm font-normal border-none outline-none"
           />
 
-          {/* Search Button */}
-          <button
-            type="submit"
-            className="
-              absolute right-1.5
-              p-2
-              bg-gradient-to-r from-blue-600 to-blue-700
-              hover:from-blue-700 hover:to-blue-800
-              active:from-blue-800 active:to-blue-900
-              text-white
-              rounded-lg
-              shadow-md shadow-blue-600/20
-              hover:shadow-lg hover:shadow-blue-600/30
-              active:scale-95
-              transition-all duration-200 ease-out
-              focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-1
-              group
-            "
-          >
-            <svg
-              className="w-4 h-4 transition-transform duration-200 group-hover:scale-110"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* Clear Button */}
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="absolute right-2.5 p-1 text-zinc-400 hover:text-indigo-600 rounded-md transition-colors cursor-pointer"
+              title="Clear search"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </button>
+              <X size={14} />
+            </button>
+          )}
         </div>
-
-        {/* Subtle glow effect on focus */}
-        <div
-          className={`
-          absolute inset-0 -z-10
-          bg-gradient-to-r from-blue-600/8 to-purple-600/8
-          rounded-xl blur-lg
-          transition-opacity duration-300
-          ${isFocused ? "opacity-100" : "opacity-0"}
-        `}
-        />
       </form>
     </div>
   );

@@ -74,6 +74,8 @@ export default async function Home() {
     scoredWithCustomResumeCount: 0,
     linkedInJobsCount: 0,
     careersFutureJobsCount: 0,
+    remoteOkJobsCount: 0,
+    atsJobsCount: 0,
     appliedTodayCount: 0,
   };
 

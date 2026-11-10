@@ -12,6 +12,7 @@ import {
   Info,
   Sparkles,
   FileText,
+  Building,
 } from "lucide-react";
 import { AppSettings } from "@/types";
 import {
@@ -45,6 +46,8 @@ export function AutomationBudgetSettings({
   // Active sources & search queries
   const isLinkedinActive = settings.scraping_sources?.includes("linkedin") ?? true;
   const isCfActive = settings.scraping_sources?.includes("careers_future") ?? false;
+  const isRemoteOkActive = settings.scraping_sources?.includes("remote_ok") ?? false;
+  const isAtsActive = settings.scraping_sources?.includes("ats") ?? false;
 
   const linkedinQueries = Array.isArray(settings.linkedin_search_queries)
     ? settings.linkedin_search_queries
@@ -102,10 +105,32 @@ export function AutomationBudgetSettings({
     return 15;
   };
 
+  const getInitialScrapeRemoteOk = () => {
+    if (typeof settings.max_jobs_per_search?.daily_scrape_remote_ok === "number") {
+      return Math.min(
+        HARD_SAFETY_SCRAPE_MAX,
+        Math.max(5, settings.max_jobs_per_search.daily_scrape_remote_ok)
+      );
+    }
+    return 10;
+  };
+
+  const getInitialScrapeAts = () => {
+    if (typeof settings.max_jobs_per_search?.daily_scrape_ats === "number") {
+      return Math.min(
+        HARD_SAFETY_SCRAPE_MAX,
+        Math.max(5, settings.max_jobs_per_search.daily_scrape_ats)
+      );
+    }
+    return 10;
+  };
+
   const [dailyJobs, setDailyJobs] = useState<number>(getInitialDailyJobs);
   const [dailyResumes, setDailyResumes] = useState<number>(getInitialDailyResumes);
   const [dailyScrapeLinkedin, setDailyScrapeLinkedin] = useState<number>(getInitialScrapeLinkedin);
   const [dailyScrapeCf, setDailyScrapeCf] = useState<number>(getInitialScrapeCf);
+  const [dailyScrapeRemoteOk, setDailyScrapeRemoteOk] = useState<number>(getInitialScrapeRemoteOk);
+  const [dailyScrapeAts, setDailyScrapeAts] = useState<number>(getInitialScrapeAts);
 
   // Keep state in sync if settings reloads from server or resets
   useEffect(() => {
@@ -113,11 +138,15 @@ export function AutomationBudgetSettings({
     setDailyResumes(getInitialDailyResumes());
     setDailyScrapeLinkedin(getInitialScrapeLinkedin());
     setDailyScrapeCf(getInitialScrapeCf());
+    setDailyScrapeRemoteOk(getInitialScrapeRemoteOk());
+    setDailyScrapeAts(getInitialScrapeAts());
   }, [
     settings.max_jobs_per_search?.daily_jobs,
     settings.max_jobs_per_search?.daily_resumes,
     settings.max_jobs_per_search?.daily_scrape_linkedin,
     settings.max_jobs_per_search?.daily_scrape_careers_future,
+    settings.max_jobs_per_search?.daily_scrape_remote_ok,
+    settings.max_jobs_per_search?.daily_scrape_ats,
     settings.max_jobs_per_search?.linkedin,
     settings.max_jobs_per_search?.careers_future,
     settings.jobs_to_score_per_run,
@@ -137,7 +166,9 @@ export function AutomationBudgetSettings({
   // Total daily scraped postings across all active platforms
   const totalDailyScraped =
     (isLinkedinActive ? dailyScrapeLinkedin : 0) +
-    (isCfActive ? dailyScrapeCf : 0);
+    (isCfActive ? dailyScrapeCf : 0) +
+    (isRemoteOkActive ? dailyScrapeRemoteOk : 0) +
+    (isAtsActive ? dailyScrapeAts : 0);
 
   // Handle changing LinkedIn scraping slider
   const handleDailyScrapeLinkedinChange = (val: number) => {
@@ -150,6 +181,8 @@ export function AutomationBudgetSettings({
       ...(settings.max_jobs_per_search || {}),
       daily_scrape_linkedin: clamped,
       daily_scrape_careers_future: dailyScrapeCf,
+      daily_scrape_remote_ok: dailyScrapeRemoteOk,
+      daily_scrape_ats: dailyScrapeAts,
       linkedin: perQuery,
       daily_jobs: dailyJobs,
       daily_resumes: dailyResumes,
@@ -168,7 +201,43 @@ export function AutomationBudgetSettings({
       ...(settings.max_jobs_per_search || {}),
       daily_scrape_linkedin: dailyScrapeLinkedin,
       daily_scrape_careers_future: clamped,
+      daily_scrape_remote_ok: dailyScrapeRemoteOk,
+      daily_scrape_ats: dailyScrapeAts,
       careers_future: perQuery,
+      daily_jobs: dailyJobs,
+      daily_resumes: dailyResumes,
+    };
+    onChange("max_jobs_per_search", updatedMaxJobs);
+  };
+
+  // Handle changing RemoteOK scraping slider
+  const handleDailyScrapeRemoteOkChange = (val: number) => {
+    const clamped = Math.min(HARD_SAFETY_SCRAPE_MAX, Math.max(5, val));
+    setDailyScrapeRemoteOk(clamped);
+
+    const updatedMaxJobs = {
+      ...(settings.max_jobs_per_search || {}),
+      daily_scrape_linkedin: dailyScrapeLinkedin,
+      daily_scrape_careers_future: dailyScrapeCf,
+      daily_scrape_remote_ok: clamped,
+      daily_scrape_ats: dailyScrapeAts,
+      daily_jobs: dailyJobs,
+      daily_resumes: dailyResumes,
+    };
+    onChange("max_jobs_per_search", updatedMaxJobs);
+  };
+
+  // Handle changing Direct ATS scraping slider
+  const handleDailyScrapeAtsChange = (val: number) => {
+    const clamped = Math.min(HARD_SAFETY_SCRAPE_MAX, Math.max(5, val));
+    setDailyScrapeAts(clamped);
+
+    const updatedMaxJobs = {
+      ...(settings.max_jobs_per_search || {}),
+      daily_scrape_linkedin: dailyScrapeLinkedin,
+      daily_scrape_careers_future: dailyScrapeCf,
+      daily_scrape_remote_ok: dailyScrapeRemoteOk,
+      daily_scrape_ats: clamped,
       daily_jobs: dailyJobs,
       daily_resumes: dailyResumes,
     };
@@ -185,6 +254,8 @@ export function AutomationBudgetSettings({
       ...(settings.max_jobs_per_search || {}),
       daily_scrape_linkedin: dailyScrapeLinkedin,
       daily_scrape_careers_future: dailyScrapeCf,
+      daily_scrape_remote_ok: dailyScrapeRemoteOk,
+      daily_scrape_ats: dailyScrapeAts,
       daily_jobs: val,
       daily_resumes: dailyResumes,
     };
@@ -207,6 +278,8 @@ export function AutomationBudgetSettings({
       ...(settings.max_jobs_per_search || {}),
       daily_scrape_linkedin: dailyScrapeLinkedin,
       daily_scrape_careers_future: dailyScrapeCf,
+      daily_scrape_remote_ok: dailyScrapeRemoteOk,
+      daily_scrape_ats: dailyScrapeAts,
       daily_jobs: dailyJobs,
       daily_resumes: val,
     };
@@ -393,6 +466,74 @@ export function AutomationBudgetSettings({
               </div>
               <p className="text-[11px] text-slate-500 pt-0.5">
                 Spreads across <strong>{cfQueries.length} target titles</strong> (~{Math.max(1, Math.floor(dailyScrapeCf / Math.max(1, cfQueries.length)))} jobs per title).
+              </p>
+            </div>
+          )}
+
+          {/* RemoteOK Scraping Slider */}
+          {isRemoteOkActive && (
+            <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200 space-y-2.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded bg-sky-600 text-white flex items-center justify-center font-bold text-[10px]">
+                    <Globe className="w-3 h-3" />
+                  </div>
+                  <span>RemoteOK Jobs / Day</span>
+                </div>
+                <span className="font-mono bg-white text-sky-800 px-2 py-0.5 rounded border border-sky-200 font-bold shadow-2xs">
+                  {dailyScrapeRemoteOk} jobs/day
+                </span>
+              </div>
+              <input
+                type="range"
+                min={5}
+                max={HARD_SAFETY_SCRAPE_MAX}
+                step={1}
+                value={dailyScrapeRemoteOk}
+                onChange={(e) => handleDailyScrapeRemoteOkChange(Number(e.target.value))}
+                className="w-full accent-sky-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                <span>5 jobs</span>
+                <span>10 (Recommended)</span>
+                <span>30 (Safety Max)</span>
+              </div>
+              <p className="text-[11px] text-slate-500 pt-0.5">
+                Ranks & extracts top worldwide remote postings matching your role concepts & tech stack.
+              </p>
+            </div>
+          )}
+
+          {/* Direct ATS Scraping Slider */}
+          {isAtsActive && (
+            <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200 space-y-2.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded bg-purple-600 text-white flex items-center justify-center font-bold text-[10px]">
+                    <Building className="w-3 h-3" />
+                  </div>
+                  <span>Direct ATS Jobs / Day</span>
+                </div>
+                <span className="font-mono bg-white text-purple-800 px-2 py-0.5 rounded border border-purple-200 font-bold shadow-2xs">
+                  {dailyScrapeAts} jobs/day
+                </span>
+              </div>
+              <input
+                type="range"
+                min={5}
+                max={HARD_SAFETY_SCRAPE_MAX}
+                step={1}
+                value={dailyScrapeAts}
+                onChange={(e) => handleDailyScrapeAtsChange(Number(e.target.value))}
+                className="w-full accent-purple-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                <span>5 jobs</span>
+                <span>10 (Recommended)</span>
+                <span>30 (Safety Max)</span>
+              </div>
+              <p className="text-[11px] text-slate-500 pt-0.5">
+                Pulls directly from target company boards (Greenhouse, Lever, Ashby).
               </p>
             </div>
           )}

@@ -23,6 +23,7 @@ import AppliedStatsBar, { FollowUpBanner } from "./applied/AppliedStatsBar";
 import StatusChangeModal from "./applied/StatusChangeModal";
 import Toast, { ToastData } from "./applied/Toast";
 import { AppliedStatusCounts } from "@/lib/supabase/queries";
+import { useRealtimeJobs } from "@/components/providers/RealtimeJobsProvider";
 
 interface AppliedJobsListProps {
   jobs: Job[];
@@ -45,6 +46,7 @@ export default function AppliedJobsList({
 }: AppliedJobsListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { markJobMutated } = useRealtimeJobs();
 
   const [updatingJobId, setUpdatingJobId] = useState<string | null>(null);
   const [modalJob, setModalJob] = useState<Job | null>(null);
@@ -94,6 +96,7 @@ export default function AppliedJobsList({
           : history[0]?.from) ??
         "new";
       setUpdatingJobId(job.job_id);
+      markJobMutated(job.job_id);
       try {
         const leavingPipeline = !APPLIED_STATUSES.includes(
           previousStatus as AppliedStatus
@@ -145,6 +148,7 @@ export default function AppliedJobsList({
       }
     ) => {
       setUpdatingJobId(job.job_id);
+      markJobMutated(job.job_id);
       try {
         const response = await fetch(`/api/jobs/${job.job_id}`, {
           method: "PATCH",
@@ -191,6 +195,7 @@ export default function AppliedJobsList({
       const due = new Date();
       due.setDate(due.getDate() + days);
       setUpdatingJobId(job.job_id);
+      markJobMutated(job.job_id);
       try {
         const response = await fetch(`/api/jobs/${job.job_id}`, {
           method: "PATCH",

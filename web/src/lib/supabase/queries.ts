@@ -44,9 +44,17 @@ export async function getTopScoredJobs(
     .eq("is_active", true)
     .eq("status", "new")
     .eq("job_state", "new")
-    .not("resume_score", "is", null)
-    .gte("resume_score", minScore)
-    .lte("resume_score", maxScore);
+    .not("resume_score", "is", null);
+
+  if (minScore !== undefined && maxScore !== undefined && maxScore < 100) {
+    query = query.or(
+      `and(total_score.gte.${minScore},total_score.lte.${maxScore}),and(total_score.is.null,resume_score.gte.${minScore},resume_score.lte.${maxScore})`
+    );
+  } else if (minScore !== undefined) {
+    query = query.or(
+      `total_score.gte.${minScore},and(total_score.is.null,resume_score.gte.${minScore})`
+    );
+  }
 
   if (provider) {
     query = query.eq("provider", provider);
@@ -112,9 +120,17 @@ export async function getTopScoredJobsCount(
     .eq("is_active", true)
     .eq("status", "new")
     .eq("job_state", "new")
-    .not("resume_score", "is", null)
-    .gte("resume_score", minScore) // Apply minScore filter
-    .lte("resume_score", maxScore); // Apply maxScore filter
+    .not("resume_score", "is", null);
+
+  if (minScore !== undefined && maxScore !== undefined && maxScore < 100) {
+    query = query.or(
+      `and(total_score.gte.${minScore},total_score.lte.${maxScore}),and(total_score.is.null,resume_score.gte.${minScore},resume_score.lte.${maxScore})`
+    );
+  } else if (minScore !== undefined) {
+    query = query.or(
+      `total_score.gte.${minScore},and(total_score.is.null,resume_score.gte.${minScore})`
+    );
+  }
 
   // Add provider filter if specified
   if (provider) {
@@ -405,7 +421,7 @@ export async function getJobsTabCounts(): Promise<JobsTabCounts> {
       .eq("status", "new")
       .eq("job_state", "new")
       .not("resume_score", "is", null)
-      .gte("resume_score", 50)
+      .or("total_score.gte.50,and(total_score.is.null,resume_score.gte.50)")
       .or("is_interested.is.null,is_interested.eq.true"),
     supabase
       .from("jobs")
@@ -1066,6 +1082,8 @@ export async function getDashboardStats(
     scoredWithCustomResumeRes,
     linkedInJobsRes,
     careersFutureJobsRes,
+    remoteOkJobsRes,
+    atsJobsRes,
     appliedTodayRes,
   ] = await Promise.all([
     supabase
@@ -1086,8 +1104,8 @@ export async function getDashboardStats(
       .eq("is_active", true)
       .eq("status", "new")
       .eq("job_state", "new")
-      .gte("resume_score", 50)
-      .lte("resume_score", 100),
+      .not("resume_score", "is", null)
+      .or("total_score.gte.50,and(total_score.is.null,resume_score.gte.50)"),
     supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })
@@ -1147,6 +1165,18 @@ export async function getDashboardStats(
     supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })
+      .eq("provider", "remote_ok")
+      .eq("is_active", true)
+      .eq("job_state", "new"),
+    supabase
+      .from("jobs")
+      .select("*", { count: "exact", head: true })
+      .in("provider", ["greenhouse", "lever", "ashby"])
+      .eq("is_active", true)
+      .eq("job_state", "new"),
+    supabase
+      .from("jobs")
+      .select("*", { count: "exact", head: true })
       .eq("is_active", true)
       .in("status", appliedStatuses)
       .eq("job_state", "new")
@@ -1167,6 +1197,8 @@ export async function getDashboardStats(
     scoredWithCustomResumeCount: scoredWithCustomResumeRes.count ?? 0,
     linkedInJobsCount: linkedInJobsRes.count ?? 0,
     careersFutureJobsCount: careersFutureJobsRes.count ?? 0,
+    remoteOkJobsCount: remoteOkJobsRes.count ?? 0,
+    atsJobsCount: atsJobsRes.count ?? 0,
     appliedTodayCount: appliedTodayRes.count ?? 0,
   };
 }

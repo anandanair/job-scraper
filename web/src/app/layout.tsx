@@ -4,6 +4,8 @@ import "./globals.css";
 import Navbar from "@/components/Navbar"; // Import the Navbar component
 import Footer from "@/components/Footer";
 import SchemaUpdateBanner from "@/components/SchemaUpdateBanner";
+import { RealtimeJobsProvider } from "@/components/providers/RealtimeJobsProvider";
+import RealtimeUpdateBanner from "@/components/realtime/RealtimeUpdateBanner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,10 +34,13 @@ export default function RootLayout({
       >
         <Navbar /> {/* Fixed at top */}
         <SchemaUpdateBanner />
-        {/* Main content area with overflow scrolling */}
-        <main className="flex-grow container mx-auto p-4 overflow-auto">
-          {children}
-        </main>
+        <RealtimeJobsProvider>
+          <RealtimeUpdateBanner />
+          {/* Main content area with overflow scrolling */}
+          <main className="flex-grow container mx-auto p-4 overflow-auto">
+            {children}
+          </main>
+        </RealtimeJobsProvider>
         <Footer />
       </body>
     </html>

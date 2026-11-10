@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, AlertTriangle, X } from "lucide-react";
 import { AppSettings, LLMTier } from "@/types";
 import { SettingsHeader } from "./SettingsHeader";
@@ -15,6 +16,20 @@ import { SettingsStickyBar } from "./SettingsStickyBar";
 
 interface SettingsClientProps {
   initialSettings: AppSettings | null;
+  initialTab?: string;
+}
+
+const VALID_TABS: readonly SettingsTabId[] = [
+  "ai",
+  "search",
+  "dream",
+  "automation",
+  "cloud",
+  "logs",
+] as const;
+
+function isValidTab(tab: string | null | undefined): tab is SettingsTabId {
+  return typeof tab === "string" && (VALID_TABS as readonly string[]).includes(tab);
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -45,7 +60,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   llm_daily_request_budget: 0,
 };
 
-export default function SettingsClient({ initialSettings }: SettingsClientProps) {
+export default function SettingsClient({
+  initialSettings,
+  initialTab,
+}: SettingsClientProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get("tab");
   const mergedSettings = useMemo<AppSettings>(() => {
     const raw = {
       ...DEFAULT_SETTINGS,
@@ -95,7 +116,39 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
   const [initialSnapshot, setInitialSnapshot] = useState<AppSettings>(mergedSettings);
   const [settings, setSettings] = useState<AppSettings>(mergedSettings);
 
-  const [activeTab, setActiveTab] = useState<SettingsTabId>("ai");
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(() => {
+    if (isValidTab(tabFromUrl)) return tabFromUrl;
+    if (isValidTab(initialTab)) return initialTab;
+    return "ai";
+  });
+
+  const lastClickedTabRef = useRef<SettingsTabId | null>(null);
+
+  // Keep activeTab synchronized when URL query parameter changes (e.g. navigation via Strategy Mode Pill or Back/Forward)
+  useEffect(() => {
+    const targetTab: SettingsTabId = isValidTab(tabFromUrl) ? tabFromUrl : "ai";
+    if (lastClickedTabRef.current === targetTab) {
+      lastClickedTabRef.current = null;
+    }
+    setActiveTab(targetTab);
+  }, [tabFromUrl]);
+
+  const handleTabChange = useCallback(
+    (tabId: SettingsTabId) => {
+      lastClickedTabRef.current = tabId;
+      setActiveTab(tabId);
+      const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
+      if (tabId === "ai") {
+        params.delete("tab");
+      } else {
+        params.set("tab", tabId);
+      }
+      const qs = params.toString();
+      const newUrl = qs ? `/settings?${qs}` : "/settings";
+      router.replace(newUrl, { scroll: false });
+    },
+    [router, searchParams]
+  );
 
   // Save states
   const [saving, setSaving] = useState(false);
@@ -268,7 +321,7 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
       )}
 
       {/* Tab Navigation */}
-      <SettingsTabs activeTab={activeTab} onChangeTab={setActiveTab} />
+      <SettingsTabs activeTab={activeTab} onChangeTab={handleTabChange} />
 
       {/* Tab Contents */}
       {activeTab === "ai" && (
@@ -298,7 +351,7 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
         <CloudWorkflowsSettings
           settings={settings}
           onChange={handleFieldChange}
-          onNavigateToLogs={() => setActiveTab("logs")}
+          onNavigateToLogs={() => handleTabChange("logs")}
         />
       )}
 

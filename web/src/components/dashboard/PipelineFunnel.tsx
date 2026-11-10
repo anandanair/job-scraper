@@ -9,6 +9,8 @@ import {
   Archive,
   Linkedin,
   SquareKanban,
+  Globe,
+  Building2,
 } from "lucide-react";
 import type { DashboardStats } from "@/types";
 
@@ -166,6 +168,14 @@ export default function PipelineFunnel({ stats }: PipelineFunnelProps) {
         <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700">
           <SquareKanban className="h-3.5 w-3.5" />
           {stats.careersFutureJobsCount} MyCareersFuture
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
+          <Globe className="h-3.5 w-3.5" />
+          {stats.remoteOkJobsCount ?? 0} RemoteOK
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+          <Building2 className="h-3.5 w-3.5" />
+          {stats.atsJobsCount ?? 0} Direct ATS
         </span>
       </div>
     </section>

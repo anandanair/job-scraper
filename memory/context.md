@@ -50,8 +50,8 @@ graph TD
    - There is **no** Flask, FastAPI, Django, or Python HTTP server in this project.
    - All REST API endpoints and server routes are Next.js Route Handlers located under [`web/src/app/api/`](web/src/app/api/).
 2. **Scraping Engine 100% in TypeScript**:
-   - Built in TypeScript under [`web/src/lib/scraper/`](web/src/lib/scraper/) and executed via [`web/scripts/scrape-jobs.ts`](web/scripts/scrape-jobs.ts) (`npm run scrape`). It uses `impit` for browser TLS (JA3/JA4) impersonation on LinkedIn, `cheerio` for fast HTML parsing, and `node-html-markdown` for local Markdown conversion with zero LLM API cost.
-   - Enforces a hard, non-overridable safety ceiling of 30 jobs/day per platform (`SAFE_MAX_SCRAPE_PER_SOURCE = 30`) to protect against guest endpoint rate-limits and IP blocking.
+   - Built in TypeScript under [`web/src/lib/scraper/`](web/src/lib/scraper/) and executed via [`web/scripts/scrape-jobs.ts`](web/scripts/scrape-jobs.ts) (`npm run scrape`). It uses `impit` for browser TLS (JA3/JA4) impersonation on LinkedIn, `cheerio` for fast HTML parsing, Direct ATS company board scraping (Greenhouse, Lever, Ashby), RemoteOK smart concept/synonym matching on tech-focused feeds (`?tag=engineer`, `?tag=dev`), and `node-html-markdown` for local Markdown conversion with zero LLM API cost.
+   - Enforces a hard, non-overridable safety ceiling of 30 jobs/day per platform (`SAFE_MAX_SCRAPE_PER_SOURCE = 30`) across all active sources (LinkedIn, CareersFuture, RemoteOK, Direct ATS) to protect against guest endpoint rate-limits and IP blocking.
    - The project is fully unified in TypeScript with zero Python dependencies.
 3. **TypeScript for Application Logic & Batch Workers**:
    - Job scoring, resume customization, PDF generation, job expiration, and resume parsing are written in TypeScript under [`web/scripts/`](web/scripts/) and [`web/src/lib/`](web/src/lib/).
@@ -171,6 +171,10 @@ graph TD
 11. **`company_profiles`** (migration `20261110_03_company_profiles_and_grounded_scoring`):
    - Zero-cost public company intelligence and employee sentiment cache. Caches Glassdoor star ratings, review counts, culture summaries, and raw source snippets with 30-day TTL to ground Dream Job evaluations.
    - Fields: `company_name` (text PK, normalized lowercase), `domain` (text), `industry` (text), `size_band` (text), `headquarters` (text), `glassdoor_rating` (numeric 3,1), `glassdoor_reviews_count` (int), `culture_summary` (text), `source_snippets` (JSONB array of `{title, snippet, link}`), `created_at`, `updated_at`.
+
+12. **Supabase Realtime Publication** (migration `20261110_04_realtime_jobs_publication`):
+   - `jobs` table added to `supabase_realtime` publication with `REPLICA IDENTITY FULL` and public RLS select policy.
+   - Powers zero-latency WebSocket update notifications (`useRealtimeJobs`, `RealtimeJobsProvider`, `RealtimeUpdateBanner`) across all pages for background scrapes, cloud workflows, and local CLI runs. Local mutations are transiently ignored via `markJobMutated` to prevent self-notification loops.
 
 ### Storage Architecture (On-Demand Streaming)
 - **Supabase Storage Buckets (`resumes`, `personalized_resumes`)**: Fully deprecated.
@@ -295,7 +299,7 @@ npm run parse-resume     # Parse master resume.pdf into base_resume table
 4. **Environment Variables**:
    - `web/.env.local` (or root `.env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 5. **Dashboard Home Page (`web/src/app/page.tsx`)**:
-   - Composed of server components in `web/src/components/dashboard/`: `DashboardHero` (personalized greeting + quick actions + last-scrape timestamp), `KpiCards` (New/Top Matches/Tailored/Applied — numbers sourced from `getJobsTabCounts()` to mirror the jobs page tab pills), `PipelineFunnel` (proportional stage bars with conversion %; pending/expired/provider stats as footer chips), `TopMatchesPreview` (top 5 via `getTopScoredJobs(1, 5)`), and `ActivityChart` (pure-CSS 14-day applications bar chart).
+   - Composed of server components in `web/src/components/dashboard/`: `DashboardHero` (personalized greeting + quick actions + last-scrape timestamp), `KpiCards` (New/Top Matches/Tailored/Applied — numbers sourced from `getJobsTabCounts()` to mirror the jobs page tab pills), `PipelineFunnel` (proportional stage bars with conversion %; pending/expired/provider stats for LinkedIn, CareersFuture, RemoteOK, and Direct ATS as footer chips via `remoteOkJobsCount` and `atsJobsCount`), `TopMatchesPreview` (top 5 overall composite fit via `getTopScoredJobs(1, 5)` displaying `total_score ?? resume_score` and dream score badge), and `ActivityChart` (pure-CSS 14-day applications bar chart).
    - Supporting queries in `web/src/lib/supabase/queries.ts`: `getAppliedJobsCountsLastNDays(days)` and `getLastScrapedAt()`.
    - All dashboard data fetches run in one `Promise.all` and fail soft (render zeros/empty states on error).
    - **Applied page (`/jobs/applied`, "Application Tracker")**: redesigned tracking view composed of `web/src/components/jobs/applied/` components (`AppliedStatsBar` clickable status-count cards, `AppliedJobCard` with company avatar/event/follow-up badges + expandable notes & timeline, `StatusChangeModal` contextual status form, `StatusTimeline`, `NotesEditor`, `Toast`) orchestrated by `web/src/components/jobs/AppliedJobsList.tsx`. Shared status helpers (status metadata, follow-up/event urgency, company avatars, date formatting) live in `web/src/lib/applied-status.ts`. Supports `followUpOnly=true` search param for the needs-attention filter and `sortBy=follow_up_at`.

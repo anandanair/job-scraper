@@ -28,7 +28,7 @@ export default function PaginationControls({
 
   // Calculate which page numbers to show
   const getPageNumbers = () => {
-    const maxPagesToShow = 3; // Reduced from 5 to 3 for compact view
+    const maxPagesToShow = 3;
 
     if (totalPages <= maxPagesToShow) {
       return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -46,31 +46,31 @@ export default function PaginationControls({
   };
 
   return (
-    <div className="flex items-center justify-between text-sm py-1">
-      <div className="text-gray-500 text-xs">
+    <div className="flex items-center justify-between text-xs py-0.5">
+      <div className="text-zinc-500 font-medium">
         Page {currentPage} of {totalPages}
       </div>
 
       <div className="flex items-center space-x-1">
-        {/* Previous button - simplified */}
+        {/* Previous button */}
         <button
           onClick={() => currentPage > 1 && goToPage(currentPage - 1)}
           disabled={currentPage <= 1}
-          className="flex items-center justify-center h-7 w-7 rounded text-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+          className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-600 disabled:text-zinc-300 disabled:cursor-not-allowed hover:bg-zinc-100 transition-colors cursor-pointer"
           aria-label="Previous page"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={15} />
         </button>
 
-        {/* Page numbers - compact */}
+        {/* Page numbers */}
         {getPageNumbers().map((page) => (
           <button
             key={page}
             onClick={() => goToPage(page)}
-            className={`flex cursor-pointer items-center justify-center h-7 w-7 rounded text-xs font-medium transition-colors ${
+            className={`flex cursor-pointer items-center justify-center h-7 w-7 rounded-md text-xs font-medium transition-colors ${
               currentPage === page
-                ? "bg-blue-600 text-white hover:bg-blue-700"
-                : "text-gray-700 hover:bg-gray-100"
+                ? "bg-zinc-900 text-white"
+                : "text-zinc-700 hover:bg-zinc-100"
             }`}
             aria-label={`Page ${page}`}
             aria-current={currentPage === page ? "page" : undefined}
@@ -79,14 +79,14 @@ export default function PaginationControls({
           </button>
         ))}
 
-        {/* Next button - simplified */}
+        {/* Next button */}
         <button
           onClick={() => currentPage < totalPages && goToPage(currentPage + 1)}
           disabled={currentPage >= totalPages}
-          className="flex items-center cursor-pointer justify-center h-7 w-7 rounded text-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+          className="flex items-center cursor-pointer justify-center h-7 w-7 rounded-md text-zinc-600 disabled:text-zinc-300 disabled:cursor-not-allowed hover:bg-zinc-100 transition-colors"
           aria-label="Next page"
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={15} />
         </button>
       </div>
     </div>

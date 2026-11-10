@@ -177,6 +177,8 @@ export interface DashboardStats {
   scoredWithCustomResumeCount: number;
   linkedInJobsCount: number;
   careersFutureJobsCount: number;
+  remoteOkJobsCount: number;
+  atsJobsCount: number;
   appliedTodayCount: number;
 }
 
