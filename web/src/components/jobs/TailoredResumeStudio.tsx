@@ -275,7 +275,8 @@ export default function TailoredResumeStudio({
       const params = new URLSearchParams(searchParams.toString());
       params.delete("source");
       const queryString = params.toString();
-      return queryString ? `${source}?${queryString}` : source;
+      if (!queryString) return source;
+      return source.includes("?") ? `${source}&${queryString}` : `${source}?${queryString}`;
     }
     return `/jobs/${jobId}`;
   }, [searchParams, jobId]);
@@ -409,7 +410,7 @@ export default function TailoredResumeStudio({
             </button>
 
             <Link
-              href={`/jobs/${jobId}/cover-letter`}
+              href={`/jobs/${jobId}/cover-letter?source=${encodeURIComponent(getSourcePath())}`}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-all"
               title="Go to Cover Letter for this job"
             >

@@ -13,14 +13,33 @@ import {
   X,
   Sparkles,
   Settings,
+  Flame,
 } from "lucide-react";
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
+  const [searchMode, setSearchMode] = useState<"get_hired_fast" | "dream_hunter">("get_hired_fast");
   const pathname = usePathname();
 
   const isSetup = pathname === "/setup" || pathname.startsWith("/setup/");
+
+  // Fetch active search mode
+  useEffect(() => {
+    if (isSetup) return;
+    let isMounted = true;
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && data?.settings?.job_search_mode) {
+          setSearchMode(data.settings.job_search_mode);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [isSetup, pathname]);
 
   // Handle scroll effect for navbar backdrop
   useEffect(() => {
@@ -111,16 +130,45 @@ export default function Navbar() {
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-1">
-              {navItems.map((item) => (
-                <NavItem
-                  key={item.href}
-                  href={item.href}
-                  icon={item.icon}
-                  text={item.text}
-                  isActive={isItemActive(item.href)}
-                />
-              ))}
+            <div className="hidden md:flex items-center space-x-2">
+              <div className="flex items-center space-x-1">
+                {navItems.map((item) => (
+                  <NavItem
+                    key={item.href}
+                    href={item.href}
+                    icon={item.icon}
+                    text={item.text}
+                    isActive={isItemActive(item.href)}
+                  />
+                ))}
+              </div>
+
+              {/* Strategy Mode Pill */}
+              <Link
+                href="/settings?tab=dream"
+                title={
+                  searchMode === "dream_hunter"
+                    ? "Operating in Dream Hunter Mode (Dual-Scoring ATS + Dream Checklist). Click to adjust."
+                    : "Operating in Get Hired Fast Mode (Pure ATS Qualification). Click to adjust."
+                }
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
+                  searchMode === "dream_hunter"
+                    ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+                }`}
+              >
+                {searchMode === "dream_hunter" ? (
+                  <>
+                    <Flame className="w-3 h-3 text-amber-600" />
+                    <span>Dream Hunter</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3 h-3 text-emerald-600" />
+                    <span>Fast Hire</span>
+                  </>
+                )}
+              </Link>
             </div>
 
             {/* Mobile Menu Button */}
@@ -170,6 +218,27 @@ export default function Navbar() {
                 onClick={() => setIsMenuOpen(false)}
               />
             ))}
+            <div className="pt-2 mt-2 border-t border-gray-100 px-4 pb-1">
+              <Link
+                href="/settings?tab=dream"
+                onClick={() => setIsMenuOpen(false)}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold ${
+                  searchMode === "dream_hunter"
+                    ? "bg-amber-50 text-amber-900 border border-amber-200"
+                    : "bg-emerald-50 text-emerald-900 border border-emerald-200"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {searchMode === "dream_hunter" ? (
+                    <Flame className="w-4 h-4 text-amber-600" />
+                  ) : (
+                    <Zap className="w-4 h-4 text-emerald-600" />
+                  )}
+                  <span>Mode: {searchMode === "dream_hunter" ? "Dream Hunter" : "Get Hired Fast"}</span>
+                </div>
+                <span className="text-[10px] text-gray-500 font-normal">Change &rarr;</span>
+              </Link>
+            </div>
           </div>
         </div>
       </div>

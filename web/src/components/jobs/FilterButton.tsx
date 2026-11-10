@@ -13,6 +13,17 @@ const PROVIDER_OPTIONS: FilterOption[] = [
   { value: "all", label: "All Providers" },
   { value: "linkedin", label: "LinkedIn" },
   { value: "careers_future", label: "Careers Future" },
+  { value: "greenhouse", label: "Greenhouse" },
+  { value: "lever", label: "Lever" },
+  { value: "remote_ok", label: "RemoteOK" },
+  { value: "imported", label: "Imported / Manual" },
+];
+
+const WORKPLACE_OPTIONS: FilterOption[] = [
+  { value: "all", label: "All Workplaces" },
+  { value: "remote", label: "100% Remote" },
+  { value: "hybrid", label: "Hybrid" },
+  { value: "onsite", label: "On-site" },
 ];
 
 const INTEREST_OPTIONS: FilterOption[] = [

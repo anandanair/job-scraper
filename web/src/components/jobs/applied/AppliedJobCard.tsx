@@ -293,7 +293,7 @@ export default function AppliedJobCard({
             {/* Action links */}
             <div className="flex flex-wrap gap-2 pt-1">
               <Link
-                href={`/jobs/${job.job_id}`}
+                href={`/jobs/${job.job_id}?source=/jobs/applied`}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
               >
                 <Info className="h-3.5 w-3.5" />
@@ -310,7 +310,7 @@ export default function AppliedJobCard({
               </a>
               {job.customized_resume_id && (
                 <Link
-                  href={`/jobs/${job.job_id}/resumes/${job.customized_resume_id}`}
+                  href={`/jobs/${job.job_id}/resumes/${job.customized_resume_id}?source=/jobs/applied`}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
                 >
                   <FileText className="h-3.5 w-3.5" />
@@ -318,7 +318,7 @@ export default function AppliedJobCard({
                 </Link>
               )}
               <Link
-                href={`/jobs/${job.job_id}/cover-letter`}
+                href={`/jobs/${job.job_id}/cover-letter?source=/jobs/applied`}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 transition-colors hover:bg-purple-100"
               >
                 <Mail className="h-3.5 w-3.5" />

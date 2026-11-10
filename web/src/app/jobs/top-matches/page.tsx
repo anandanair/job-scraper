@@ -36,6 +36,10 @@ export default async function TopMatchesPage({
   const minScore = minScoreParam ? parseInt(minScoreParam) : undefined;
   const maxScore = maxScoreParam ? parseInt(maxScoreParam) : undefined;
 
+  const sortParam = (params?.sort as string) || "total";
+  const sortBy: "total" | "dream" | "ats" =
+    sortParam === "dream" || sortParam === "ats" ? sortParam : "total";
+
   // Fetch top scored jobs, total count, and tab counts in parallel
   const [topJobs, totalCount, tabCounts] = await Promise.all([
     getTopScoredJobs(
@@ -46,6 +50,7 @@ export default async function TopMatchesPage({
       maxScore,
       interestFilter,
       searchQuery,
+      sortBy,
     ),
     getTopScoredJobsCount(
       providerFilter,
@@ -74,6 +79,7 @@ export default async function TopMatchesPage({
           jobs={topJobs}
           currentPage={currentPage}
           totalPages={totalPages}
+          currentSort={sortBy}
           title="Top Match Listings"
           emptyTitle="No matches found"
           emptyMessage="No top matching jobs found for this filter. Try lowering your minimum score filter or scoring more pending jobs."

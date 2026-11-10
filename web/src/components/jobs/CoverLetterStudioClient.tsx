@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Sparkles,
@@ -59,6 +59,23 @@ export default function CoverLetterStudioClient({
   initialCoverLetter,
 }: CoverLetterStudioClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const source = searchParams.get("source");
+  const backHref = source || `/jobs/${job.job_id}`;
+  const backLabel = useMemo(() => {
+    if (!source) return "Back to Job";
+    if (source.includes("/applied")) return "Back to Applications";
+    if (
+      source.includes("/jobs/new") ||
+      source.includes("/jobs/top-matches") ||
+      source.includes("/jobs/tailored")
+    ) {
+      return "Back to Jobs";
+    }
+    if (source.startsWith("/jobs/")) return "Back to Job Details";
+    return "Back";
+  }, [source]);
+
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(
     initialCoverLetter
   );
@@ -233,11 +250,11 @@ export default function CoverLetterStudioClient({
           {/* Left: Back Link & Context */}
           <div className="flex items-center space-x-3">
             <Link
-              href={`/jobs/${job.job_id}`}
+              href={backHref}
               className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="mr-1.5 h-4 w-4" />
-              <span className="hidden sm:inline">Back to Job</span>
+              <span className="hidden sm:inline">{backLabel}</span>
             </Link>
             <div className="h-4 w-px bg-gray-200" />
             <div>

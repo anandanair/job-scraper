@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -17,9 +17,17 @@ import {
   RefreshCw,
   ArrowLeft,
   Mail,
+  Send,
+  Award,
+  Banknote,
+  CheckCircle2,
+  AlertTriangle,
+  Flame,
 } from "lucide-react";
 import MarkdownRenderer from "./MarkdownRenderer";
 import Toast, { ToastData } from "./applied/Toast";
+import { OutreachDrawer } from "./OutreachDrawer";
+import { InterviewPrepModal } from "./InterviewPrepModal";
 import { Job } from "@/types";
 
 interface JobDetailsClientProps {
@@ -34,9 +42,35 @@ export default function JobDetailsClient({
   const [isUpdatingInterest, setIsUpdatingInterest] = useState(false);
   const [isGeneratingResume, setIsGeneratingResume] = useState(false);
   const [isRescoring, setIsRescoring] = useState(false);
+  const [isOutreachOpen, setIsOutreachOpen] = useState(false);
+  const [isInterviewPrepOpen, setIsInterviewPrepOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const source = searchParams.get("source");
+
+  const handleBack = () => {
+    if (source) {
+      router.push(source);
+    } else if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/jobs/top-matches");
+    }
+  };
+
+  const backLabel = useMemo(() => {
+    if (!source) return "Back";
+    if (source.includes("/applied")) return "Back to Applications";
+    if (
+      source.includes("/jobs/new") ||
+      source.includes("/jobs/top-matches") ||
+      source.includes("/jobs/tailored")
+    ) {
+      return "Back to Jobs";
+    }
+    return "Back";
+  }, [source]);
 
   const hasCustomResume = Boolean(
     job.customized_resume_id ||
@@ -58,7 +92,10 @@ export default function JobDetailsClient({
     resume_id: string | null | undefined
   ) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set("source", window.location.pathname);
+    const sourceParam = searchParams.get("source");
+    if (!sourceParam) {
+      params.set("source", `/jobs/${job_id}`);
+    }
     router.push(`/jobs/${job_id}/resumes/${resume_id}?${params.toString()}`);
   };
 
@@ -267,11 +304,11 @@ export default function JobDetailsClient({
       {/* Back navigation */}
       <div className="px-6 pt-4">
         <button
-          onClick={() => router.back()}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          onClick={handleBack}
+          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 cursor-pointer"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {backLabel}
         </button>
       </div>
 
@@ -296,7 +333,7 @@ export default function JobDetailsClient({
                 </span>
               )}
             </div>
-            <div className="mt-3 flex flex-col sm:flex-row sm:items-center text-gray-600 space-y-2 sm:space-y-0 sm:space-x-6">
+            <div className="mt-3 flex flex-wrap items-center text-gray-600 gap-y-2 gap-x-6">
               <div className="flex items-center">
                 <BuildingIcon className="h-5 w-5 mr-2 text-gray-500" />
                 <span>{job.company}</span>
@@ -305,56 +342,114 @@ export default function JobDetailsClient({
                 <MapPinIcon className="h-5 w-5 mr-2 text-gray-500" />
                 <span>{job.location}</span>
               </div>
+              {job.workplace_type && (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold uppercase tracking-wider ${
+                  job.workplace_type === "remote"
+                    ? "bg-purple-100 text-purple-800 border border-purple-200"
+                    : job.workplace_type === "hybrid"
+                      ? "bg-blue-100 text-blue-800 border border-blue-200"
+                      : "bg-gray-100 text-gray-800 border border-gray-200"
+                }`}>
+                  {job.workplace_type === "remote" ? "🌐 100% Remote" : job.workplace_type === "hybrid" ? "🏢 Hybrid" : "📍 On-Site"}
+                </span>
+              )}
+              {(job.salary_min || job.salary_max) && (
+                <div className="flex items-center text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200 text-xs">
+                  <Banknote className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                  <span>
+                    {job.salary_currency || "USD"}{" "}
+                    {job.salary_min ? job.salary_min.toLocaleString() : ""}
+                    {job.salary_min && job.salary_max ? " - " : ""}
+                    {job.salary_max ? job.salary_max.toLocaleString() : ""}{" "}
+                    / {job.salary_period || "mo"}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center">
                 <SocialLink className="h-5 w-5 mr-2 text-gray-500" />
                 <span className="capitalize">
                   {job.provider === "careers_future"
                     ? "MyCareersFuture"
-                    : "LinkedIn"}
+                    : job.provider === "remote_ok"
+                      ? "RemoteOK"
+                      : job.provider}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Prominent Score & Stage Display */}
-          <div className="flex-shrink-0 mt-4 sm:mt-0 flex items-center space-x-3">
+          {/* Prominent Multi-Score Display */}
+          <div className="flex-shrink-0 mt-4 sm:mt-0 flex flex-wrap items-center gap-3">
+            {/* Overall Composite Score */}
             {job.resume_score !== undefined && job.resume_score !== null ? (
-              <div className="flex items-center space-x-3 bg-white px-4 py-3 rounded-xl border border-gray-200 shadow-sm">
+              <div className="flex items-center space-x-3 bg-white px-3.5 py-2.5 rounded-xl border border-emerald-300 shadow-xs bg-gradient-to-r from-emerald-50/50 to-teal-50/40">
+                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-baseline space-x-1">
+                    <span className="text-xl font-bold text-emerald-950">
+                      {job.total_score ?? job.resume_score}
+                    </span>
+                    <span className="text-xs font-semibold text-emerald-600">%</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-emerald-800">
+                    Overall Match
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* ATS Score */}
+            {job.resume_score !== undefined && job.resume_score !== null ? (
+              <div className="flex items-center space-x-3 bg-white px-3.5 py-2.5 rounded-xl border border-gray-200 shadow-xs">
                 <div
-                  className={`p-2.5 rounded-lg ${
+                  className={`p-2 rounded-lg ${
                     job.resume_score_stage === "custom"
                       ? "bg-emerald-50 text-emerald-600"
                       : "bg-indigo-50 text-indigo-600"
                   }`}
                 >
-                  <BarChart3Icon className="h-6 w-6" />
+                  <BarChart3Icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="flex items-baseline space-x-1.5">
-                    <span className="text-2xl font-bold text-gray-900">
+                  <div className="flex items-baseline space-x-1">
+                    <span className="text-xl font-bold text-gray-900">
                       {job.resume_score}
                     </span>
-                    <span className="text-sm font-medium text-gray-400">/100</span>
+                    <span className="text-xs font-medium text-gray-400">/100</span>
                   </div>
-                  <div className="mt-1">
-                    {job.resume_score_stage === "custom" ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                        ✨ Tailored Resume Score
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                        📄 Base Resume Score
-                      </span>
-                    )}
+                  <div className="text-[11px] font-semibold text-gray-500">
+                    {job.resume_score_stage === "custom" ? "Tailored Score" : "ATS Fit Score"}
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="flex items-center space-x-2 bg-gray-50 px-4 py-3 rounded-xl border border-gray-200">
-                <BarChart3Icon className="h-6 w-6 text-gray-400" />
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Not Scored</span>
+            ) : null}
+
+            {/* Dream Score */}
+            {job.dream_score !== undefined && job.dream_score !== null ? (
+              <div className="flex items-center space-x-3 bg-white px-3.5 py-2.5 rounded-xl border border-amber-200 shadow-xs bg-gradient-to-r from-amber-50/40 to-orange-50/30">
+                <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
+                  <Flame className="h-5 w-5" />
                 </div>
+                <div>
+                  <div className="flex items-baseline space-x-1">
+                    <span className="text-xl font-bold text-amber-900">
+                      {job.dream_score}
+                    </span>
+                    <span className="text-xs font-medium text-amber-500">/100</span>
+                  </div>
+                  <div className="text-[11px] font-semibold text-amber-700">
+                    Dream Match
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {job.resume_score === null && job.dream_score === null && (
+              <div className="flex items-center space-x-2 bg-gray-50 px-4 py-3 rounded-xl border border-gray-200">
+                <BarChart3Icon className="h-5 w-5 text-gray-400" />
+                <span className="text-xs font-medium text-gray-500">Not Scored</span>
               </div>
             )}
           </div>
@@ -413,7 +508,9 @@ export default function JobDetailsClient({
 
           {/* Custom Cover Letter (On-Demand) */}
           <Link
-            href={`/jobs/${job.job_id}/cover-letter`}
+            href={`/jobs/${job.job_id}/cover-letter?source=${encodeURIComponent(
+              source || `/jobs/${job.job_id}`
+            )}`}
             className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
               hasCoverLetter
                 ? "bg-purple-100 text-purple-800 hover:bg-purple-200 border border-purple-300 focus:ring-purple-500"
@@ -433,6 +530,26 @@ export default function JobDetailsClient({
               </>
             )}
           </Link>
+
+          {/* Outreach Copilot (On-Demand Networking) */}
+          <button
+            onClick={() => setIsOutreachOpen(true)}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors shadow-xs"
+            title="Generate personalized LinkedIn connection note or cold inmail"
+          >
+            <Send size={16} className="mr-2" />
+            Outreach Note
+          </button>
+
+          {/* Interview Prep Copilot (On-Demand Preparation) */}
+          <button
+            onClick={() => setIsInterviewPrepOpen(true)}
+            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 transition-colors shadow-xs"
+            title="Generate role-specific technical questions and STAR answers"
+          >
+            <Award size={16} className="mr-2" />
+            Interview Prep
+          </button>
 
           {/* Rescore with Custom Resume: ONLY rendered if custom resume exists AND score stage is still initial */}
           {canRescore && (
@@ -510,6 +627,88 @@ export default function JobDetailsClient({
         </div>
       </div>
 
+      {/* AI Match Analysis & Skill Gap Drawer */}
+      {job.score_breakdown && (
+        <div className="bg-gradient-to-r from-gray-50 to-indigo-50/20 border-b border-gray-200 p-6 space-y-4">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="h-5 w-5 text-indigo-600" />
+            <h3 className="text-base font-bold text-gray-900">AI Match Analysis & Skill Insights</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Matched Skills */}
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                Matched Core Skills ({job.score_breakdown.matched_skills?.length || 0})
+              </span>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {(job.score_breakdown.matched_skills || []).length > 0 ? (
+                  job.score_breakdown.matched_skills.map((skill, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    >
+                      {skill}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-gray-500">No direct skill keywords extracted</span>
+                )}
+              </div>
+            </div>
+
+            {/* Skill Gaps */}
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                Missing / Skill Gaps ({job.score_breakdown.skill_gaps?.length || 0})
+              </span>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {(job.score_breakdown.skill_gaps || []).length > 0 ? (
+                  job.score_breakdown.skill_gaps.map((skill, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 text-amber-800 border border-amber-200"
+                    >
+                      {skill}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-emerald-600 font-medium">No major missing skills identified!</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Red flags warning if any */}
+          {job.score_breakdown.red_flags && job.score_breakdown.red_flags.length > 0 && (
+            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 flex items-start space-x-2.5">
+              <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block mb-1">Detected Job Red Flags:</span>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {job.score_breakdown.red_flags.map((rf, idx) => (
+                    <li key={idx}>{rf}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Actionable Advice */}
+          {job.score_breakdown.actionable_advice && (
+            <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-100 text-xs text-indigo-900 leading-relaxed flex items-start space-x-2.5">
+              <Sparkles className="h-4 w-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Career Coach Recommendation: </span>
+                <span>{job.score_breakdown.actionable_advice}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main content */}
       <div className="p-6">
         <h2 className="text-xl font-bold text-gray-900 mb-4">
@@ -519,6 +718,19 @@ export default function JobDetailsClient({
           <MarkdownRenderer content={job.description} />
         </div>
       </div>
+
+      {/* Modals & Drawers */}
+      <OutreachDrawer
+        job={job}
+        isOpen={isOutreachOpen}
+        onClose={() => setIsOutreachOpen(false)}
+      />
+
+      <InterviewPrepModal
+        job={job}
+        isOpen={isInterviewPrepOpen}
+        onClose={() => setIsInterviewPrepOpen(false)}
+      />
 
       {/* Toast notifications */}
       <Toast toast={toast} onDismiss={() => setToast(null)} />

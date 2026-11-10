@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Zap, Star, Sparkles } from "lucide-react";
+import { Zap, Star, Sparkles, Plus } from "lucide-react";
 import SearchComponent from "./SearchComponent";
 import FilterButton from "./FilterButton";
 import RefreshButton from "./RefreshButton";
+import { JobImportModal } from "./JobImportModal";
 import { JobsTabCounts } from "@/lib/supabase/queries";
 
 export type JobsTabKey = "new" | "top-matches" | "tailored";
@@ -26,6 +28,7 @@ export default function JobsNavigationHeader({
   subtitle,
 }: JobsNavigationHeaderProps) {
   const searchParams = useSearchParams();
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Helper to preserve filters and search query when switching tabs
   const getTabHref = (basePath: string) => {
@@ -75,11 +78,23 @@ export default function JobsNavigationHeader({
         </div>
 
         <div className="flex items-center space-x-3 flex-wrap">
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors"
+          >
+            <Plus size={16} />
+            Import Job
+          </button>
           <SearchComponent />
           <FilterButton />
           <RefreshButton currentPage={currentPage} />
         </div>
       </div>
+
+      <JobImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+      />
 
       {/* Segmented Tab Control */}
       <div className="flex border-b border-gray-200">
