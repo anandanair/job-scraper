@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   Loader2,
   DollarSign,
-  Briefcase,
   Laptop,
   Plus,
   X,
@@ -88,24 +87,8 @@ export function Step4SearchStrategy({
   });
 
   // Tag inputs for Dream Hunter mode
-  const [titleInput, setTitleInput] = useState("");
   const [techLoveInput, setTechLoveInput] = useState("");
   const [techHateInput, setTechHateInput] = useState("");
-
-  const handleAddTitle = () => {
-    const trimmed = titleInput.trim();
-    if (trimmed && !profile.target_titles.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
-      setProfile((p) => ({ ...p, target_titles: [...p.target_titles, trimmed] }));
-      setTitleInput("");
-    }
-  };
-
-  const handleRemoveTitle = (title: string) => {
-    setProfile((p) => ({
-      ...p,
-      target_titles: p.target_titles.filter((t) => t !== title),
-    }));
-  };
 
   const handleAddLoveTech = () => {
     const trimmed = techLoveInput.trim();
@@ -370,55 +353,6 @@ export function Step4SearchStrategy({
             <p className="text-xs text-gray-500 mt-0.5">
               Set your target preferences below. All fields are optional and can be refined later in Settings.
             </p>
-          </div>
-
-          {/* Desired Titles */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-              <Briefcase className="w-3.5 h-3.5 text-gray-500" />
-              Target Role Titles
-            </label>
-            <div className="flex gap-2 max-w-md">
-              <input
-                type="text"
-                value={titleInput}
-                onChange={(e) => setTitleInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddTitle();
-                  }
-                }}
-                placeholder="e.g. Senior AI Engineer, Tech Lead"
-                className="flex-1 px-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleAddTitle}
-                className="px-3.5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition"
-              >
-                Add
-              </button>
-            </div>
-            {profile.target_titles.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {profile.target_titles.map((title) => (
-                  <span
-                    key={title}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-medium"
-                  >
-                    {title}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTitle(title)}
-                      className="hover:text-indigo-950"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Workplace Preference */}

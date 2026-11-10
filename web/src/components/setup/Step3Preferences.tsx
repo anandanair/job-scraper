@@ -12,6 +12,8 @@ import {
   Plus,
   X,
   Check,
+  Globe,
+  Building,
 } from "lucide-react";
 import { PRESET_GEO_LOCATIONS, GeoLocationItem } from "@/lib/setup/geoLocations";
 import { LocationCombobox } from "./LocationCombobox";
@@ -67,6 +69,12 @@ export function Step3Preferences({
   const [includeCareersFuture, setIncludeCareersFuture] = useState(
     initialSettings?.scraping_sources?.includes("careers_future") ?? true
   );
+  const [includeRemoteOk, setIncludeRemoteOk] = useState(
+    initialSettings?.scraping_sources?.includes("remote_ok") ?? false
+  );
+  const [includeAts, setIncludeAts] = useState(
+    initialSettings?.scraping_sources?.includes("ats") ?? false
+  );
 
   // --- 4. Employment Types & Workplace Models ---
   const [selectedJobTypes, setSelectedJobTypes] = useState<string[]>(() => {
@@ -118,6 +126,8 @@ export function Step3Preferences({
       }
       if (initialSettings.scraping_sources) {
         setIncludeCareersFuture(initialSettings.scraping_sources.includes("careers_future"));
+        setIncludeRemoteOk(initialSettings.scraping_sources.includes("remote_ok"));
+        setIncludeAts(initialSettings.scraping_sources.includes("ats"));
       }
     }
   }, [initialSettings]);
@@ -320,6 +330,12 @@ export function Step3Preferences({
     if (includeCareersFuture && isSingaporeActive) {
       scrapingSources.push("careers_future");
     }
+    if (includeRemoteOk) {
+      scrapingSources.push("remote_ok");
+    }
+    if (includeAts) {
+      scrapingSources.push("ats");
+    }
 
     try {
       await onNext({
@@ -455,7 +471,7 @@ export function Step3Preferences({
           Job Boards
         </label>
 
-        <div className={`grid gap-3 ${isSingaporeActive ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}>
+        <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
           {/* LinkedIn (Always Active) */}
           <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/40 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -496,6 +512,52 @@ export function Step3Preferences({
               </label>
             </div>
           )}
+
+          {/* RemoteOK */}
+          <div className="p-3.5 rounded-xl border border-sky-200 bg-sky-50/30 flex items-center justify-between transition animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold text-xs">
+                <Globe className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900">RemoteOK</p>
+                <p className="text-[11px] text-slate-500">100% remote worldwide tech feeds</p>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeRemoteOk}
+                onChange={(e) => setIncludeRemoteOk(e.target.checked)}
+                className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500"
+              />
+              <span className="text-xs font-semibold text-slate-700">Include</span>
+            </label>
+          </div>
+
+          {/* Direct ATS Boards */}
+          <div className="p-3.5 rounded-xl border border-purple-200 bg-purple-50/30 flex items-center justify-between transition animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs">
+                <Building className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900">Direct ATS Boards</p>
+                <p className="text-[11px] text-slate-500">Greenhouse, Lever, Ashby targets</p>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeAts}
+                onChange={(e) => setIncludeAts(e.target.checked)}
+                className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500"
+              />
+              <span className="text-xs font-semibold text-slate-700">Include</span>
+            </label>
+          </div>
         </div>
       </div>
 

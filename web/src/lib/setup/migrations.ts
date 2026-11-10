@@ -381,6 +381,42 @@ WHERE "job_search_mode" IS NULL;
 -- 3. Record this migration as applied
 INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261110_02_job_search_mode_and_strategy') ON CONFLICT DO NOTHING;`,
   },
+  {
+    id: "20261110_03_company_profiles_and_grounded_scoring",
+    title: "Company Profiles & Grounded Scoring",
+    description:
+      "Creates the company_profiles table for caching real-time company intelligence, public review sentiments, and official overviews to ground AI Dream Job evaluations.",
+    sql: `-- 1. Create company_profiles table
+CREATE TABLE IF NOT EXISTS "public"."company_profiles" (
+    "company_name" text NOT NULL PRIMARY KEY,
+    "domain" text,
+    "industry" text,
+    "size_band" text,
+    "headquarters" text,
+    "glassdoor_rating" numeric(3, 1),
+    "glassdoor_reviews_count" integer,
+    "culture_summary" text,
+    "source_snippets" jsonb DEFAULT '[]'::jsonb,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- 2. Indexes and security
+CREATE INDEX IF NOT EXISTS "idx_company_profiles_updated_at" ON "public"."company_profiles" ("updated_at" DESC);
+ALTER TABLE "public"."company_profiles" ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE "public"."company_profiles" TO "anon", "authenticated", "service_role";
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'company_profiles' AND policyname = 'Allow public all access on company_profiles'
+    ) THEN
+        CREATE POLICY "Allow public all access on company_profiles" ON "public"."company_profiles" FOR ALL USING (true);
+    END IF;
+END $$;
+
+-- 3. Record migration
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261110_03_company_profiles_and_grounded_scoring') ON CONFLICT DO NOTHING;`,
+  },
 ];
 
 /**

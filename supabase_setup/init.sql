@@ -1024,6 +1024,35 @@ CREATE INDEX IF NOT EXISTS "idx_jobs_salary_min" ON "public"."jobs" ("salary_min
 ALTER TABLE "public"."job_interview_prep" ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE "public"."job_interview_prep" TO "anon", "authenticated", "service_role";
 
+-- ============================================================================
+-- COMPANY PROFILES (Cached real-time company intelligence & employee sentiment)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "public"."company_profiles" (
+    "company_name" text NOT NULL PRIMARY KEY,
+    "domain" text,
+    "industry" text,
+    "size_band" text,
+    "headquarters" text,
+    "glassdoor_rating" numeric(3, 1),
+    "glassdoor_reviews_count" integer,
+    "culture_summary" text,
+    "source_snippets" jsonb DEFAULT '[]'::jsonb,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "idx_company_profiles_updated_at" ON "public"."company_profiles" ("updated_at" DESC);
+ALTER TABLE "public"."company_profiles" ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE "public"."company_profiles" TO "anon", "authenticated", "service_role";
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'company_profiles' AND policyname = 'Allow public all access on company_profiles'
+    ) THEN
+        CREATE POLICY "Allow public all access on company_profiles" ON "public"."company_profiles" FOR ALL USING (true);
+    END IF;
+END $$;
+
+
 
 
 

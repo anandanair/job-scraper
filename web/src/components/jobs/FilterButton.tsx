@@ -15,6 +15,7 @@ const PROVIDER_OPTIONS: FilterOption[] = [
   { value: "careers_future", label: "Careers Future" },
   { value: "greenhouse", label: "Greenhouse" },
   { value: "lever", label: "Lever" },
+  { value: "ashby", label: "Ashby" },
   { value: "remote_ok", label: "RemoteOK" },
   { value: "imported", label: "Imported / Manual" },
 ];

@@ -142,10 +142,10 @@ graph TD
 5. **`app_settings`**:
    - Single-row table storing global application preferences:
      - AI provider (`gemini`, `fireworks`, `openai`, `anthropic`, `groq`), model name, API key, RPM rate limits, daily budget.
-     - Search preferences: LinkedIn queries, GeoID, job type, date posted, CareersFuture queries, categories, active platforms (`linkedin`, `careers_future`, `ats_boards`, `remote_ok`).
+     - Search preferences: LinkedIn queries, GeoID, job type, date posted, CareersFuture queries, categories, active platforms (`linkedin`, `careers_future`, `ats`, `remote_ok`). Direct ATS target companies are configured under Job Search Settings.
       - Search strategy mode (migration `20261110_02_job_search_mode_and_strategy`): `job_search_mode` (text, default 'get_hired_fast'). Supports 'get_hired_fast' (pure ATS qualification, dream checklist dormant, zero gating penalty) and 'dream_hunter' (dual ATS + dream checklist evaluation, strict gating).
      - Multi-country preferences (migration `20261109_01_dream_job_enhancements`): `search_locations` (JSONB array of `{label, country, query, active}`).
-     - Dream Job Checklist (migration `20261109_01_dream_job_enhancements`): `dream_job_profile` (JSONB: desired titles, min salary, preferred work modes, company tiers/target companies, must-have skills, dealbreakers).
+     - Dream Job Checklist (migration `20261109_01_dream_job_enhancements`): `dream_job_profile` (JSONB: min salary, preferred work modes, must-have skills, dealbreakers, culture priorities; desired titles removed in favor of stack/seniority; target_ats_companies decoupled from scoring and managed under Job Search Settings).
      - Scheduling (migration `20261102_01_schedule_timezone_and_timing`): `schedule_timezone` (text, default `'Asia/Singapore'`), `schedule_hour` (int, default `19`), `schedule_minute` (int, default `0`), `last_scraped_at` (timestamptz).
      - Onboarding status: `setup_step`, `setup_completed`.
 6. **`linkedin_geo_locations`**:
@@ -167,6 +167,10 @@ graph TD
 10. **`job_interview_prep`** (migration `20261109_01_dream_job_enhancements`):
    - On-demand AI interview preparation guides. Links 1:1 to `jobs.job_id` with cascade delete.
    - Fields: `id` (uuid), `job_id` (text unique fk), `guide` (JSONB: company_overview, 30_second_pitch, technical_questions with key focus, behavioral_star_answers with STAR breakdown, smart_questions_to_ask), `created_at`, `updated_at`.
+
+11. **`company_profiles`** (migration `20261110_03_company_profiles_and_grounded_scoring`):
+   - Zero-cost public company intelligence and employee sentiment cache. Caches Glassdoor star ratings, review counts, culture summaries, and raw source snippets with 30-day TTL to ground Dream Job evaluations.
+   - Fields: `company_name` (text PK, normalized lowercase), `domain` (text), `industry` (text), `size_band` (text), `headquarters` (text), `glassdoor_rating` (numeric 3,1), `glassdoor_reviews_count` (int), `culture_summary` (text), `source_snippets` (JSONB array of `{title, snippet, link}`), `created_at`, `updated_at`.
 
 ### Storage Architecture (On-Demand Streaming)
 - **Supabase Storage Buckets (`resumes`, `personalized_resumes`)**: Fully deprecated.
@@ -211,9 +215,19 @@ graph TD
 - **Dual-Mode AI Job Evaluation (`evaluateJobFit`)**:
   - Respects user's active `app_settings.job_search_mode`:
     - **Get Hired Fast** (default): Focuses 100% on qualification and ATS fit (`resume_score`), completely omitting dream checklist from prompt to reduce token consumption and latency. `dream_score` is stored as `null`, and `total_score = resume_score`. Automated tailoring requires only `resume_score >= 60`.
-    - **Dream Hunter**: Computes both `resume_score` and `dream_score` against dream checklist criteria (titles, salary floor, remote/hybrid, tech stack, dealbreakers). `total_score = round(resume_score*0.5 + dream_score*0.5)`, and automated tailoring gates on `dream_score >= 60`.
-  - Computes two distinct scores simultaneously: `resume_score` (0-100 ATS qualification fit against base resume) and `dream_score` (0-100 alignment against user's Dream Job Checklist: titles, minimum salary, work modes, target companies/tiers, dealbreakers).
-  - Produces structured `score_breakdown` with `must_haves` (met/missing), `nice_to_haves`, `dealbreakers_triggered`, and `red_flags` (e.g. unrealistic responsibilities, churn signals).
+    - **Dream Hunter**: Computes both `resume_score` (0-100 ATS fit) and `dream_score` (0-100 grounded alignment). `total_score = round(resume_score*0.5 + dream_score*0.5)`, and automated tailoring gates on `dream_score >= 60`.
+  - **Grounded Company Intelligence & Zero-Cost Intel Pipeline (`web/src/lib/company-intel.ts`)**:
+    - Queries public DuckDuckGo search indexes (`"{company}" "{location}" working culture reviews glassdoor`) to extract real employee review sentiment, Glassdoor star ratings, review counts, and source URLs with zero paid APIs or bot blockers.
+    - Caches intelligence in Supabase `company_profiles` table with 30-day TTL (`is_cached: true`). On-demand testing rescore button (`/api/jobs/[job_id]/rescore`) passes `forceLive: true` to bypass cache and query fresh web intelligence immediately.
+    - **Transparent 4-Part Rubric for Dream Score**:
+      1. `dream_craft_score` (0-35 pts): Favorite tech stack matches vs dealbreakers avoided.
+      2. `dream_workplace_score` (0-25 pts): Remote, Hybrid, or Onsite preference match.
+      3. `dream_seniority_score` (0-20 pts): Seniority tier and career trajectory fit.
+      4. `dream_culture_score` (0-20 pts): Grounded in public Glassdoor ratings and employee reviews. Unmentioned perks default to Neutral (14/20 pts) to eliminate arbitrary score capping.
+  - **Complete Transparency & Inspection UI (`CompanyIntelModal.tsx`)**:
+    - Accessible via "Rescore with Intel" and "Company Intel & Reasoning" buttons on Job Details and Top Matches list.
+    - Surfaces live vs cached status, Glassdoor star rating and review count, synthesized culture summary, clickable verifiable source URLs, sub-score bars, matched skills, missing skills, red flags, and career advice.
+  - Produces structured `score_breakdown` containing sub-scores and `company_intel` transparency block.
 - **On-Demand Recruiter Outreach Copilot (`generateOutreachNotesWithLLM`)**:
   - Generates 3 tailored networking assets on-demand: (1) LinkedIn Connection Note (<300 chars, concise, hook-driven), (2) InMail / Cold Email (structured pain-point pitch), and (3) Mutual Connection Referral Request.
   - User chooses tone (`direct_impactful`, `friendly_warm`, `executive`), recipient name, and custom context before triggering generation.

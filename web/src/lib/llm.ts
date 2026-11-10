@@ -9,6 +9,7 @@ import {
   JobInterviewPrep,
   TechnicalQuestionItem,
   BehavioralStarAnswer,
+  CompanyProfile,
 } from "@/types";
 
 export interface JobEvaluationResult {
@@ -483,25 +484,45 @@ export async function evaluateJobFit(
     description: string;
   },
   dreamProfile?: DreamJobProfile | null,
-  searchMode: JobSearchMode = "get_hired_fast"
+  searchMode: JobSearchMode = "get_hired_fast",
+  companyIntel?: CompanyProfile | null
 ): Promise<JobEvaluationResult | null> {
   const isDreamMode = searchMode === "dream_hunter" && !!dreamProfile;
 
   let prompt = "";
   if (isDreamMode) {
     const dreamProfileText = `
-- Target Titles: ${(dreamProfile.target_titles || []).join(", ") || "Any"}
 - Target Seniorities: ${(dreamProfile.target_seniorities || []).join(", ") || "Any"}
 - Workplace Preference: ${(dreamProfile.workplace_models || []).join(", ") || "Any"}
 - Favorite Tech Stack: ${(dreamProfile.favorite_tech_stack || []).join(", ") || "None"}
 - Dealbreaker Technologies: ${(dreamProfile.dealbreaker_tech_stack || []).join(", ") || "None"}
 - Culture & Perks Priorities: ${(dreamProfile.culture_priorities || []).map((id) => CULTURE_BENEFIT_LABELS[id] || id).join("; ") || "None specified"}
 - Target Salary Floor: ${dreamProfile.salary_floor_min ? `${dreamProfile.salary_floor_currency || "SGD"} ${dreamProfile.salary_floor_min} per ${dreamProfile.salary_floor_period || "month"}` : "Not specified"}
-- Target Companies / Slugs: ${(dreamProfile.target_ats_companies || []).join(", ") || "Any"}
 `;
 
+    let companyIntelBlock = "";
+    if (companyIntel) {
+      const parts: string[] = [];
+      if (companyIntel.glassdoor_rating) {
+        parts.push(`- Public / Glassdoor Rating: ${companyIntel.glassdoor_rating}/5.0 ${companyIntel.glassdoor_reviews_count ? `(based on ${companyIntel.glassdoor_reviews_count.toLocaleString()} employee reviews)` : ""}`);
+      }
+      if (companyIntel.culture_summary) {
+        parts.push(`- Employee Reviews & Workplace Sentiment: ${companyIntel.culture_summary}`);
+      }
+      if (companyIntel.source_snippets && companyIntel.source_snippets.length > 0) {
+        const snippetList = companyIntel.source_snippets
+          .slice(0, 4)
+          .map((s, idx) => `  [${idx + 1}] "${s.title}": ${s.snippet}`)
+          .join("\n");
+        parts.push(`- Verifiable Employee Excerpts:\n${snippetList}`);
+      }
+      if (parts.length > 0) {
+        companyIntelBlock = `\n--- VERIFIED COMPANY INTELLIGENCE & EMPLOYEE SENTIMENT ---\nCompany: ${companyIntel.company_name}\n${parts.join("\n")}\n--- END COMPANY INTELLIGENCE ---\n`;
+      }
+    }
+
     prompt = `You are an expert technical recruiter, executive talent advisor, and ATS evaluation engine.
-Evaluate the candidate's resume and dream job criteria against the target job description.
+Evaluate the candidate's resume and dream job criteria against the target job description and real-world company intelligence.
 
 --- RESUME ---
 ${resumeText}
@@ -514,24 +535,48 @@ Level: ${jobDetails.level || "N/A"}
 
 ${jobDetails.description || "N/A"}
 --- END JOB DESCRIPTION ---
-
+${companyIntelBlock}
 --- CANDIDATE DREAM PREFERENCES ---
 ${dreamProfileText}
 --- END DREAM PREFERENCES ---
 
+EVALUATION RUBRIC FOR DREAM SCORE (0 to 100):
+1. dream_craft_score (0-35 points): Matches candidate's favorite tech stack (+points). If job uses candidate's dealbreaker tech stack, deduct heavily (down to 0 for this category).
+2. dream_workplace_score (0-25 points): Matches candidate's workplace model preference (Remote / Hybrid / Onsite). Full points if matched, partial if flexible.
+3. dream_seniority_score (0-20 points): Alignment with candidate's target seniority level and career progression.
+4. dream_culture_score (0-20 points): Grounded in public Glassdoor ratings, employee review sentiment, and workplace reality:
+   - High Glassdoor rating (>= 4.0) or verified positive reviews on WLB/culture: 16-20 points.
+   - Average rating (3.3 - 3.9) or mixed reviews: 11-15 points.
+   - Low rating (< 3.3) or reviews warning of heavy burnout / 24-7 on-call / high turnover / unpaid work: 0-6 points.
+   - Neutral default: If perks are not explicitly mentioned in the JD or company is a small private firm without reviews, score as Neutral (13-14/20 points). Do not penalize solely for unmentioned perks.
+
+CRITICAL COMPANY REPUTATION & CULTURE PENALTY RULE:
+A role at a company with toxic management, scam warnings, unpaid contractor tasks, or Glassdoor rating below 3.0 CANNOT be scored as an 80+ "Dream Job", even if the candidate's preferred tech stack is used.
+If company reviews or employee sentiment indicate severe red flags (e.g. low rating < 3.0, scam alerts, unpaid work, or high turnover):
+- dream_culture_score MUST be docked to 0-6 points.
+- dream_score MUST be capped at 50 max (apply a reputation penalty if raw sum exceeds 50) so it does not qualify as a top dream match or trigger automated resume tailoring.
+- culture_analysis MUST clearly detail the review findings, how culture was scored, and why the penalty/cap was applied.
+- If company culture is verified positive (>= 4.0 rating, good WLB), award 16-20 points and explain in culture_analysis.
+- If no company reviews exist or perks are unmentioned in JD, score as Neutral (13-14 points) and state that in culture_analysis.
+
 Return a single JSON object with this exact structure:
 {
   "resume_score": <integer 0-100: ATS alignment based on hard skills 40pts, experience 35pts, seniority 15pts, domain 10pts>,
-  "dream_score": <integer 0-100: alignment with candidate's target tech, culture values, seniority direction, and dealbreakers>,
+  "dream_score": <integer 0-100: sum of sub-scores, strictly capped at 50 if company intel has toxic/scam/low rating red flags>,
   "score_breakdown": {
     "hard_skills_score": <integer 0-40>,
     "experience_score": <integer 0-35>,
     "seniority_score": <integer 0-15>,
     "culture_fit_score": <integer 0-10>,
+    "dream_craft_score": <integer 0-35>,
+    "dream_workplace_score": <integer 0-25>,
+    "dream_seniority_score": <integer 0-20>,
+    "dream_culture_score": <integer 0-20>,
+    "culture_analysis": "<2-3 sentence transparent explanation: state what Glassdoor/Reddit/web reviews revealed, how culture was scored, and any reputation penalties or caps applied>",
     "matched_skills": [<array of specific technical or domain skills candidate HAS that this job explicitly requires>],
     "skill_gaps": [<array of tools, languages, or domain concepts the job asks for that are MISSING or weak in resume>],
     "key_strengths": [<1-3 short bullet points summarizing why the candidate is competitive>],
-    "red_flags": [<any detected job warnings such as "Unrealistic experience requirements", "24/7 on-call", "Vague compensation", or empty array if none>],
+    "red_flags": [<any detected job or company warnings such as low Glassdoor rating, unpaid work, high turnover, 24/7 on-call, or empty array if none>],
     "actionable_advice": "<1-2 sentence recommendation for the candidate on how to position themselves or address gaps>"
   }
 }
@@ -595,12 +640,29 @@ Output strictly valid JSON only.`;
       experience_score: typeof sb.experience_score === "number" ? sb.experience_score : undefined,
       seniority_score: typeof sb.seniority_score === "number" ? sb.seniority_score : undefined,
       culture_fit_score: typeof sb.culture_fit_score === "number" ? sb.culture_fit_score : undefined,
+      dream_craft_score: typeof sb.dream_craft_score === "number" ? sb.dream_craft_score : undefined,
+      dream_workplace_score: typeof sb.dream_workplace_score === "number" ? sb.dream_workplace_score : undefined,
+      dream_seniority_score: typeof sb.dream_seniority_score === "number" ? sb.dream_seniority_score : undefined,
+      dream_culture_score: typeof sb.dream_culture_score === "number" ? sb.dream_culture_score : undefined,
+      culture_analysis: typeof sb.culture_analysis === "string" ? sb.culture_analysis : undefined,
       matched_skills: Array.isArray(sb.matched_skills) ? sb.matched_skills.map(String) : [],
       skill_gaps: Array.isArray(sb.skill_gaps) ? sb.skill_gaps.map(String) : [],
       key_strengths: Array.isArray(sb.key_strengths) ? sb.key_strengths.map(String) : [],
       red_flags: Array.isArray(sb.red_flags) ? sb.red_flags.map(String) : [],
       actionable_advice: typeof sb.actionable_advice === "string" ? sb.actionable_advice : undefined,
     };
+
+    if (companyIntel) {
+      breakdown.company_intel = {
+        company_name: companyIntel.company_name,
+        glassdoor_rating: companyIntel.glassdoor_rating,
+        glassdoor_reviews_count: companyIntel.glassdoor_reviews_count,
+        summary: companyIntel.culture_summary,
+        source_snippets: companyIntel.source_snippets,
+        is_cached: companyIntel.is_cached,
+        retrieved_at: companyIntel.updated_at || new Date().toISOString(),
+      };
+    }
 
     return {
       resume_score: resumeScore,

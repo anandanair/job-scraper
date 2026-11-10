@@ -7,12 +7,13 @@ import {
   ShieldAlert,
   Heart,
   DollarSign,
-  Building,
   Plus,
   X,
   Check,
   CheckCircle2,
-  Briefcase,
+  Wand2,
+  Loader2,
+  AlertCircle,
   HeartPulse,
   Laptop,
   GraduationCap,
@@ -303,25 +304,117 @@ export function DreamJobSettings({ settings, onChange }: DreamJobSettingsProps) 
   };
 
   // Tag inputs
-  const [titleInput, setTitleInput] = useState("");
   const [techLoveInput, setTechLoveInput] = useState("");
   const [techHateInput, setTechHateInput] = useState("");
-  const [companySlugInput, setCompanySlugInput] = useState("");
 
-  const handleAddTitle = () => {
-    const trimmed = titleInput.trim();
-    const current = profile.target_titles || [];
-    if (trimmed && !current.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
-      updateProfile({ target_titles: [...current, trimmed] });
-      setTitleInput("");
+  // Auto-populate from Master Resume state
+  const [isPopulating, setIsPopulating] = useState(false);
+  const [populateStatus, setPopulateStatus] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  const handleAutoPopulateFromResume = async () => {
+    setIsPopulating(true);
+    setPopulateStatus(null);
+    try {
+      const res = await fetch("/api/base-resume");
+      if (!res.ok) {
+        throw new Error("Failed to load Master Resume from database.");
+      }
+      const resume = await res.json();
+      if (!resume || !resume.name || resume.name === "NA") {
+        throw new Error("No parsed Master Resume found. Please parse or upload a resume in Resume Studio first.");
+      }
+
+      // 1. Extract core tech skills (up to 15 top skills)
+      const rawSkills: string[] = Array.isArray(resume.skills) ? resume.skills : [];
+      const cleanedSkills = rawSkills
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 15);
+
+      // Merge with existing favorite tech stack without duplicates
+      const mergedTech = Array.from(new Set([...(profile.favorite_tech_stack || []), ...cleanedSkills]));
+
+      // 2. Infer seniority levels based on experience
+      const experiences = Array.isArray(resume.experience) ? resume.experience : [];
+      const detectedSeniorities = new Set<string>();
+
+      let hasLeadTitle = false;
+      let hasSeniorTitle = false;
+      let hasManagerTitle = false;
+
+      for (const exp of experiences) {
+        const titleLower = (exp.job_title || "").toLowerCase();
+        if (
+          titleLower.includes("lead") ||
+          titleLower.includes("principal") ||
+          titleLower.includes("staff") ||
+          titleLower.includes("architect")
+        ) {
+          hasLeadTitle = true;
+        }
+        if (
+          titleLower.includes("senior") ||
+          titleLower.includes("sr.") ||
+          titleLower.includes("sr ") ||
+          titleLower.includes("iii") ||
+          titleLower.includes("iv")
+        ) {
+          hasSeniorTitle = true;
+        }
+        if (
+          titleLower.includes("manager") ||
+          titleLower.includes("head") ||
+          titleLower.includes("director")
+        ) {
+          hasManagerTitle = true;
+        }
+      }
+
+      if (hasLeadTitle) {
+        detectedSeniorities.add("senior");
+        detectedSeniorities.add("lead");
+      } else if (hasSeniorTitle || experiences.length >= 3) {
+        detectedSeniorities.add("mid");
+        detectedSeniorities.add("senior");
+      } else if (experiences.length >= 1) {
+        detectedSeniorities.add("junior");
+        detectedSeniorities.add("mid");
+      } else {
+        detectedSeniorities.add("mid");
+        detectedSeniorities.add("senior");
+      }
+
+      if (hasManagerTitle) {
+        detectedSeniorities.add("manager");
+      }
+
+      const updatedSeniorities = Array.from(detectedSeniorities);
+
+      // Apply updates to profile
+      updateProfile({
+        favorite_tech_stack: mergedTech.length > 0 ? mergedTech : profile.favorite_tech_stack,
+        target_seniorities: updatedSeniorities.length > 0 ? updatedSeniorities : profile.target_seniorities,
+      });
+
+      setPopulateStatus({
+        type: "success",
+        message: `Auto-populated ${cleanedSkills.length} skills and seniority (${updatedSeniorities.join(", ")}) from "${resume.name}"'s Master Resume.`,
+      });
+
+      setTimeout(() => {
+        setPopulateStatus(null);
+      }, 7000);
+    } catch (err: any) {
+      setPopulateStatus({
+        type: "error",
+        message: err.message || "Failed to auto-populate from Master Resume.",
+      });
+    } finally {
+      setIsPopulating(false);
     }
-  };
-
-  const handleRemoveTitle = (title: string) => {
-    const current = profile.target_titles || [];
-    updateProfile({
-      target_titles: current.filter((t) => t !== title),
-    });
   };
 
   const handleAddLoveTech = () => {
@@ -353,22 +446,6 @@ export function DreamJobSettings({ settings, onChange }: DreamJobSettingsProps) 
     const current = profile.dealbreaker_tech_stack || [];
     updateProfile({
       dealbreaker_tech_stack: current.filter((t) => t !== tech),
-    });
-  };
-
-  const handleAddCompanySlug = () => {
-    const trimmed = companySlugInput.trim().toLowerCase();
-    const current = profile.target_ats_companies || [];
-    if (trimmed && !current.includes(trimmed)) {
-      updateProfile({ target_ats_companies: [...current, trimmed] });
-      setCompanySlugInput("");
-    }
-  };
-
-  const handleRemoveCompanySlug = (slug: string) => {
-    const current = profile.target_ats_companies || [];
-    updateProfile({
-      target_ats_companies: current.filter((s) => s !== slug),
     });
   };
 
@@ -507,78 +584,66 @@ export function DreamJobSettings({ settings, onChange }: DreamJobSettingsProps) 
       {/* Checklist section: displayed if in dream_hunter mode OR user explicitly clicks to view/edit saved checklist */}
       {(currentMode === "dream_hunter" || showDormantChecklist) && (
         <>
-          {/* Banner */}
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-6">
-            <div className="flex items-center space-x-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700">
+          {/* Banner with Auto-Populate Button */}
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
                 <Flame className="h-5 w-5" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900">
                   {currentMode === "get_hired_fast" ? "Saved Dream Job Checklist (Dormant)" : "Dream Job Checklist & Criteria"}
                 </h3>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-gray-600 mt-0.5">
                   {currentMode === "get_hired_fast"
                     ? "These criteria are currently preserved in your settings. They will be actively evaluated once you switch to Dream Hunter mode."
                     : "Set your target aspirations, salary floor, perks, and dealbreakers. JobTrack calculates a dedicated Dream Match (0-100) alongside your ATS Resume score."}
                 </p>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={handleAutoPopulateFromResume}
+              disabled={isPopulating}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-xs disabled:opacity-50 shrink-0 cursor-pointer"
+              title="Inspect your Master Resume and pre-populate your skills & seniority"
+            >
+              {isPopulating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Wand2 className="w-4 h-4" />
+              )}
+              <span>Auto-Populate from Resume</span>
+            </button>
           </div>
 
-      {/* Target Role Titles */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs space-y-3">
-        <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-          <Briefcase className="h-4 w-4 text-amber-600" />
-          Desired Job Titles
-        </h4>
-        <p className="text-xs text-gray-500">
-          Target role titles you are actively aiming for (e.g., <em>Senior AI Engineer</em>, <em>Fullstack Lead</em>, <em>Staff Platform Engineer</em>).
-        </p>
-        <div className="flex gap-2 max-w-md">
-          <input
-            type="text"
-            placeholder="Type a title & press Enter or Add"
-            value={titleInput}
-            onChange={(e) => setTitleInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleAddTitle();
-              }
-            }}
-            className="flex-1 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
-          <button
-            type="button"
-            onClick={handleAddTitle}
-            className="px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-semibold hover:bg-amber-700 transition-colors"
-          >
-            Add Title
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {(profile.target_titles || []).map((title) => (
-            <span
-              key={title}
-              className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-lg bg-amber-50 text-amber-900 border border-amber-200"
+          {/* Populate feedback alert */}
+          {populateStatus && (
+            <div
+              className={`p-4 rounded-xl border text-xs flex items-center justify-between gap-3 ${
+                populateStatus.type === "success"
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                  : "bg-rose-50 border-rose-200 text-rose-900"
+              }`}
             >
-              {title}
+              <div className="flex items-center gap-2">
+                {populateStatus.type === "success" ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                )}
+                <span>{populateStatus.message}</span>
+              </div>
               <button
                 type="button"
-                onClick={() => handleRemoveTitle(title)}
-                className="hover:text-amber-950 transition-colors"
-                title="Remove title"
+                onClick={() => setPopulateStatus(null)}
+                className="hover:opacity-75"
               >
-                <X size={12} />
+                <X size={14} />
               </button>
-            </span>
-          ))}
-          {(profile.target_titles || []).length === 0 && (
-            <span className="text-xs text-gray-400 italic">No specific target titles added yet (open to any matching roles).</span>
+            </div>
           )}
-        </div>
-      </div>
 
       {/* Seniority & Track */}
       <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs space-y-3">
@@ -825,59 +890,6 @@ export function DreamJobSettings({ settings, onChange }: DreamJobSettingsProps) 
               <span className="text-xs text-gray-400 italic">No dealbreaker technologies specified.</span>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Target Dream Companies (Greenhouse / Lever / Ashby) */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs space-y-3">
-        <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-          <Building className="h-4 w-4 text-indigo-600" />
-          Target Dream Companies (Automated Direct ATS Scraping)
-        </h4>
-        <p className="text-xs text-gray-500">
-          Enter company slugs hosted on Greenhouse, Lever, or Ashby (e.g. <code>grab</code>, <code>stripe</code>, <code>figma</code>, <code>carousell</code>, <code>airwallex</code>, <code>anthropic</code>). The daily scraper queries their public job boards directly with zero rate limits!
-        </p>
-        <div className="flex gap-2 max-w-md">
-          <input
-            type="text"
-            placeholder="e.g. grab, stripe, figma"
-            value={companySlugInput}
-            onChange={(e) => setCompanySlugInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleAddCompanySlug();
-              }
-            }}
-            className="flex-1 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <button
-            type="button"
-            onClick={handleAddCompanySlug}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition-colors"
-          >
-            Add Company
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {(profile.target_ats_companies || []).map((slug) => (
-            <span
-              key={slug}
-              className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 capitalize"
-            >
-              {slug}
-              <button
-                type="button"
-                onClick={() => handleRemoveCompanySlug(slug)}
-                className="hover:text-indigo-950 transition-colors"
-              >
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-          {(profile.target_ats_companies || []).length === 0 && (
-            <span className="text-xs text-gray-400 italic">No direct ATS target companies configured yet.</span>
-          )}
         </div>
       </div>
 

@@ -28,6 +28,7 @@ import MarkdownRenderer from "./MarkdownRenderer";
 import Toast, { ToastData } from "./applied/Toast";
 import { OutreachDrawer } from "./OutreachDrawer";
 import { InterviewPrepModal } from "./InterviewPrepModal";
+import { CompanyIntelModal } from "./CompanyIntelModal";
 import { Job } from "@/types";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -70,6 +71,7 @@ export default function TopMatchesList({
   const [isRescoring, setIsRescoring] = useState(false);
   const [isOutreachOpen, setIsOutreachOpen] = useState(false);
   const [isInterviewPrepOpen, setIsInterviewPrepOpen] = useState(false);
+  const [isCompanyIntelOpen, setIsCompanyIntelOpen] = useState(false);
 
   const hasCustomResume = Boolean(
     selectedJob?.customized_resume_id ||
@@ -142,11 +144,18 @@ export default function TopMatchesList({
           ? {
               ...prev,
               resume_score: data.resume_score,
+              dream_score: data.dream_score,
+              total_score: data.total_score,
+              score_breakdown: data.score_breakdown,
               resume_score_stage: data.resume_score_stage,
             }
           : null
       );
-      showToast(`Job rescored! New score: ${data.resume_score}/100 (${data.resume_score_stage})`, "success");
+      const scoreDetail = data.dream_score !== null
+        ? `Overall: ${data.total_score ?? data.resume_score}% (ATS: ${data.resume_score}, Dream: ${data.dream_score})`
+        : `ATS Score: ${data.resume_score}/100`;
+      showToast(`Job rescored with latest company intel! ${scoreDetail}`, "success");
+      setIsCompanyIntelOpen(true);
       router.refresh();
     } catch (err: any) {
       console.error("Error rescoring job:", err);
@@ -481,6 +490,14 @@ export default function TopMatchesList({
                                 {job.dream_score}%
                               </span>
                             )}
+                            {job.score_breakdown?.company_intel?.glassdoor_rating && (
+                              <span
+                                className="inline-flex items-center gap-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-1 py-0.2 rounded"
+                                title={`Glassdoor Rating: ${job.score_breakdown.company_intel.glassdoor_rating}/5.0`}
+                              >
+                                ★ {job.score_breakdown.company_intel.glassdoor_rating.toFixed(1)}
+                              </span>
+                            )}
                           </div>
                         </>
                       ) : (
@@ -634,9 +651,17 @@ export default function TopMatchesList({
                         <div className="mt-0.5 flex items-center gap-1.5 text-[10px]">
                           <span className="text-gray-500 font-medium">📄 ATS: {selectedJob.resume_score}%</span>
                           {selectedJob.dream_score !== undefined && selectedJob.dream_score !== null && (
-                            <span className="text-amber-800 font-bold bg-amber-50 border border-amber-200 px-1 py-0.2 rounded">
+                            <button
+                              type="button"
+                              onClick={() => setIsCompanyIntelOpen(true)}
+                              className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 px-1.5 py-0.5 rounded cursor-pointer transition-colors group"
+                              title="Click to view transparent Dream Match breakdown & company reviews"
+                            >
                               🔥 Dream: {selectedJob.dream_score}%
-                            </span>
+                              <span className="text-[9px] text-amber-600 font-normal underline underline-offset-1 group-hover:text-amber-900">
+                                Intel →
+                              </span>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -759,22 +784,41 @@ export default function TopMatchesList({
                   Interview Prep
                 </button>
 
-                {canRescore && (
+                {/* Company Intelligence & Live Rescore Companion Group */}
+                <div className="inline-flex items-center rounded-xl p-1 bg-slate-900 border border-slate-800 shadow-2xs">
+                  <button
+                    onClick={() => setIsCompanyIntelOpen(true)}
+                    className="inline-flex items-center px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800/90 hover:bg-slate-700/90 text-white transition-all shadow-xs cursor-pointer gap-2"
+                    title="Inspect Glassdoor ratings, employee review sentiment, and transparent Dream Score rubric"
+                  >
+                    <BuildingIcon size={15} className="text-indigo-400" />
+                    <span>Company Intel</span>
+                    {selectedJob.score_breakdown?.company_intel?.glassdoor_rating ? (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-bold border border-amber-400/30">
+                        ★ {selectedJob.score_breakdown.company_intel.glassdoor_rating.toFixed(1)}
+                      </span>
+                    ) : selectedJob.score_breakdown?.company_intel?.source_snippets?.length ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 text-[10px] font-semibold border border-emerald-400/30">
+                        Indexed
+                      </span>
+                    ) : null}
+                  </button>
+
+                  <div className="h-4 w-px bg-slate-700/80 mx-1" />
+
                   <button
                     onClick={handleRescore}
                     disabled={isRescoring}
-                    className="inline-flex items-center px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer"
-                    title="Rescore this job against your customized resume"
+                    className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-300 hover:text-amber-200 hover:bg-slate-800/80 transition-all disabled:opacity-50 cursor-pointer gap-1.5"
+                    title="Fetch fresh live employer reviews from the web and rescore this job immediately"
                   >
                     <RefreshCw
-                      size={16}
-                      className={`mr-2 ${isRescoring ? "animate-spin" : ""}`}
+                      size={14}
+                      className={`text-amber-400 ${isRescoring ? "animate-spin" : ""}`}
                     />
-                    {isRescoring
-                      ? "Rescoring with Custom Resume..."
-                      : "Rescore with Custom Resume"}
+                    <span>{isRescoring ? "Rescoring..." : "Live Rescore"}</span>
                   </button>
-                )}
+                </div>
 
                 {selectedJob.status !== "applied" ? (
                   <button
@@ -949,6 +993,13 @@ export default function TopMatchesList({
             job={selectedJob}
             isOpen={isInterviewPrepOpen}
             onClose={() => setIsInterviewPrepOpen(false)}
+          />
+          <CompanyIntelModal
+            job={selectedJob}
+            isOpen={isCompanyIntelOpen}
+            onClose={() => setIsCompanyIntelOpen(false)}
+            onRescore={handleRescore}
+            isRescoring={isRescoring}
           />
         </>
       )}

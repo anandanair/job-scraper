@@ -317,7 +317,7 @@ async function runScraper(ctx?: any) {
 
   // 3. Direct ATS Target Companies (Greenhouse / Lever / Ashby)
   const targetCompanies = settings.targetAtsCompanies || [];
-  if (targetCompanies.length > 0 || activeSources.includes("ats")) {
+  if (activeSources.includes("ats")) {
     console.log("\n============= Starting Direct ATS Scraping (Target Companies) =============");
     console.log(`Target Companies: ${targetCompanies.join(", ") || "None configured"}`);
     if (targetCompanies.length > 0) {
@@ -334,7 +334,11 @@ async function runScraper(ctx?: any) {
       } else {
         console.log("ℹ️ No new jobs found across configured target companies.");
       }
+    } else {
+      console.log("ℹ️ Direct ATS is active, but no target company slugs are configured. Add slugs in Settings.");
     }
+  } else {
+    console.log("\nℹ️ Skipping Direct ATS Scraping (disabled in arguments / settings).");
   }
 
   // 4. Remote Feeds (RemoteOK)

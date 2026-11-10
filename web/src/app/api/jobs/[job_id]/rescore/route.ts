@@ -8,6 +8,7 @@ import {
   getAppSettings,
 } from "@/lib/supabase/queries";
 import { formatResumeToText, evaluateJobFit } from "@/lib/llm";
+import { getCompanyIntelligence } from "@/lib/company-intel";
 
 export async function POST(
   request: Request,
@@ -50,6 +51,23 @@ export async function POST(
 
     const settings = await getAppSettings();
     const resumeText = formatResumeToText(resumeData);
+
+    // 3. Fetch real-world company intelligence (Glassdoor, public sentiment, reviews)
+    let companyIntel = null;
+    if (job.company) {
+      try {
+        // In on-demand testing rescore, always live fetch to bypass the cache completely as requested
+        companyIntel = await getCompanyIntelligence(
+          job.company,
+          job.location || "Singapore",
+          null,
+          true // forceLive: true for on-demand test rescores
+        );
+      } catch (err: any) {
+        console.warn(`[Rescore] Error fetching company intel for ${job.company}:`, err.message);
+      }
+    }
+
     const evalResult = await evaluateJobFit(
       resumeText,
       {
@@ -60,7 +78,8 @@ export async function POST(
         description: job.description,
       },
       settings?.dream_job_profile,
-      settings?.job_search_mode || "get_hired_fast"
+      settings?.job_search_mode || "get_hired_fast",
+      companyIntel
     );
 
     if (!evalResult) {
@@ -79,11 +98,13 @@ export async function POST(
       resume_score_stage: stage,
     });
 
-    // Invalidate dashboard stats cache
+    // Invalidate dashboard stats & job pages cache
     try {
       revalidateTag("dashboard-stats", "default");
       revalidatePath("/");
       revalidatePath(`/jobs/${job_id}`);
+      revalidatePath("/jobs/top-matches");
+      revalidatePath("/jobs/new");
     } catch (e) {
       console.warn("Revalidate error:", e);
     }
@@ -94,7 +115,9 @@ export async function POST(
         job_id,
         resume_score: evalResult.resume_score,
         dream_score: evalResult.dream_score,
+        total_score: evalResult.total_score,
         score_breakdown: evalResult.score_breakdown,
+        company_intel: companyIntel,
         resume_score_stage: stage,
       },
       { status: 200 }

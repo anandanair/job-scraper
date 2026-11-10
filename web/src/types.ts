@@ -42,11 +42,42 @@ export interface ScoreBreakdown {
   experience_score?: number;
   seniority_score?: number;
   culture_fit_score?: number;
+  // Dream Hunter sub-scores (sum up to 100)
+  dream_craft_score?: number;
+  dream_workplace_score?: number;
+  dream_seniority_score?: number;
+  dream_culture_score?: number;
+  culture_analysis?: string; // Transparent reasoning of how company intel and reviews affected scoring
+  // Grounded Company Intelligence transparency
+  company_intel?: {
+    company_name?: string;
+    glassdoor_rating?: number | null;
+    glassdoor_reviews_count?: number | null;
+    summary?: string | null;
+    source_snippets?: Array<{ title: string; snippet: string; link: string }>;
+    is_cached?: boolean;
+    retrieved_at?: string;
+  };
   matched_skills: string[];
   skill_gaps: string[];
   key_strengths?: string[];
   red_flags?: string[];
   actionable_advice?: string;
+}
+
+export interface CompanyProfile {
+  company_name: string;
+  domain?: string | null;
+  industry?: string | null;
+  size_band?: string | null;
+  headquarters?: string | null;
+  glassdoor_rating?: number | null;
+  glassdoor_reviews_count?: number | null;
+  culture_summary?: string | null;
+  source_snippets?: Array<{ title: string; snippet: string; link: string }>;
+  created_at?: string;
+  updated_at?: string;
+  is_cached?: boolean;
 }
 
 // Append-only record of a single status transition

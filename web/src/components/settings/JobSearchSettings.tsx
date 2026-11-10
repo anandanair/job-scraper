@@ -10,8 +10,11 @@ import {
   Plus,
   X,
   MapPin,
+  Building,
+  Globe,
+  Laptop,
 } from "lucide-react";
-import { AppSettings } from "@/types";
+import { AppSettings, DreamJobProfile } from "@/types";
 import { LocationCombobox } from "@/components/setup/LocationCombobox";
 import { PRESET_GEO_LOCATIONS, GeoLocationItem } from "@/lib/setup/geoLocations";
 
@@ -24,6 +27,40 @@ export function JobSearchSettings({ settings, onChange }: JobSearchSettingsProps
   const [locationsList, setLocationsList] = useState<GeoLocationItem[]>(PRESET_GEO_LOCATIONS);
   const [queryInput, setQueryInput] = useState("");
   const [cfQueryInput, setCfQueryInput] = useState("");
+  const [companySlugInput, setCompanySlugInput] = useState("");
+
+  const targetAtsCompanies = Array.isArray(settings.dream_job_profile?.target_ats_companies)
+    ? settings.dream_job_profile.target_ats_companies
+    : [];
+
+  const baseProfile: DreamJobProfile = {
+    target_titles: [],
+    target_seniorities: ["mid", "senior"],
+    workplace_models: ["remote", "hybrid"],
+    favorite_tech_stack: [],
+    dealbreaker_tech_stack: [],
+    ...(settings.dream_job_profile || {}),
+  };
+
+  const handleAddCompanySlug = () => {
+    const trimmed = companySlugInput.trim().toLowerCase();
+    if (trimmed && !targetAtsCompanies.includes(trimmed)) {
+      const updated = [...targetAtsCompanies, trimmed];
+      onChange("dream_job_profile", {
+        ...baseProfile,
+        target_ats_companies: updated,
+      });
+      setCompanySlugInput("");
+    }
+  };
+
+  const handleRemoveCompanySlug = (slug: string) => {
+    const updated = targetAtsCompanies.filter((s) => s !== slug);
+    onChange("dream_job_profile", {
+      ...baseProfile,
+      target_ats_companies: updated,
+    });
+  };
 
   // Fetch all locations (including any custom saved locations) from Supabase
   useEffect(() => {
@@ -197,7 +234,143 @@ export function JobSearchSettings({ settings, onChange }: JobSearchSettingsProps
               {settings.scraping_sources.includes("careers_future") ? "Active" : "Disabled"}
             </span>
           </div>
+
+          {/* RemoteOK */}
+          <div
+            onClick={() => toggleSource("remote_ok")}
+            className={`p-4 rounded-xl border text-left cursor-pointer transition flex items-center justify-between ${
+              settings.scraping_sources.includes("remote_ok")
+                ? "border-sky-500 bg-sky-50/40 ring-1 ring-sky-500/20"
+                : "border-slate-200 bg-white hover:bg-slate-50"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                <Globe className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900">RemoteOK</p>
+                <p className="text-[11px] text-slate-500">100% remote worldwide tech postings feed</p>
+              </div>
+            </div>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                settings.scraping_sources.includes("remote_ok")
+                  ? "bg-sky-100 text-sky-800 border-sky-200"
+                  : "bg-slate-100 text-slate-600 border-slate-200"
+              }`}
+            >
+              {settings.scraping_sources.includes("remote_ok") ? "Active" : "Disabled"}
+            </span>
+          </div>
+
+          {/* Direct ATS Boards */}
+          <div
+            onClick={() => toggleSource("ats")}
+            className={`p-4 rounded-xl border text-left cursor-pointer transition flex items-center justify-between ${
+              settings.scraping_sources.includes("ats")
+                ? "border-purple-500 bg-purple-50/40 ring-1 ring-purple-500/20"
+                : "border-slate-200 bg-white hover:bg-slate-50"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                <Building className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900">Direct ATS Boards</p>
+                <p className="text-[11px] text-slate-500">Greenhouse, Lever, & Ashby company boards</p>
+              </div>
+            </div>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                settings.scraping_sources.includes("ats")
+                  ? "bg-purple-100 text-purple-800 border-purple-200"
+                  : "bg-slate-100 text-slate-600 border-slate-200"
+              }`}
+            >
+              {settings.scraping_sources.includes("ats") ? "Active" : "Disabled"}
+            </span>
+          </div>
         </div>
+
+        {/* RemoteOK Information Banner when active */}
+        {settings.scraping_sources.includes("remote_ok") && (
+          <div className="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200 flex items-start gap-2.5">
+            <Globe className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-sky-900 leading-relaxed">
+              <strong>RemoteOK feed active:</strong> Scrapes verified remote software & engineering opportunities matching your search queries directly from RemoteOK's public feed. All scraped listings are automatically tagged as <em>Remote Worldwide</em>.
+            </p>
+          </div>
+        )}
+
+        {/* Direct ATS Target Companies Configuration when active */}
+        {settings.scraping_sources.includes("ats") && (
+          <div className="pt-2 border-t border-slate-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Direct ATS Target Companies (Greenhouse / Lever / Ashby)
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  Enter company slugs hosted on Greenhouse, Lever, or Ashby (e.g. <code>grab</code>, <code>stripe</code>, <code>figma</code>, <code>carousell</code>, <code>airwallex</code>, <code>anthropic</code>). The daily scraper queries their public job boards directly with zero rate limits.
+                </p>
+              </div>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                {targetAtsCompanies.length} configured
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 pt-1 min-h-[32px]">
+              {targetAtsCompanies.map((slug) => (
+                <span
+                  key={slug}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-50 text-purple-800 border border-purple-200 text-xs font-semibold"
+                >
+                  <Building className="w-3 h-3 text-purple-600" />
+                  <span>{slug}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCompanySlug(slug)}
+                    title="Remove company"
+                    className="hover:bg-purple-100 rounded p-0.5 text-purple-500 hover:text-purple-800 transition"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              ))}
+              {targetAtsCompanies.length === 0 && (
+                <p className="text-xs text-slate-400 italic py-1">
+                  No company slugs added yet. Type a slug (e.g. stripe, grab, figma) below and press Add.
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2 max-w-md">
+              <input
+                type="text"
+                placeholder="e.g. grab, stripe, figma, carousell"
+                value={companySlugInput}
+                onChange={(e) => setCompanySlugInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddCompanySlug();
+                  }
+                }}
+                className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+              <button
+                type="button"
+                onClick={handleAddCompanySlug}
+                disabled={!companySlugInput.trim()}
+                className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors shadow-xs disabled:opacity-50"
+              >
+                Add Company
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2. Target Location (Search as you type Combobox - Identical to Setup) */}

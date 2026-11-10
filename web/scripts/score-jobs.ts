@@ -10,6 +10,7 @@ if (fs.existsSync(rootEnv)) dotenv.config({ path: rootEnv });
 
 import { createSupabaseStaticClient } from "../src/utils/supabase/server";
 import { formatResumeToText, evaluateJobFit } from "../src/lib/llm";
+import { getCompanyIntelligence } from "../src/lib/company-intel";
 import { Resume } from "../src/types";
 import { withTelemetry, TelemetryContext } from "../src/lib/telemetry";
 
@@ -124,7 +125,7 @@ async function runJobScorer(ctx?: TelemetryContext) {
   // 3. Fetch jobs to score
   let query = supabase
     .from("jobs")
-    .select("job_id, job_title, company, description, level")
+    .select("job_id, job_title, company, description, level, location")
     .eq("is_active", true);
 
   if (cli.jobId) {
@@ -159,6 +160,20 @@ async function runJobScorer(ctx?: TelemetryContext) {
     console.log(`[${i + 1}/${jobsToScore.length}] Scoring: "${job.job_title}" at "${job.company}" (${job.job_id})`);
 
     try {
+      let companyIntel = null;
+      if (job.company) {
+        try {
+          companyIntel = await getCompanyIntelligence(
+            job.company,
+            job.location || "Singapore",
+            supabase,
+            Boolean(cli.force || cli.rescore)
+          );
+        } catch (intelErr: any) {
+          console.warn(`  ⚠ Could not fetch company intel for ${job.company}:`, intelErr.message);
+        }
+      }
+
       const evalResult = await evaluateJobFit(
         baseResumeText,
         {
@@ -169,7 +184,8 @@ async function runJobScorer(ctx?: TelemetryContext) {
           description: job.description,
         },
         dbSettings.dream_job_profile,
-        searchMode
+        searchMode,
+        companyIntel
       );
 
       if (evalResult !== null) {
