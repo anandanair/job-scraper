@@ -12,7 +12,7 @@ export interface TelemetryContext {
 export interface WithTelemetryOptions {
   workflowName: string;
   workflowId: AutomationWorkflowId;
-  triggerType?: "schedule" | "workflow_dispatch" | "local_cli";
+  triggerType?: "schedule" | "workflow_dispatch" | "local_cli" | "local_web";
 }
 
 /**
@@ -33,8 +33,10 @@ export async function withTelemetry<T>(
   const startedAtIso = startedAt.toISOString();
 
   // 1. Resolve Trigger Type and GitHub Actions Context
-  let triggerType: "schedule" | "workflow_dispatch" | "local_cli" = options.triggerType || "local_cli";
-  if (process.env.GITHUB_EVENT_NAME === "workflow_dispatch") {
+  let triggerType: "schedule" | "workflow_dispatch" | "local_cli" | "local_web" = options.triggerType || "local_cli";
+  if (process.env.TRIGGER_TYPE === "local_web") {
+    triggerType = "local_web";
+  } else if (process.env.GITHUB_EVENT_NAME === "workflow_dispatch") {
     triggerType = "workflow_dispatch";
   } else if (process.env.GITHUB_EVENT_NAME === "schedule" || process.env.GITHUB_ACTIONS === "true") {
     triggerType = "schedule";
@@ -162,6 +164,61 @@ export async function withTelemetry<T>(
   let result: T;
   let executionError: any = null;
 
+  // Signal handlers to capture graceful stops
+  const handleSignal = async (signalName: string) => {
+    if (supabase && runId) {
+      try {
+        const completedAt = new Date();
+        const durationSeconds = Math.max(1, Math.round((completedAt.getTime() - startedAt.getTime()) / 1000));
+        await supabase
+          .from("automation_runs")
+          .update({
+            status: "stopped",
+            completed_at: completedAt.toISOString(),
+            duration_seconds: durationSeconds,
+            summary: `Interrupted by signal ${signalName}.`,
+            error_message: `Process received ${signalName}.`,
+            log_output: logLines.join("\n"),
+          })
+          .eq("id", runId);
+      } catch {
+        // non-fatal
+      }
+    }
+    process.exit(130);
+  };
+
+  const onSigInt = () => handleSignal("SIGINT");
+  const onSigTerm = () => handleSignal("SIGTERM");
+  process.once("SIGINT", onSigInt);
+  process.once("SIGTERM", onSigTerm);
+
+  // Periodic in-progress telemetry flush (every 4s) so web UI can view live logs in real time
+  let flushTimer: NodeJS.Timeout | null = null;
+  let lastFlushedLines = 0;
+
+  if (supabase && runId) {
+    flushTimer = setInterval(async () => {
+      if (runId && logLines.length > lastFlushedLines) {
+        lastFlushedLines = logLines.length;
+        try {
+          await supabase
+            .from("automation_runs")
+            .update({
+              log_output: logLines.join("\n"),
+              metrics,
+              warning_count: warningCount,
+              error_count: errorCount,
+              summary: summary || `Executing... (${logLines.length} lines logged)`,
+            })
+            .eq("id", runId);
+        } catch {
+          // non-fatal periodic sync
+        }
+      }
+    }, 4000);
+  }
+
   try {
     result = await runFn(ctx);
   } catch (err) {
@@ -172,6 +229,11 @@ export async function withTelemetry<T>(
       errorsList.unshift(`[FATAL] ${errMsg.slice(0, 250)}`);
     }
   } finally {
+    process.removeListener("SIGINT", onSigInt);
+    process.removeListener("SIGTERM", onSigTerm);
+    if (flushTimer) {
+      clearInterval(flushTimer);
+    }
     // Restore console immediately
     console.log = originalLog;
     console.warn = originalWarn;

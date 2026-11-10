@@ -18,7 +18,7 @@ import { AppSettings } from "../src/types";
  * Runs once every hour in GitHub Actions (0 * * * *).
  * Evaluates whether the scraper should run right now for the user's configured local timezone.
  *
- * If triggered by `workflow_dispatch`, it runs immediately regardless of schedule.
+ * If triggered by `workflow_dispatch` or `--force`, it runs immediately regardless of schedule.
  * If scheduled, it compares the user's local time against `schedule_hour` and verifies
  * that the scraper has not already completed for today.
  */
@@ -27,8 +27,10 @@ async function main() {
   console.log("            JobTrack Schedule Gatekeeper Check             ");
   console.log("============================================================");
 
-  const eventName = process.env.GITHUB_EVENT_NAME || "schedule";
-  console.log(`Trigger Event:   ${eventName}`);
+  const args = process.argv.slice(2);
+  const isForced = args.includes("--force") || args.includes("-f") || process.env.FORCE_SCHEDULE === "true";
+  const eventName = isForced ? "workflow_dispatch" : (process.env.GITHUB_EVENT_NAME || "schedule");
+  console.log(`Trigger Event:   ${eventName}${isForced ? " (Forced via --force flag)" : ""}`);
 
   let settings: Partial<AppSettings> | null = null;
 

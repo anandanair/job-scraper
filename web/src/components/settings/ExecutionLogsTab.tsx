@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Terminal,
   RefreshCw,
@@ -14,6 +14,10 @@ import {
   Info,
   Layers,
   Sparkles,
+  Play,
+  ChevronDown,
+  Check,
+  Square,
 } from "lucide-react";
 import { AutomationRun, AutomationWorkflowId } from "@/types";
 import { ExecutionLogModal } from "./ExecutionLogModal";
@@ -23,6 +27,7 @@ interface StatsData {
   success: number;
   warning: number;
   failed: number;
+  stopped?: number;
   running: number;
 }
 
@@ -39,6 +44,7 @@ const STATUS_FILTERS = [
   { id: "success", label: "Success" },
   { id: "warning", label: "Warnings" },
   { id: "failed", label: "Failed" },
+  { id: "stopped", label: "Stopped" },
 ];
 
 function formatTimeAgo(isoString: string): string {
@@ -75,6 +81,17 @@ export function ExecutionLogsTab() {
   const [selectedRun, setSelectedRun] = useState<AutomationRun | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
+  // Trigger dropdown states
+  const [triggerDropdownOpen, setTriggerDropdownOpen] = useState(false);
+  const [triggerLoading, setTriggerLoading] = useState(false);
+  const [triggerFeedback, setTriggerFeedback] = useState<{
+    text: string;
+    workflowId?: AutomationWorkflowId;
+    workflowName?: string;
+    isError?: boolean;
+  } | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const fetchRuns = useCallback(async () => {
     try {
       setLoading(true);
@@ -102,14 +119,60 @@ export function ExecutionLogsTab() {
     fetchRuns();
   }, [fetchRuns]);
 
-  // Auto-refresh interval (every 20s if toggled)
+  // Auto-refresh interval (every 10s if toggled)
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
       fetchRuns();
-    }, 20000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [autoRefresh, fetchRuns]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setTriggerDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleTriggerFromLogs = async (workflowId: AutomationWorkflowId, name: string) => {
+    try {
+      setTriggerLoading(true);
+      setTriggerDropdownOpen(false);
+      const res = await fetch("/api/system/trigger-workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflow_id: workflowId, force: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setTriggerFeedback({
+          text: `Error: ${data.error || "Failed to trigger workflow."}`,
+          isError: true,
+        });
+      } else {
+        setTriggerFeedback({
+          text: `Started ${name} locally (PID: ${data.pid}).`,
+          workflowId,
+          workflowName: name,
+        });
+        setAutoRefresh(true);
+        setTimeout(() => fetchRuns(), 1200);
+      }
+    } catch (e: any) {
+      setTriggerFeedback({
+        text: `Error: ${e?.message || "Network error"}`,
+        isError: true,
+      });
+    } finally {
+      setTriggerLoading(false);
+      setTimeout(() => setTriggerFeedback(null), 8000);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -127,12 +190,72 @@ export function ExecutionLogsTab() {
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Live execution logs, non-fatal rate-limit warnings, and runtime metrics for all GitHub Action workflows.
+              Live execution logs, non-fatal rate-limit warnings, and runtime metrics for all GitHub Action and local workflows.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-center">
+        <div className="flex flex-wrap items-center gap-2 self-end sm:self-center">
+          {/* Run Job Locally Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              type="button"
+              onClick={() => setTriggerDropdownOpen(!triggerDropdownOpen)}
+              disabled={triggerLoading}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-colors shadow-xs disabled:opacity-50"
+            >
+              {triggerLoading ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Play className="w-3.5 h-3.5 fill-current" />
+              )}
+              <span>Run Job Locally</span>
+              <ChevronDown className="w-3 h-3 ml-0.5 opacity-70" />
+            </button>
+
+            {triggerDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-30 py-1.5 text-xs divide-y divide-slate-800">
+                <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                  Select Workflow To Run
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerFromLogs("scrape_jobs", "Daily Job Scraper")}
+                    className="w-full text-left px-3 py-2 text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                    <span>Daily Job Scraper</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerFromLogs("score_jobs", "AI Job Scorer")}
+                    className="w-full text-left px-3 py-2 text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span>AI Job Scorer</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerFromLogs("customize_resumes", "ATS Resume Tailor")}
+                    className="w-full text-left px-3 py-2 text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    <span>ATS Resume Tailor</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerFromLogs("job_manager", "Job Expiration Manager")}
+                    className="w-full text-left px-3 py-2 text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-sky-400" />
+                    <span>Job Expiration Manager</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => setAutoRefresh(!autoRefresh)}
@@ -145,7 +268,7 @@ export function ExecutionLogsTab() {
             <span
               className={`w-2 h-2 rounded-full ${autoRefresh ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`}
             />
-            <span>Auto-Refresh {autoRefresh ? "ON (20s)" : "OFF"}</span>
+            <span>Auto-Refresh {autoRefresh ? "ON" : "OFF"}</span>
           </button>
 
           <button
@@ -161,8 +284,50 @@ export function ExecutionLogsTab() {
         </div>
       </div>
 
+      {/* Trigger Feedback Notification */}
+      {triggerFeedback && (
+        <div
+          className={`p-3.5 rounded-xl text-xs font-medium flex items-center justify-between gap-2 border ${
+            triggerFeedback.isError
+              ? "bg-rose-50 border-rose-200 text-rose-800"
+              : "bg-indigo-50 border-indigo-200 text-indigo-900"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Info className={`w-4 h-4 shrink-0 ${triggerFeedback.isError ? "text-rose-600" : "text-indigo-600"}`} />
+            <span>{triggerFeedback.text}</span>
+          </div>
+
+          {triggerFeedback.workflowId && triggerFeedback.workflowName && (
+            <button
+              type="button"
+              onClick={() => {
+                const nowIso = new Date().toISOString();
+                setSelectedRun({
+                  id: "live-" + triggerFeedback.workflowId,
+                  workflow_name: triggerFeedback.workflowName!,
+                  workflow_id: triggerFeedback.workflowId!,
+                  status: "running",
+                  trigger_type: "local_web",
+                  started_at: nowIso,
+                  metrics: {},
+                  error_count: 0,
+                  warning_count: 0,
+                  errors_list: [],
+                  created_at: nowIso,
+                });
+              }}
+              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shrink-0 shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span>Watch Live Stream</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* KPI Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
         {/* Total Runs */}
         <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center gap-3">
           <div className="p-2.5 rounded-lg bg-slate-100 text-slate-700">
@@ -207,6 +372,17 @@ export function ExecutionLogsTab() {
           <div>
             <div className="text-xs font-semibold text-slate-500">Failed</div>
             <div className="text-xl sm:text-2xl font-bold text-rose-600">{stats.failed}</div>
+          </div>
+        </div>
+
+        {/* Stopped Runs */}
+        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600">
+            <Square className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500">Stopped</div>
+            <div className="text-xl sm:text-2xl font-bold text-slate-700">{stats.stopped || 0}</div>
           </div>
         </div>
       </div>
@@ -283,6 +459,7 @@ export function ExecutionLogsTab() {
             const isSuccess = run.status === "success";
             const isWarning = run.status === "warning";
             const isFailed = run.status === "failed";
+            const isStopped = run.status === "stopped";
 
             return (
               <div
@@ -301,13 +478,16 @@ export function ExecutionLogsTab() {
                           ? "bg-amber-50 text-amber-600 border border-amber-100"
                           : isFailed
                           ? "bg-rose-50 text-rose-600 border border-rose-100"
+                          : isStopped
+                          ? "bg-slate-100 text-slate-600 border border-slate-200"
                           : "bg-sky-50 text-sky-600 border border-sky-100"
                       }`}
                     >
                       {isSuccess && <CheckCircle2 className="w-4 h-4" />}
                       {isWarning && <AlertTriangle className="w-4 h-4" />}
                       {isFailed && <XCircle className="w-4 h-4" />}
-                      {run.status === "running" && <RefreshCw className="w-4 h-4 animate-spin" />}
+                      {isStopped && <Square className="w-4 h-4" />}
+                      {run.status === "running" && <RefreshCw className="w-4 h-4 animate-spin text-emerald-500" />}
                     </div>
 
                     <div className="space-y-1">
@@ -326,6 +506,8 @@ export function ExecutionLogsTab() {
                               ? "bg-amber-100 text-amber-800"
                               : isFailed
                               ? "bg-rose-100 text-rose-800"
+                              : isStopped
+                              ? "bg-slate-200 text-slate-700"
                               : "bg-sky-100 text-sky-800"
                           }`}
                         >
@@ -396,10 +578,23 @@ export function ExecutionLogsTab() {
                           e.stopPropagation();
                           setSelectedRun(run);
                         }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          run.status === "running"
+                            ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 animate-pulse font-bold"
+                            : "text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200"
+                        }`}
                       >
-                        <span>View Logs</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
+                        {run.status === "running" ? (
+                          <>
+                            <Terminal className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Watch Live Terminal</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>View Logs</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

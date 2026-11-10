@@ -8,6 +8,8 @@
     "start": "npm --prefix web run start",
     "install:web": "npm --prefix web install",
     "scrape": "npm --prefix web run scrape --",
+    "scrape:force": "npm --prefix web run scrape -- --force",
+    "score:force": "npm --prefix web run score -- --force",
     "check-schedule": "npm --prefix web run check-schedule --",
     "migrate": "npm --prefix web run migrate --",
     "test:scraper": "npm --prefix web run test:scraper --",

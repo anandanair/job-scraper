@@ -9,9 +9,11 @@
     "lint": "next lint",
     "parse-resume": "tsx scripts/parse-resume.ts",
     "score": "tsx scripts/score-jobs.ts",
+    "score:force": "tsx scripts/score-jobs.ts --force",
     "customize": "tsx scripts/customize-resumes.ts",
     "manage": "tsx scripts/job-manager.ts",
     "scrape": "tsx scripts/scrape-jobs.ts",
+    "scrape:force": "tsx scripts/scrape-jobs.ts --force",
     "check-schedule": "tsx scripts/check-schedule.ts",
     "migrate": "tsx scripts/migrate.ts",
     "test:scraper": "tsx scripts/test-scraper.ts"
