@@ -182,7 +182,9 @@ function drawSectionHeading(
   lookaheadHeight: number = 70
 ) {
   ensureSpace(doc, lookaheadHeight, margins.bottom);
-  doc.moveDown(0.5);
+  if (doc.y > margins.top + 5) {
+    doc.moveDown(0.4);
+  }
 
   const headingStyle = theme.layout.headingStyle || "underline";
 
@@ -246,15 +248,25 @@ function drawSectionHeading(
   }
 }
 
+
+/**
+ * Strips leading bullet symbols, asterisks, dashes, and extra whitespace
+ * so bullets never render double markers like "• - " or "• • "
+ */
+export function cleanBulletText(text: string): string {
+  if (!text) return "";
+  return text.trim().replace(/^[\s•*–—◦▪‣⁃+\-]+/g, "").trim();
+}
+
 // --- Helper: extract bullet lines safely from description ---
 function getBulletLines(description: string): string[] {
   if (description.includes("\n")) {
     return description
       .split("\n")
-      .map((b) => b.trim().replace(/^[•\-]\s*/, ""))
+      .map(cleanBulletText)
       .filter(Boolean);
   }
-  return splitIntoSentences(description).filter(Boolean);
+  return splitIntoSentences(description).map(cleanBulletText).filter(Boolean);
 }
 
 // --- Bullet point text ---
@@ -307,6 +319,23 @@ function drawDescription(
   const bullets = getBulletLines(description);
   for (const bulletText of bullets) {
     drawBullet(doc, bulletText, theme, fonts, sizes, margins, contentWidth);
+  }
+}
+
+// --- Bullet list handler: direct array of bullets ---
+function drawBulletList(
+  doc: PDFKit.PDFDocument,
+  bullets: string[],
+  theme: ResumeThemeConfig,
+  fonts: ReturnType<typeof getFontFamilyNames>,
+  sizes: ReturnType<typeof getFontSizes>,
+  margins: ReturnType<typeof getMargins>,
+  contentWidth: number
+) {
+  for (const bulletText of bullets) {
+    if (!isNA(bulletText)) {
+      drawBullet(doc, bulletText, theme, fonts, sizes, margins, contentWidth);
+    }
   }
 }
 
@@ -524,36 +553,49 @@ function renderExperience(
     const leftWidth = contentWidth - rightWidth;
 
     // Calculate minimum keep-together height for this job entry:
-    // Header (Job Title + Dates + Company) + at least the first 1-2 bullet points
-    const bullets = !isNA(exp.description) ? getBulletLines(exp.description!) : [];
-    doc.font(fonts.regular).fontSize(sizes.body);
+    // Header (Job Title + Dates + Company) + at least the first bullet point
+    const rawBullets =
+      exp.bullets && exp.bullets.length > 0
+        ? exp.bullets.filter((b) => !isNA(b))
+        : !isNA(exp.description)
+        ? getBulletLines(exp.description!)
+        : [];
+    const bullets = rawBullets.map(cleanBulletText).filter(Boolean);
 
-    let firstBulletsHeight = 0;
-    if (bullets.length > 0) {
-      firstBulletsHeight +=
-        doc.heightOfString(`• ${bullets[0]}`, {
-          width: contentWidth - 12,
-          lineGap,
-        }) + 4;
-      if (bullets.length > 1) {
-        firstBulletsHeight +=
-          doc.heightOfString(`• ${bullets[1]}`, {
+    doc.font(fonts.regular).fontSize(sizes.body);
+    const firstBulletH =
+      bullets.length > 0
+        ? doc.heightOfString(`• ${bullets[0]}`, {
             width: contentWidth - 12,
             lineGap,
-          }) + 4;
-      }
-    } else {
-      firstBulletsHeight = 20;
-    }
+          }) + 4
+        : 18;
+
+    const hasRoleTech =
+      exp.technologies &&
+      exp.technologies.length > 0 &&
+      !(exp.technologies.length === 1 && exp.technologies[0] === "NA");
+
+    doc.font(fonts.bold).fontSize(sizes.jobTitle);
+    const jobTitleH = doc.heightOfString(jobTitle, { width: leftWidth, lineGap });
+
+    doc.font(fonts.bold).fontSize(sizes.body);
+    const companyH = companyLocation
+      ? doc.heightOfString(companyLocation, { width: contentWidth, lineGap }) + 4
+      : 0;
+
+    const roleTechH = hasRoleTech
+      ? doc.heightOfString(`Technologies: ${exp.technologies!.join(", ")}`, { width: contentWidth, lineGap }) + 4
+      : 0;
 
     const entryHeaderHeight =
-      sizes.jobTitle +
-      4 +
-      (companyLocation ? sizes.body + 6 : 0) +
-      firstBulletsHeight +
-      6;
+      jobTitleH +
+      2 +
+      companyH +
+      roleTechH +
+      firstBulletH +
+      4;
 
-    // If Title + Company + first 1-2 bullets don't fit, start this job on the new page
     ensureSpace(doc, entryHeaderHeight, margins.bottom);
 
     drawTwoColumnRow(
@@ -579,14 +621,30 @@ function renderExperience(
         .fontSize(sizes.body)
         .fillColor(theme.colors.secondary)
         .text(companyLocation, margins.left, doc.y, { width: contentWidth });
-      doc.y += 4;
+      doc.y += 3;
+    }
+
+    // Role Technologies (if present)
+    if (hasRoleTech && exp.technologies) {
+      const techList = exp.technologies.filter((t) => !isNA(t));
+      if (techList.length > 0) {
+        doc
+          .font(fonts.italic)
+          .fontSize(sizes.meta)
+          .fillColor(theme.colors.light);
+        doc.text(`Technologies: ${techList.join(", ")}`, margins.left, doc.y, {
+          width: contentWidth,
+        });
+        doc.y += 3;
+      }
     }
 
     // Description bullets (will naturally split across pages if there are many bullets)
-    if (!isNA(exp.description)) {
-      drawDescription(
+    // Note: context_notes are strictly excluded from the rendered PDF
+    if (bullets.length > 0) {
+      drawBulletList(
         doc,
-        exp.description!,
+        bullets,
         theme,
         fonts,
         sizes,
@@ -697,9 +755,13 @@ function renderProjects(
   for (const proj of resumeData.projects) {
     if (isNA(proj.name)) continue;
 
-    const projBullets = !isNA(proj.description)
-      ? getBulletLines(proj.description!)
-      : [];
+    const rawProjBullets =
+      proj.bullets && proj.bullets.length > 0
+        ? proj.bullets.filter((b) => !isNA(b))
+        : !isNA(proj.description)
+        ? getBulletLines(proj.description!)
+        : [];
+    const projBullets = rawProjBullets.map(cleanBulletText).filter(Boolean);
     doc.font(fonts.regular).fontSize(sizes.body);
     const lineGap =
       theme.typography.lineSpacing === "tight"
@@ -720,23 +782,89 @@ function renderProjects(
       proj.technologies.length > 0 &&
       !(proj.technologies.length === 1 && proj.technologies[0] === "NA");
 
-    const projHeaderHeight =
-      sizes.jobTitle +
-      4 +
-      (hasTech ? sizes.meta + 5 : 0) +
-      firstBulletH +
-      6;
+    const rightWidth = 2.0 * 72;
+    const leftWidth = contentWidth - rightWidth;
+    const dateText = !isNA(proj.date) ? proj.date! : "";
 
-    // Keep project title + technologies + first bullet together
+    doc.font(fonts.bold).fontSize(sizes.jobTitle);
+    const projNameH = doc.heightOfString(proj.name, { width: leftWidth, lineGap });
+
+    doc.font(fonts.italic).fontSize(sizes.body);
+    const roleH = !isNA(proj.role)
+      ? doc.heightOfString(proj.role!, { width: contentWidth, lineGap }) + 3
+      : 0;
+
+    doc.font(fonts.regular).fontSize(sizes.meta);
+    const urlH = !isNA(proj.url)
+      ? doc.heightOfString(proj.url!, { width: contentWidth, lineGap }) + 3
+      : 0;
+
+    const techH = hasTech
+      ? doc.heightOfString(`Technologies: ${proj.technologies!.join(", ")}`, { width: contentWidth, lineGap }) + 3
+      : 0;
+
+    const projHeaderHeight =
+      projNameH +
+      2 +
+      roleH +
+      urlH +
+      techH +
+      firstBulletH +
+      4;
+
+    // Keep project title + metadata + first bullet together
     ensureSpace(doc, projHeaderHeight, margins.bottom);
 
-    doc
-      .font(fonts.bold)
-      .fontSize(sizes.jobTitle)
-      .fillColor(theme.colors.primary)
-      .text(proj.name, margins.left, doc.y, { width: contentWidth });
-    doc.y += 2;
+    if (dateText) {
+      drawTwoColumnRow(
+        doc,
+        proj.name,
+        fonts.bold,
+        sizes.jobTitle,
+        theme.colors.primary,
+        dateText,
+        fonts.italic,
+        sizes.meta,
+        theme.colors.light,
+        leftWidth,
+        rightWidth,
+        margins,
+        sizes.jobTitle + 2
+      );
+    } else {
+      doc
+        .font(fonts.bold)
+        .fontSize(sizes.jobTitle)
+        .fillColor(theme.colors.primary)
+        .text(proj.name, margins.left, doc.y, { width: contentWidth });
+      doc.y += 2;
+    }
 
+    // Role / Subtitle
+    if (!isNA(proj.role)) {
+      doc
+        .font(fonts.italic)
+        .fontSize(sizes.body)
+        .fillColor(theme.colors.secondary)
+        .text(proj.role!, margins.left, doc.y, { width: contentWidth });
+      doc.y += 2;
+    }
+
+    // Clickable Project Link
+    if (!isNA(proj.url)) {
+      doc
+        .font(fonts.regular)
+        .fontSize(sizes.meta)
+        .fillColor(theme.colors.primary)
+        .text(proj.url!, margins.left, doc.y, {
+          link: proj.url!,
+          underline: true,
+          width: contentWidth,
+        });
+      doc.y += 2;
+    }
+
+    // Technologies
     if (hasTech && proj.technologies) {
       const techList = proj.technologies.filter((t) => !isNA(t));
       if (techList.length > 0) {
@@ -751,10 +879,11 @@ function renderProjects(
       }
     }
 
-    if (!isNA(proj.description)) {
-      drawDescription(
+    // Bullet points (context_notes are strictly excluded from the rendered PDF)
+    if (projBullets.length > 0) {
+      drawBulletList(
         doc,
-        proj.description!,
+        projBullets,
         theme,
         fonts,
         sizes,
@@ -871,10 +1000,15 @@ function renderLanguages(
 // MAIN PDF BUILDER
 // ==========================================
 
-export async function buildPdfBuffer(
+export interface PdfBufferWithMeta {
+  buffer: Buffer;
+  pageCount: number;
+}
+
+export async function buildPdfBufferWithMeta(
   resumeData: ResumeInput,
   styleConfig?: ResumeThemeConfig
-): Promise<Buffer> {
+): Promise<PdfBufferWithMeta> {
   const theme: ResumeThemeConfig = styleConfig || DEFAULT_THEME_CONFIG;
   const fonts = getFontFamilyNames(theme.typography.fontFamily);
   const sizes = getFontSizes(theme.typography.fontSizeScale);
@@ -897,7 +1031,9 @@ export async function buildPdfBuffer(
   doc.on("data", (chunk: Buffer) => chunks.push(chunk));
 
   const pdfPromise = new Promise<Buffer>((resolve, reject) => {
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
     doc.on("error", reject);
   });
 
@@ -1192,9 +1328,21 @@ export async function buildPdfBuffer(
     }
   }
 
+  // Capture page count from buffered pages before finalizing the stream
+  const pageCount = doc.bufferedPageRange()?.count || 1;
+
   // Finalize PDF
   doc.end();
-  return await pdfPromise;
+  const buffer = await pdfPromise;
+  return { buffer, pageCount };
+}
+
+export async function buildPdfBuffer(
+  resumeData: ResumeInput,
+  styleConfig?: ResumeThemeConfig
+): Promise<Buffer> {
+  const { buffer } = await buildPdfBufferWithMeta(resumeData, styleConfig);
+  return buffer;
 }
 
 // ==========================================

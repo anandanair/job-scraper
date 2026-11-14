@@ -45,8 +45,20 @@ async function main() {
   console.log(`  Candidate: ${parsed.name}`);
   console.log(`  Email: ${parsed.email}`);
   console.log(`  Skills: ${parsed.skills?.length || 0} extracted`);
-  console.log(`  Experience: ${parsed.experience?.length || 0} roles extracted`);
-  console.log(`  Projects: ${parsed.projects?.length || 0} projects extracted`);
+  const totalExpBullets = (parsed.experience || []).reduce(
+    (acc, exp) => acc + (exp.bullets?.length || 0),
+    0
+  );
+  console.log(
+    `  Experience: ${parsed.experience?.length || 0} roles extracted (${totalExpBullets} total bullets)`
+  );
+  const totalProjBullets = (parsed.projects || []).reduce(
+    (acc, proj) => acc + (proj.bullets?.length || 0),
+    0
+  );
+  console.log(
+    `  Projects: ${parsed.projects?.length || 0} projects extracted (${totalProjBullets} total bullets)`
+  );
 
   // 3. Upsert to Supabase base_resume table
   console.log("Saving structured resume to Supabase 'base_resume' table...");

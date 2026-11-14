@@ -380,12 +380,26 @@ export function formatResumeToText(resumeData: any): string {
       if (exp.location) lines.push(`  Location: ${exp.location}`);
       const dateRange = `${exp.start_date || "?"} - ${exp.end_date || "Present"}`;
       lines.push(`  Dates: ${dateRange}`);
-      if (exp.description) {
-        lines.push("  Description:");
-        const descLines = exp.description.split("\n");
-        for (const line of descLines) {
-          if (line.trim()) lines.push(`    - ${line.trim()}`);
+      if (exp.technologies && exp.technologies.length > 0) {
+        lines.push(`  Technologies Used: ${exp.technologies.join(", ")}`);
+      }
+      const bullets =
+        exp.bullets && exp.bullets.length > 0
+          ? exp.bullets
+          : exp.description
+          ? exp.description
+              .split("\n")
+              .map((l: string) => l.trim().replace(/^[•\-*]\s*/, ""))
+              .filter(Boolean)
+          : [];
+      if (bullets.length > 0) {
+        lines.push("  Achievements & Responsibilities:");
+        for (const bullet of bullets) {
+          lines.push(`    - ${bullet}`);
         }
+      }
+      if (exp.context_notes) {
+        lines.push(`  Internal Context Notes: ${exp.context_notes}`);
       }
     }
     lines.push("\n---\n");
@@ -405,12 +419,32 @@ export function formatResumeToText(resumeData: any): string {
 
   // Projects
   if (resumeData.projects && resumeData.projects.length > 0) {
-    lines.push("Projects:");
+    lines.push("Projects (Master Career Vault):");
     for (const proj of resumeData.projects) {
-      lines.push(`\n* ${proj.name || "N/A"}`);
-      if (proj.description) lines.push(`  Description: ${proj.description}`);
+      lines.push(`\n* Project Name: ${proj.name || "N/A"}`);
+      if (proj.role) lines.push(`  Role: ${proj.role}`);
+      if (proj.url) lines.push(`  URL/Link: ${proj.url}`);
+      if (proj.date) lines.push(`  Date/Period: ${proj.date}`);
       if (proj.technologies && proj.technologies.length > 0) {
         lines.push(`  Technologies: ${proj.technologies.join(", ")}`);
+      }
+      const bullets =
+        proj.bullets && proj.bullets.length > 0
+          ? proj.bullets
+          : proj.description
+          ? proj.description
+              .split("\n")
+              .map((l: string) => l.trim().replace(/^[•\-*]\s*/, ""))
+              .filter(Boolean)
+          : [];
+      if (bullets.length > 0) {
+        lines.push("  Key Achievements & Features:");
+        for (const bullet of bullets) {
+          lines.push(`    - ${bullet}`);
+        }
+      }
+      if (proj.context_notes) {
+        lines.push(`  Internal Architecture Notes: ${proj.context_notes}`);
       }
     }
     lines.push("\n---\n");
@@ -482,6 +516,10 @@ export async function evaluateJobFit(
     company: string;
     level?: string;
     description: string;
+    salary_min?: number | null;
+    salary_max?: number | null;
+    salary_currency?: string | null;
+    salary_period?: string | null;
   },
   dreamProfile?: DreamJobProfile | null,
   searchMode: JobSearchMode = "get_hired_fast",
@@ -491,6 +529,10 @@ export async function evaluateJobFit(
 
   let prompt = "";
   if (isDreamMode) {
+    const salaryText = (jobDetails.salary_min || jobDetails.salary_max)
+      ? `${jobDetails.salary_currency || "SGD"} ${jobDetails.salary_min ?? 0} - ${jobDetails.salary_max ?? 0} per ${jobDetails.salary_period || "month"}`
+      : "Undisclosed / Not specified in listing";
+
     const dreamProfileText = `
 - Target Seniorities: ${(dreamProfile.target_seniorities || []).join(", ") || "Any"}
 - Workplace Preference: ${(dreamProfile.workplace_models || []).join(", ") || "Any"}
@@ -532,6 +574,7 @@ ${resumeText}
 Job Title: ${jobDetails.job_title || "N/A"}
 Company: ${jobDetails.company || "N/A"}
 Level: ${jobDetails.level || "N/A"}
+Salary: ${salaryText}
 
 ${jobDetails.description || "N/A"}
 --- END JOB DESCRIPTION ---
@@ -543,26 +586,45 @@ ${dreamProfileText}
 EVALUATION RUBRIC FOR DREAM SCORE (0 to 100):
 1. dream_craft_score (0-35 points): Matches candidate's favorite tech stack (+points). If job uses candidate's dealbreaker tech stack, deduct heavily (down to 0 for this category).
 2. dream_workplace_score (0-25 points): Matches candidate's workplace model preference (Remote / Hybrid / Onsite). Full points if matched, partial if flexible.
-3. dream_seniority_score (0-20 points): Alignment with candidate's target seniority level and career progression.
+3. dream_seniority_score (0-20 points): Semantic alignment with candidate's target seniority level and career progression:
+   - Critically evaluate the actual scope of responsibility, decision-making autonomy, and required experience from the entire job description (not merely the job title).
+   - If candidate's Target Seniorities does NOT include junior/entry (e.g. candidate selected Mid-Level, Senior, Lead, or Manager), and the role's scope is evaluated as Entry-Level / Junior / Tier 1 Support / Helpdesk / Intern (routine task execution, supervised runbooks, 0-2 years experience):
+     - dream_seniority_score MUST be docked to 0 points.
+     - The role is a career downgrade -> apply the CRITICAL SENIORITY DOWNGRADE PENALTY below.
+   - If the role aligns with candidate's target seniority tier (e.g. Mid, Senior, Lead): award 15-20 points.
+   - If the role is adjacent or an acceptable stretch: award 10-14 points.
 4. dream_culture_score (0-20 points): Grounded in public Glassdoor ratings, employee review sentiment, and workplace reality:
    - High Glassdoor rating (>= 4.0) or verified positive reviews on WLB/culture: 16-20 points.
    - Average rating (3.3 - 3.9) or mixed reviews: 11-15 points.
    - Low rating (< 3.3) or reviews warning of heavy burnout / 24-7 on-call / high turnover / unpaid work: 0-6 points.
    - Neutral default: If perks are not explicitly mentioned in the JD or company is a small private firm without reviews, score as Neutral (13-14/20 points). Do not penalize solely for unmentioned perks.
 
-CRITICAL COMPANY REPUTATION & CULTURE PENALTY RULE:
-A role at a company with toxic management, scam warnings, unpaid contractor tasks, or Glassdoor rating below 3.0 CANNOT be scored as an 80+ "Dream Job", even if the candidate's preferred tech stack is used.
-If company reviews or employee sentiment indicate severe red flags (e.g. low rating < 3.0, scam alerts, unpaid work, or high turnover):
-- dream_culture_score MUST be docked to 0-6 points.
-- dream_score MUST be capped at 50 max (apply a reputation penalty if raw sum exceeds 50) so it does not qualify as a top dream match or trigger automated resume tailoring.
-- culture_analysis MUST clearly detail the review findings, how culture was scored, and why the penalty/cap was applied.
-- If company culture is verified positive (>= 4.0 rating, good WLB), award 16-20 points and explain in culture_analysis.
-- If no company reviews exist or perks are unmentioned in JD, score as Neutral (13-14 points) and state that in culture_analysis.
+CRITICAL CAREER DOWNGRADE, SALARY DEALBREAKER & REPUTATION PENALTY RULES:
+1. Seniority Downgrade:
+   If the role is an Entry-Level / Junior / Tier 1 Support / Intern role and the candidate's Target Seniorities only includes Mid-Level, Senior, Lead, or Manager:
+   - dream_seniority_score MUST be set to 0 points.
+   - dream_score MUST be capped at 40 max (apply a career downgrade penalty so it stays strictly below the 60-point threshold for Top Matches and automated resume tailoring).
+   - MUST include in red_flags: "Career Downgrade: Scope of work and requirements reflect an Entry-Level/Junior role (below candidate Mid/Senior target)."
+
+2. Salary Floor Dealbreaker:
+   - If the job posting does NOT specify compensation (undisclosed), treat salary as NEUTRAL (award no penalty, do not cap score).
+   - If compensation IS specified (in metadata or description) and the maximum pay is clearly below candidate's Target Salary Floor (normalizing currencies and monthly/annual periods if needed):
+     - dream_score MUST be capped at 40 max.
+     - MUST include in red_flags: "Below Salary Floor: Stated compensation is below candidate minimum acceptable floor."
+
+3. Toxic Company Reputation / Culture:
+   A role at a company with toxic management, scam warnings, unpaid contractor tasks, or Glassdoor rating below 3.0 CANNOT be scored as an 80+ "Dream Job", even if the candidate's preferred tech stack is used.
+   If company reviews or employee sentiment indicate severe red flags (e.g. low rating < 3.0, scam alerts, unpaid work, or high turnover):
+   - dream_culture_score MUST be docked to 0-6 points.
+   - dream_score MUST be capped at 50 max (apply a reputation penalty if raw sum exceeds 50) so it does not qualify as a top dream match or trigger automated resume tailoring.
+   - culture_analysis MUST clearly detail the review findings, how culture was scored, and why the penalty/cap was applied.
+   - If company culture is verified positive (>= 4.0 rating, good WLB), award 16-20 points and explain in culture_analysis.
+   - If no company reviews exist or perks are unmentioned in JD, score as Neutral (13-14 points) and state that in culture_analysis.
 
 Return a single JSON object with this exact structure:
 {
   "resume_score": <integer 0-100: ATS alignment based on hard skills 40pts, experience 35pts, seniority 15pts, domain 10pts>,
-  "dream_score": <integer 0-100: sum of sub-scores, strictly capped at 50 if company intel has toxic/scam/low rating red flags>,
+  "dream_score": <integer 0-100: sum of sub-scores, strictly capped at 40 if role is a seniority downgrade or below salary floor, and strictly capped at 50 if company intel has toxic/scam/low rating red flags>,
   "score_breakdown": {
     "hard_skills_score": <integer 0-40>,
     "experience_score": <integer 0-35>,
@@ -911,10 +973,10 @@ ${JSON.stringify(curationPlan.experience_guidance, null, 2)}
 Candidate's Original Summary:
 ${baseResume.summary || "N/A"}
 
-Candidate's Original Experience (Keep job_title, company, location, dates identical; rewrite description into 3-4 newline-separated bullets starting with "- "):
+Candidate's Original Experience (Keep job_title, company, location, dates identical; rewrite description into 3-4 newline-separated impactful bullet points without bullet symbols or dashes):
 ${JSON.stringify(baseResume.experience || [], null, 2)}
 
-Selected Projects to Tailor (Keep name & technologies identical; rewrite description into 2-3 newline-separated bullets starting with "- "):
+Selected Projects to Tailor (Keep name & technologies identical; rewrite description into 2-3 newline-separated impactful bullet points without bullet symbols or dashes):
 ${JSON.stringify(filteredProjects, null, 2)}
 
 ---
@@ -930,14 +992,19 @@ Return valid JSON matching this exact structure:
       "location": string,
       "start_date": string,
       "end_date": string,
+      "bullets": string[],
       "description": string
     }
   ],
   "projects": [
     {
       "name": string,
-      "description": string,
-      "technologies": string[]
+      "role": string,
+      "url": string,
+      "date": string,
+      "technologies": string[],
+      "bullets": string[],
+      "description": string
     }
   ]
 }`;
@@ -1023,13 +1090,39 @@ export function validateAndHealResume(
       description = origExp.description || "";
     }
 
+    const rawBullets = Array.isArray(matchingTailored?.bullets)
+      ? matchingTailored.bullets
+          .filter((b: any) => typeof b === "string" && b.trim())
+          .map((b: string) =>
+            b.trim().replace(/^[\s•*–—◦▪‣⁃+\-]+/g, "").trim(),
+          )
+          .filter(Boolean)
+      : [];
+    const bullets =
+      rawBullets.length > 0
+        ? rawBullets
+        : description
+        ? description
+            .split("\n")
+            .map((b: string) =>
+              b.trim().replace(/^[\s•*–—◦▪‣⁃+\-]+/g, "").trim(),
+            )
+            .filter(Boolean)
+        : (origExp.bullets || [])
+            .map((b: string) =>
+              b.trim().replace(/^[\s•*–—◦▪‣⁃+\-]+/g, "").trim(),
+            )
+            .filter(Boolean);
+
     return {
       job_title: origExp.job_title,
       company: origExp.company,
       location: origExp.location,
       start_date: origExp.start_date,
       end_date: origExp.end_date,
-      description: description.trim(),
+      technologies: origExp.technologies || [],
+      bullets,
+      description: bullets.length > 0 ? bullets.join("\n") : description.trim(),
     };
   });
 
@@ -1047,15 +1140,45 @@ export function validateAndHealResume(
         bp.name && bp.name.toLowerCase().trim() === p.name.toLowerCase().trim(),
     );
     if (origProj) {
+      const projDesc =
+        p.description &&
+        typeof p.description === "string" &&
+        p.description.trim().length > 10
+          ? p.description.trim()
+          : origProj.description || "";
+
+      const rawBullets = Array.isArray(p.bullets)
+        ? p.bullets
+            .filter((b: any) => typeof b === "string" && b.trim())
+            .map((b: string) =>
+              b.trim().replace(/^[\s•*–—◦▪‣⁃+\-]+/g, "").trim(),
+            )
+            .filter(Boolean)
+        : [];
+      const bullets =
+        rawBullets.length > 0
+          ? rawBullets
+          : projDesc
+          ? projDesc
+              .split("\n")
+              .map((b: string) =>
+                b.trim().replace(/^[\s•*–—◦▪‣⁃+\-]+/g, "").trim(),
+              )
+              .filter(Boolean)
+          : (origProj.bullets || [])
+              .map((b: string) =>
+                b.trim().replace(/^[\s•*–—◦▪‣⁃+\-]+/g, "").trim(),
+              )
+              .filter(Boolean);
+
       healedProjects.push({
         name: origProj.name,
-        description:
-          p.description &&
-          typeof p.description === "string" &&
-          p.description.trim().length > 10
-            ? p.description.trim()
-            : origProj.description,
+        role: origProj.role || p.role || null,
+        url: origProj.url || p.url || null,
+        date: origProj.date || p.date || null,
         technologies: origProj.technologies || p.technologies || [],
+        bullets,
+        description: bullets.length > 0 ? bullets.join("\n") : projDesc,
       });
     }
   }
@@ -1073,11 +1196,26 @@ export function validateAndHealResume(
     const fallbackProjects =
       matching.length > 0 ? matching : baseProjects.slice(0, 2);
 
-    healedProjects = fallbackProjects.map((bp) => ({
-      name: bp.name,
-      description: bp.description,
-      technologies: bp.technologies || [],
-    }));
+    healedProjects = fallbackProjects.map((bp) => {
+      const bullets =
+        bp.bullets && bp.bullets.length > 0
+          ? bp.bullets
+          : bp.description
+          ? bp.description
+              .split("\n")
+              .map((b) => b.trim().replace(/^[•\-*]\s*/, ""))
+              .filter(Boolean)
+          : [];
+      return {
+        name: bp.name,
+        role: bp.role || null,
+        url: bp.url || null,
+        date: bp.date || null,
+        technologies: bp.technologies || [],
+        bullets,
+        description: bp.description || (bullets.length > 0 ? bullets.join("\n") : ""),
+      };
+    });
   }
 
   // Cap at 3 projects to preserve 2-page ATS ceiling
@@ -1204,18 +1342,26 @@ export async function generateCoverLetterWithLLM(
   const experienceSummary = (baseResume.experience || [])
     .slice(0, 4)
     .map((exp) => {
-      const desc = (exp.description || "")
-        .split("\n")
-        .filter((l) => l.trim())
-        .slice(0, 3)
-        .join(" ");
-      return `- ${exp.job_title} at ${exp.company} (${exp.start_date || ""} - ${exp.end_date || "Present"}): ${desc}`;
+      const bullets =
+        exp.bullets && exp.bullets.length > 0
+          ? exp.bullets.slice(0, 3).join("; ")
+          : (exp.description || "")
+              .split("\n")
+              .filter((l) => l.trim())
+              .slice(0, 3)
+              .join(" ");
+      const tech = exp.technologies?.length ? ` [${exp.technologies.slice(0, 4).join(", ")}]` : "";
+      return `- ${exp.job_title} at ${exp.company} (${exp.start_date || ""} - ${exp.end_date || "Present"}): ${bullets}${tech}`;
     })
     .join("\n");
 
   const projectSummary = (baseResume.projects || [])
     .slice(0, 3)
-    .map((p) => `- ${p.name}: ${p.description || ""} [${(p.technologies || []).join(", ")}]`)
+    .map((p) => {
+      const bullets = p.bullets?.slice(0, 2).join("; ") || p.description || "";
+      const roleStr = p.role ? ` (${p.role})` : "";
+      return `- ${p.name}${roleStr}: ${bullets} [${(p.technologies || []).join(", ")}]`;
+    })
     .join("\n");
 
   const topSkills = (baseResume.skills || []).slice(0, 15).join(", ");
@@ -1382,7 +1528,30 @@ export async function generateInterviewPrepWithLLM(
   const candidateName = baseResume.name || "Candidate";
   const experienceSummary = (baseResume.experience || [])
     .slice(0, 3)
-    .map((e) => `${e.job_title} at ${e.company}: ${e.description?.slice(0, 200)}`)
+    .map((e) => {
+      const bullets =
+        e.bullets && e.bullets.length > 0
+          ? e.bullets.slice(0, 3).join("; ")
+          : e.description?.slice(0, 200) || "";
+      const notes = e.context_notes
+        ? ` [Internal Notes: ${e.context_notes.slice(0, 150)}]`
+        : "";
+      return `- ${e.job_title} at ${e.company}: ${bullets}${notes}`;
+    })
+    .join("\n");
+
+  const projectSummary = (baseResume.projects || [])
+    .slice(0, 3)
+    .map((p) => {
+      const bullets =
+        p.bullets && p.bullets.length > 0
+          ? p.bullets.slice(0, 2).join("; ")
+          : p.description?.slice(0, 150) || "";
+      const notes = p.context_notes
+        ? ` [Architecture Notes: ${p.context_notes.slice(0, 150)}]`
+        : "";
+      return `- Project "${p.name}" (${p.role || "Developer"}): ${bullets} [${(p.technologies || []).join(", ")}]${notes}`;
+    })
     .join("\n");
 
   const tone = options.tone || "balanced";
@@ -1403,7 +1572,12 @@ ${jobDetails.description.slice(0, 3000)}
 --- END JOB DESCRIPTION ---
 
 --- CANDIDATE BACKGROUND ---
+Experience:
 ${experienceSummary}
+
+Key Projects & Architecture:
+${projectSummary}
+
 Skills: ${(baseResume.skills || []).slice(0, 15).join(", ")}
 --- END CANDIDATE BACKGROUND ---
 

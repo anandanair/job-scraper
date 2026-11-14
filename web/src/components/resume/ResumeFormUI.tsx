@@ -1,36 +1,188 @@
 "use client";
 
-import { ChangeEvent, useEffect } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import {
   CheckCircle2,
   AlertCircle,
   X,
   Plus,
   Trash2,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 // --- SectionCard ---
 
+export type SectionColorTheme =
+  | "indigo"
+  | "purple"
+  | "blue"
+  | "emerald"
+  | "amber"
+  | "rose"
+  | "teal"
+  | "sky"
+  | "slate";
+
+const THEME_STYLES: Record<
+  SectionColorTheme,
+  {
+    borderTop: string;
+    iconBg: string;
+    iconColor: string;
+    headerBg: string;
+  }
+> = {
+  indigo: {
+    borderTop: "border-t-[3px] border-t-indigo-600",
+    iconBg: "bg-indigo-100/90",
+    iconColor: "text-indigo-700",
+    headerBg: "bg-gradient-to-r from-indigo-50/60 via-white to-white",
+  },
+  purple: {
+    borderTop: "border-t-[3px] border-t-purple-600",
+    iconBg: "bg-purple-100/90",
+    iconColor: "text-purple-700",
+    headerBg: "bg-gradient-to-r from-purple-50/60 via-white to-white",
+  },
+  blue: {
+    borderTop: "border-t-[3px] border-t-blue-600",
+    iconBg: "bg-blue-100/90",
+    iconColor: "text-blue-700",
+    headerBg: "bg-gradient-to-r from-blue-50/60 via-white to-white",
+  },
+  emerald: {
+    borderTop: "border-t-[3px] border-t-emerald-600",
+    iconBg: "bg-emerald-100/90",
+    iconColor: "text-emerald-700",
+    headerBg: "bg-gradient-to-r from-emerald-50/60 via-white to-white",
+  },
+  amber: {
+    borderTop: "border-t-[3px] border-t-amber-500",
+    iconBg: "bg-amber-100/90",
+    iconColor: "text-amber-800",
+    headerBg: "bg-gradient-to-r from-amber-50/60 via-white to-white",
+  },
+  rose: {
+    borderTop: "border-t-[3px] border-t-rose-500",
+    iconBg: "bg-rose-100/90",
+    iconColor: "text-rose-700",
+    headerBg: "bg-gradient-to-r from-rose-50/60 via-white to-white",
+  },
+  teal: {
+    borderTop: "border-t-[3px] border-t-teal-600",
+    iconBg: "bg-teal-100/90",
+    iconColor: "text-teal-700",
+    headerBg: "bg-gradient-to-r from-teal-50/60 via-white to-white",
+  },
+  sky: {
+    borderTop: "border-t-[3px] border-t-sky-500",
+    iconBg: "bg-sky-100/90",
+    iconColor: "text-sky-700",
+    headerBg: "bg-gradient-to-r from-sky-50/60 via-white to-white",
+  },
+  slate: {
+    borderTop: "border-t-[3px] border-t-slate-500",
+    iconBg: "bg-slate-100/90",
+    iconColor: "text-slate-700",
+    headerBg: "bg-gradient-to-r from-slate-50/60 via-white to-white",
+  },
+};
+
 export function SectionCard({
   icon,
   title,
+  action,
   children,
   className = "",
+  accentColor = "slate",
+  collapsible = true,
+  isExpanded: controlledExpanded,
+  onToggle: controlledToggle,
+  defaultExpanded = false,
+  badge,
 }: {
   icon: React.ReactNode;
   title: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  accentColor?: SectionColorTheme;
+  collapsible?: boolean;
+  isExpanded?: boolean;
+  onToggle?: () => void;
+  defaultExpanded?: boolean;
+  badge?: React.ReactNode;
 }) {
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
+
+  const isExpanded =
+    typeof controlledExpanded === "boolean"
+      ? controlledExpanded
+      : internalExpanded;
+
+  const handleToggle = () => {
+    if (controlledToggle) {
+      controlledToggle();
+    } else {
+      setInternalExpanded(!internalExpanded);
+    }
+  };
+
+  const styles = THEME_STYLES[accentColor] || THEME_STYLES.slate;
+
   return (
     <section
-      className={`bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden ${className}`}
+      className={`bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden ${styles.borderTop} ${className}`}
     >
-      <div className="px-6 py-4 border-b border-gray-50 flex items-center gap-2.5">
-        <span className="text-navy-600">{icon}</span>
-        <h2 className="text-base font-semibold text-slate-800">{title}</h2>
+      <div
+        onClick={collapsible ? handleToggle : undefined}
+        className={`px-5 sm:px-6 py-3.5 flex items-center justify-between gap-3 ${
+          styles.headerBg
+        } ${isExpanded ? "border-b border-slate-100" : ""} ${
+          collapsible ? "cursor-pointer select-none hover:opacity-95 transition-all group" : ""
+        }`}
+      >
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {collapsible && (
+            <span
+              className={`p-1 rounded-md transition-colors ${
+                isExpanded
+                  ? "text-slate-700 bg-slate-200/70"
+                  : "text-slate-400 group-hover:text-slate-700 group-hover:bg-slate-200/50"
+              }`}
+            >
+              {isExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+            </span>
+          )}
+          <span
+            className={`p-1.5 rounded-lg ${styles.iconBg} ${styles.iconColor} shrink-0 shadow-2xs`}
+          >
+            {icon}
+          </span>
+          <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+            {title}
+          </h2>
+          {badge && (
+            <span className="hidden sm:inline-flex text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+              {badge}
+            </span>
+          )}
+        </div>
+
+        {action && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="shrink-0 flex items-center gap-2"
+          >
+            {action}
+          </div>
+        )}
       </div>
-      <div className="px-6 py-5">{children}</div>
+
+      {(!collapsible || isExpanded) && (
+        <div className="p-4 sm:p-6 animate-fadeIn">{children}</div>
+      )}
     </section>
   );
 }
@@ -135,13 +287,13 @@ export function FormField({
   rows?: number;
 }) {
   const baseClasses =
-    "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50/50 focus:bg-white focus:border-navy-400 focus:ring-1 focus:ring-navy-400/20 transition-all outline-none placeholder:text-gray-400";
+    "w-full px-3.5 py-2 text-xs sm:text-sm border border-gray-200 rounded-xl bg-white text-slate-800 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs";
 
   return (
     <div>
       <label
         htmlFor={id}
-        className="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider"
+        className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide"
       >
         {label}
       </label>
@@ -152,7 +304,7 @@ export function FormField({
           onChange={onChange}
           rows={rows}
           placeholder={placeholder}
-          className={`${baseClasses} resize-y`}
+          className={`${baseClasses} resize-y leading-relaxed`}
         />
       ) : (
         <input
@@ -180,9 +332,9 @@ export function AddItemButton({
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-navy-600 bg-navy-50 border border-navy-200 rounded-lg hover:bg-navy-100 transition-all"
+      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-blue-700 bg-blue-50/80 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 rounded-xl transition-all shadow-2xs"
     >
-      <Plus size={13} /> {label}
+      <Plus size={14} /> {label}
     </button>
   );
 }
@@ -193,7 +345,7 @@ export function RemoveItemButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="absolute top-3 right-3 p-1 text-slate-400 hover:text-red-500 transition-colors"
+      className="absolute top-3.5 right-3.5 p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
       title="Remove"
     >
       <Trash2 size={14} />
@@ -211,7 +363,7 @@ export function ArrayItemCard({
   onRemove: () => void;
 }) {
   return (
-    <div className="p-4 border border-gray-100 rounded-lg bg-gray-50/50 relative">
+    <div className="p-4 sm:p-5 border border-gray-200/90 rounded-2xl bg-white relative shadow-xs">
       <RemoveItemButton onClick={onRemove} />
       <div className="pr-8">{children}</div>
     </div>

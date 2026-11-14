@@ -125,7 +125,7 @@ async function runJobScorer(ctx?: TelemetryContext) {
   // 3. Fetch jobs to score
   let query = supabase
     .from("jobs")
-    .select("job_id, job_title, company, description, level, location")
+    .select("job_id, job_title, company, description, level, location, salary_min, salary_max, salary_currency, salary_period")
     .eq("is_active", true);
 
   if (cli.jobId) {
@@ -182,6 +182,10 @@ async function runJobScorer(ctx?: TelemetryContext) {
           company: job.company,
           level: job.level,
           description: job.description,
+          salary_min: job.salary_min,
+          salary_max: job.salary_max,
+          salary_currency: job.salary_currency,
+          salary_period: job.salary_period,
         },
         dbSettings.dream_job_profile,
         searchMode,

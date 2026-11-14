@@ -91,24 +91,58 @@ function normalizeResumeData(raw: any): Omit<Resume, "id" | "created_at"> {
       : [],
     experience: Array.isArray(raw.experience)
       ? raw.experience
-          .map((exp: any) => ({
-            job_title: cleanStr(exp?.job_title),
-            company: cleanStr(exp?.company),
-            location: cleanStr(exp?.location),
-            start_date: cleanStr(exp?.start_date),
-            end_date: cleanStr(exp?.end_date),
-            description: cleanStr(exp?.description),
-          }))
-          .filter((exp: any) => exp.job_title || exp.company || exp.description)
+          .map((exp: any) => {
+            const rawBullets = cleanArr(exp?.bullets);
+            const desc = cleanStr(exp?.description);
+            const bullets =
+              rawBullets.length > 0
+                ? rawBullets
+                : desc
+                ? desc
+                    .split("\n")
+                    .map((b) => b.trim().replace(/^[•\-*]\s*/, ""))
+                    .filter(Boolean)
+                : [];
+            return {
+              job_title: cleanStr(exp?.job_title),
+              company: cleanStr(exp?.company),
+              location: cleanStr(exp?.location),
+              start_date: cleanStr(exp?.start_date),
+              end_date: cleanStr(exp?.end_date),
+              technologies: cleanArr(exp?.technologies),
+              bullets,
+              description: bullets.length > 0 ? bullets.join("\n") : desc,
+              context_notes: cleanStr(exp?.context_notes),
+            };
+          })
+          .filter((exp: any) => exp.job_title || exp.company || exp.description || exp.bullets.length > 0)
       : [],
     projects: Array.isArray(raw.projects)
       ? raw.projects
-          .map((proj: any) => ({
-            name: cleanStr(proj?.name),
-            description: cleanStr(proj?.description),
-            technologies: cleanArr(proj?.technologies),
-          }))
-          .filter((proj: any) => proj.name || proj.description || proj.technologies.length > 0)
+          .map((proj: any) => {
+            const rawBullets = cleanArr(proj?.bullets);
+            const desc = cleanStr(proj?.description);
+            const bullets =
+              rawBullets.length > 0
+                ? rawBullets
+                : desc
+                ? desc
+                    .split("\n")
+                    .map((b) => b.trim().replace(/^[•\-*]\s*/, ""))
+                    .filter(Boolean)
+                : [];
+            return {
+              name: cleanStr(proj?.name),
+              role: cleanStr(proj?.role),
+              url: cleanStr(proj?.url),
+              date: cleanStr(proj?.date),
+              technologies: cleanArr(proj?.technologies),
+              bullets,
+              description: bullets.length > 0 ? bullets.join("\n") : desc,
+              context_notes: cleanStr(proj?.context_notes),
+            };
+          })
+          .filter((proj: any) => proj.name || proj.description || proj.technologies.length > 0 || proj.bullets.length > 0)
       : [],
     certifications: Array.isArray(raw.certifications)
       ? raw.certifications
@@ -155,10 +189,27 @@ Return JSON adhering strictly to this structure:
     { "degree": string, "field_of_study": string, "institution": string, "start_year": string, "end_year": string }
   ],
   "experience": [
-    { "job_title": string, "company": string, "location": string, "start_date": string, "end_date": string, "description": string }
+    { 
+      "job_title": string, 
+      "company": string, 
+      "location": string, 
+      "start_date": string, 
+      "end_date": string, 
+      "technologies": string[],
+      "bullets": string[],
+      "description": string 
+    }
   ],
   "projects": [
-    { "name": string, "description": string, "technologies": string[] }
+    { 
+      "name": string, 
+      "role": string, 
+      "url": string, 
+      "date": string, 
+      "technologies": string[], 
+      "bullets": string[], 
+      "description": string 
+    }
   ],
   "certifications": [
     { "name": string, "issuer": string, "year": string }

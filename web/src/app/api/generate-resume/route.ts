@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildPdfBuffer, ResumeInput } from "@/lib/pdf";
+import { buildPdfBufferWithMeta, ResumeInput } from "@/lib/pdf";
 import { getActiveResumeStyle } from "@/lib/supabase/queries";
 import { ResumeThemeConfig } from "@/types";
 
@@ -21,13 +21,18 @@ export async function POST(request: NextRequest) {
       styleConfig = await getActiveResumeStyle();
     }
 
-    const pdfBuffer = await buildPdfBuffer(resumeData, styleConfig);
+    const { buffer: pdfBuffer, pageCount } = await buildPdfBufferWithMeta(
+      resumeData,
+      styleConfig
+    );
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": "attachment; filename=resume.pdf",
+        "X-Page-Count": pageCount.toString(),
+        "Access-Control-Expose-Headers": "X-Page-Count",
       },
     });
   } catch (error: any) {

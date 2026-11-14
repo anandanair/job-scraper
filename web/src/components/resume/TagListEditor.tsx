@@ -260,9 +260,6 @@ export function TagListEditor({
               <span>Add</span>
             </button>
           </div>
-          <p className="text-[10px] text-slate-400">
-            Tip: Press <kbd className="px-1 py-0.5 rounded bg-gray-100 border border-gray-200 text-[10px]">Enter</kbd> or type <kbd className="px-1 py-0.5 rounded bg-gray-100 border border-gray-200 text-[10px]">,</kbd> to add. Paste comma lists to add multiple at once.
-          </p>
         </div>
       )}
 
@@ -281,9 +278,6 @@ export function TagListEditor({
             }
             className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-gray-200 rounded-lg text-slate-800 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 transition-all font-mono leading-relaxed resize-y"
           />
-          <p className="text-[10px] text-slate-400">
-            Edit freely with commas. Changes sync to your live resume in real time.
-          </p>
         </div>
       )}
     </div>

@@ -73,11 +73,26 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
     section: keyof Resume,
     index: number,
     field: keyof T,
-    value: string,
+    value: any,
   ) => {
     setFormData((prev) => {
       const arr = [...(prev[section] as any[])];
       arr[index] = { ...arr[index], [field]: value };
+      return { ...prev, [section]: arr };
+    });
+  };
+
+  const moveArrayItem = (
+    section: keyof Resume,
+    fromIndex: number,
+    toIndex: number
+  ) => {
+    setFormData((prev) => {
+      const arr = [...(prev[section] as any[])];
+      if (toIndex < 0 || toIndex >= arr.length) return prev;
+      const temp = arr[fromIndex];
+      arr[fromIndex] = arr[toIndex];
+      arr[toIndex] = temp;
       return { ...prev, [section]: arr };
     });
   };
@@ -345,7 +360,12 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
                       ? `${exp.start_date} — ${exp.end_date || "Present"}`
                       : undefined
                   }
-                  description={exp.description}
+                  description={
+                    exp.description ||
+                    (exp.bullets && exp.bullets.length > 0
+                      ? exp.bullets.join("\n")
+                      : undefined)
+                  }
                 />
               ))}
             </div>
@@ -380,9 +400,35 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
             <div className="space-y-4">
               {formData.projects.map((proj, i) => (
                 <div key={i}>
-                  <h3 className="text-sm font-semibold text-slate-800">
-                    {proj.name}
-                  </h3>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      {proj.name}
+                      {proj.role && (
+                        <span className="ml-2 text-xs font-normal text-slate-500">
+                          ({proj.role})
+                        </span>
+                      )}
+                    </h3>
+                    {proj.date && (
+                      <span className="text-xs text-slate-400 font-medium">
+                        {proj.date}
+                      </span>
+                    )}
+                  </div>
+                  {proj.url && (
+                    <a
+                      href={
+                        proj.url.startsWith("http")
+                          ? proj.url
+                          : `https://${proj.url}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-indigo-600 hover:underline block mt-0.5"
+                    >
+                      {proj.url}
+                    </a>
+                  )}
                   {proj.technologies && proj.technologies.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                       {proj.technologies.map((tech) => (
@@ -395,9 +441,10 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
                       ))}
                     </div>
                   )}
-                  {proj.description && (
-                    <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                      {proj.description}
+                  {(proj.description ||
+                    (proj.bullets && proj.bullets.length > 0)) && (
+                    <p className="text-sm text-slate-600 mt-2 leading-relaxed whitespace-pre-line">
+                      {proj.description || proj.bullets?.join("\n")}
                     </p>
                   )}
                 </div>
@@ -532,6 +579,7 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
         updateLinkField={updateLinkField}
         addArrayItem={addArrayItem}
         removeArrayItem={removeArrayItem}
+        moveArrayItem={moveArrayItem}
       />
 
       {/* Bottom action bar — fixed at bottom of viewport */}

@@ -91,7 +91,9 @@ export default function TailoredResumeStudio({
   // --- UI status ---
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [paperHeight, setPaperHeight] = useState<number>(0);
+  const [pageCount, setPageCount] = useState<number>(1);
+  const [isSyncingPreview, setIsSyncingPreview] = useState<boolean>(false);
+  const activePdfDataRef = useRef<Uint8Array | null>(null);
   const paperRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{
     message: string;
@@ -105,14 +107,6 @@ export default function TailoredResumeStudio({
   const isDirty =
     JSON.stringify(formData) !== JSON.stringify(baselineFormDataRef.current) ||
     JSON.stringify(theme) !== JSON.stringify(baselineThemeRef.current);
-
-  useEffect(() => {
-    if (paperRef.current) {
-      setPaperHeight(paperRef.current.scrollHeight);
-    }
-  }, [theme, formData, isSidebarOpen, activeTab]);
-
-  const isOnePage = paperHeight <= ONE_PAGE_TOLERANCE_PX;
 
   // Warn before leaving with unsaved changes
   useEffect(() => {
@@ -134,11 +128,26 @@ export default function TailoredResumeStudio({
     section: keyof Resume,
     index: number,
     field: keyof T,
-    value: string
+    value: any
   ) => {
     setFormData((prev) => {
       const arr = [...((prev[section] as any[]) || [])];
       arr[index] = { ...arr[index], [field]: value };
+      return { ...prev, [section]: arr };
+    });
+  };
+
+  const moveArrayItem = (
+    section: keyof Resume,
+    fromIndex: number,
+    toIndex: number
+  ) => {
+    setFormData((prev) => {
+      const arr = [...((prev[section] as any[]) || [])];
+      if (toIndex < 0 || toIndex >= arr.length) return prev;
+      const temp = arr[fromIndex];
+      arr[fromIndex] = arr[toIndex];
+      arr[toIndex] = temp;
       return { ...prev, [section]: arr };
     });
   };
@@ -235,11 +244,38 @@ export default function TailoredResumeStudio({
     });
   };
 
-  // --- Download the persisted PDF snapshot ---
+  // --- Download the PDF (from active live preview if unsaved, or persisted snapshot) ---
   const handleDownload = async () => {
     if (isDownloading) return;
     setIsDownloading(true);
     try {
+      const downloadName = fileName.toLowerCase().endsWith(".pdf")
+        ? fileName
+        : `${fileName}.pdf`;
+
+      // If unsaved edits exist and the live preview has compiled PDF data, download it directly
+      if (isDirty && activePdfDataRef.current && activePdfDataRef.current.byteLength > 0) {
+        const blob = new Blob([activePdfDataRef.current.slice() as any], {
+          type: "application/pdf",
+        });
+        if (blob.size > 0) {
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = blobUrl;
+          link.download = downloadName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+          setToast({
+            message: "✓ Downloaded PDF with current live edits!",
+            type: "success",
+          });
+          return;
+        }
+      }
+
       const response = await fetch(
         `/api/customized_resumes/${resumeId}/pdf?download=true`
       );
@@ -247,16 +283,22 @@ export default function TailoredResumeStudio({
         throw new Error(`Failed to download PDF (HTTP ${response.status})`);
       }
       const blob = await response.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error("Downloaded PDF is empty");
+      }
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = fileName.toLowerCase().endsWith(".pdf")
-        ? fileName
-        : `${fileName}.pdf`;
+      link.download = downloadName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+
+      setToast({
+        message: "✓ Resume PDF downloaded successfully!",
+        type: "success",
+      });
     } catch (err: any) {
       console.error("Error downloading PDF:", err);
       setToast({
@@ -483,6 +525,7 @@ export default function TailoredResumeStudio({
                     updateLinkField={updateLinkField}
                     addArrayItem={addArrayItem}
                     removeArrayItem={removeArrayItem}
+                    moveArrayItem={moveArrayItem}
                   />
                 </div>
               )}
@@ -548,21 +591,37 @@ export default function TailoredResumeStudio({
               {/* Canvas header with page-fit indicator */}
               <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 p-3 shadow-xs flex items-center justify-between shrink-0 z-10">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                      isSyncingPreview
+                        ? "bg-amber-400 animate-ping"
+                        : "bg-emerald-500"
+                    }`}
+                  />
                   <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
                     Live Interactive Preview
                   </span>
                   <div
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                      isOnePage
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border transition-all ${
+                      pageCount === 1
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : pageCount === 2
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
                         : "bg-amber-50 text-amber-700 border-amber-200"
                     }`}
                   >
-                    {isOnePage
+                    {pageCount === 1
                       ? "Length: 1 Page (ATS Optimal)"
-                      : "Length: ~2 Pages"}
+                      : pageCount === 2
+                      ? "Length: 2 Pages (ATS Standard)"
+                      : `Length: ${pageCount} Pages (Target: 1-2 Pages)`}
                   </div>
+                  {isSyncingPreview && (
+                    <div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium animate-pulse">
+                      <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
+                      <span>Syncing...</span>
+                    </div>
+                  )}
                 </div>
                 {isDirty && (
                   <span className="text-[11px] text-amber-600 font-medium">
@@ -576,8 +635,13 @@ export default function TailoredResumeStudio({
                   ref={paperRef}
                   resume={formData}
                   theme={theme}
+                  onPageCountChange={setPageCount}
+                  onSyncingChange={setIsSyncingPreview}
+                  onPdfReady={(data) => {
+                    activePdfDataRef.current = data;
+                  }}
                 />
-                <div className="pb-4 -mt-6 text-[10px] text-gray-400 select-none">
+                <div className="pb-4 mt-4 text-[10px] text-gray-400 select-none">
                   — End of Preview Document —
                 </div>
               </div>

@@ -104,13 +104,21 @@ export interface Experience {
   location: string | null;
   start_date: string | null;
   end_date: string | null;
-  description: string | null;
+  technologies?: string[] | null;     // Tools & stack used in this role
+  bullets?: string[];                 // Array of distinct achievement bullets
+  description: string | null;        // Maintained for backward compatibility
+  context_notes?: string | null;      // Internal AI-only notes (omitted from PDF)
 }
 
 export interface Project {
   name: string;
-  description: string | null;
-  technologies: string[] | null;
+  role?: string | null;               // e.g. "Lead Developer", "Creator"
+  url?: string | null;                // GitHub / Live demo URL (clickable in PDF)
+  date?: string | null;               // e.g. "2024" or "Jan 2024 - Apr 2024"
+  technologies: string[] | null;      // Array of technology tags
+  bullets?: string[];                 // Array of distinct achievement bullets
+  description: string | null;        // Maintained for backward compatibility
+  context_notes?: string | null;      // Internal AI-only notes (omitted from PDF)
 }
 
 export interface Certification {

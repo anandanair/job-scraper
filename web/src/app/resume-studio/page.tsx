@@ -26,14 +26,13 @@ export default async function ResumeStudioPage({
     resolvedSearchParams?.tab === "style" ? "style" : "content";
 
   return (
-    <div className="max-w-7xl mx-auto flex flex-col h-[calc(100vh-165px)] overflow-hidden">
+    <div className="max-w-[1720px] w-full mx-auto px-2 sm:px-4 flex flex-col h-[calc(100vh-165px)] overflow-hidden">
       <div className="mb-2 shrink-0">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
           Resume Studio
         </h1>
-        <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-          Unified control center for your master resume profile and ATS typography, layout, and styling.
-          Any changes you save here automatically calibrate all future AI-generated resumes.
+        <p className="text-xs text-gray-500 mt-0.5">
+          Master career vault and ATS resume design center
         </p>
       </div>
 
