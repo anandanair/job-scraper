@@ -1,8 +1,11 @@
-import { Job, Resume, DashboardStats, ResumeThemeConfig, ResumeStyleSetting, AppSettings, CoverLetter, CoverLetterTone } from "@/types";
+import { Job, Resume, DashboardStats, ResumeThemeConfig, ResumeStyleSetting, AppSettings, CoverLetter, CoverLetterTone, JobSearchMode } from "@/types";
 import { DEFAULT_THEME_CONFIG } from "@/lib/resume-presets";
 import { createSupabaseServerClient, createSupabaseStaticClient } from "@/utils/supabase/server";
 import { unstable_cache } from "next/cache";
 import { PostgrestError } from "@supabase/supabase-js";
+
+/** Active, unapplied job status values accepted across intake, top matches, and tailored views */
+export const ACTIVE_UNAPPLIED_STATUSES = ["new", "tailored", "resume_generated"];
 
 // Helper function to handle Supabase response errors
 async function handleResponse({
@@ -33,18 +36,30 @@ export async function getTopScoredJobs(
   isInterested?: boolean | null, // Optional interest filter (true, false, or null for 'not marked')
   searchQuery?: string, // Optional search query
   sortBy: "total" | "dream" | "ats" = "total", // Ranking strategy: composite match, dream fit first, or ATS fit first
+  searchMode?: JobSearchMode,
 ): Promise<Job[]> {
   const supabase = await createSupabaseServerClient();
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  let activeMode = searchMode;
+  if (!activeMode) {
+    const settings = await getAppSettings();
+    activeMode = settings?.job_search_mode || "get_hired_fast";
+  }
+  const isDreamMode = activeMode === "dream_hunter";
+
   let query = supabase
     .from("jobs")
     .select("*, customized_resumes(id, resume_link), cover_letters(id, updated_at)")
     .eq("is_active", true)
-    .eq("status", "new")
+    .in("status", ACTIVE_UNAPPLIED_STATUSES)
     .eq("job_state", "new")
     .not("resume_score", "is", null);
+
+  if (isDreamMode) {
+    query = query.gte("dream_score", 60);
+  }
 
   if (minScore !== undefined && maxScore !== undefined && maxScore < 100) {
     query = query.or(
@@ -111,16 +126,28 @@ export async function getTopScoredJobsCount(
   maxScore: number = 100, // Default maxScore
   isInterested?: boolean | null, // Optional interest filter
   searchQuery?: string, // Optional search query
+  searchMode?: JobSearchMode,
 ): Promise<number> {
   const supabase = await createSupabaseServerClient();
+
+  let activeMode = searchMode;
+  if (!activeMode) {
+    const settings = await getAppSettings();
+    activeMode = settings?.job_search_mode || "get_hired_fast";
+  }
+  const isDreamMode = activeMode === "dream_hunter";
 
   let query = supabase
     .from("jobs")
     .select("*", { count: "exact", head: true }) // Select count only
     .eq("is_active", true)
-    .eq("status", "new")
+    .in("status", ACTIVE_UNAPPLIED_STATUSES)
     .eq("job_state", "new")
     .not("resume_score", "is", null);
+
+  if (isDreamMode) {
+    query = query.gte("dream_score", 60);
+  }
 
   if (minScore !== undefined && maxScore !== undefined && maxScore < 100) {
     query = query.or(
@@ -183,7 +210,7 @@ export async function getNewJobs(
     .from("jobs")
     .select("*, customized_resumes(id, resume_link), cover_letters(id, updated_at)")
     .eq("is_active", true)
-    .eq("status", "new") // Filter by status
+    .in("status", ACTIVE_UNAPPLIED_STATUSES) // Filter by status
     .eq("job_state", "new");
 
   // Only apply score filter if explicitly provided by user
@@ -241,7 +268,7 @@ export async function getAllActiveJobsCount(
     .from("jobs")
     .select("*", { count: "exact", head: true }) // Select count only
     .eq("is_active", true)
-    .eq("status", "new")
+    .in("status", ACTIVE_UNAPPLIED_STATUSES)
     .eq("job_state", "new");
 
   // Only apply score filter if explicitly provided by user
@@ -303,7 +330,7 @@ export async function getTailoredJobs(
     .from("jobs")
     .select("*, customized_resumes(id, resume_link), cover_letters(id, updated_at)")
     .eq("is_active", true)
-    .in("status", ["new", "resume_generated"])
+    .in("status", ACTIVE_UNAPPLIED_STATUSES)
     .eq("job_state", "new")
     .not("customized_resume_id", "is", null);
 
@@ -356,7 +383,7 @@ export async function getTailoredJobsCount(
     .from("jobs")
     .select("*", { count: "exact", head: true })
     .eq("is_active", true)
-    .in("status", ["new", "resume_generated"])
+    .in("status", ACTIVE_UNAPPLIED_STATUSES)
     .eq("job_state", "new")
     .not("customized_resume_id", "is", null);
 
@@ -405,29 +432,38 @@ export interface JobsTabCounts {
 // Helper to fetch live counts for all 3 Jobs Hub tabs in parallel
 export async function getJobsTabCounts(): Promise<JobsTabCounts> {
   const supabase = await createSupabaseServerClient();
+  const settings = await getAppSettings();
+  const isDreamMode = settings?.job_search_mode === "dream_hunter";
+
+  let matchesQuery = supabase
+    .from("jobs")
+    .select("*", { count: "exact", head: true })
+    .eq("is_active", true)
+    .in("status", ACTIVE_UNAPPLIED_STATUSES)
+    .eq("job_state", "new")
+    .not("resume_score", "is", null)
+    .or("is_interested.is.null,is_interested.eq.true");
+
+  if (isDreamMode) {
+    matchesQuery = matchesQuery.gte("dream_score", 60);
+  } else {
+    matchesQuery = matchesQuery.or("total_score.gte.50,and(total_score.is.null,resume_score.gte.50)");
+  }
 
   const [newRes, matchesRes, tailoredRes] = await Promise.all([
     supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .eq("is_active", true)
-      .eq("status", "new")
+      .in("status", ACTIVE_UNAPPLIED_STATUSES)
       .eq("job_state", "new")
       .or("is_interested.is.null,is_interested.eq.true"),
+    matchesQuery,
     supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .eq("is_active", true)
-      .eq("status", "new")
-      .eq("job_state", "new")
-      .not("resume_score", "is", null)
-      .or("total_score.gte.50,and(total_score.is.null,resume_score.gte.50)")
-      .or("is_interested.is.null,is_interested.eq.true"),
-    supabase
-      .from("jobs")
-      .select("*", { count: "exact", head: true })
-      .eq("is_active", true)
-      .in("status", ["new", "resume_generated"])
+      .in("status", ACTIVE_UNAPPLIED_STATUSES)
       .eq("job_state", "new")
       .not("customized_resume_id", "is", null)
       .or("is_interested.is.null,is_interested.eq.true"),
@@ -879,7 +915,7 @@ export async function getPendingScoreJobsCount(): Promise<number> {
     .select("*", { count: "exact", head: true })
     .is("resume_score", null)
     .eq("is_active", true) // Assuming we only count active jobs
-    .eq("status", "new") // And new jobs that haven't been processed beyond initial scraping
+    .in("status", ACTIVE_UNAPPLIED_STATUSES) // And new jobs that haven't been processed beyond initial scraping
     .eq("job_state", "new");
 
   if (error) {
@@ -900,7 +936,7 @@ export async function getScoredJobsCount(): Promise<number> {
     .select("*", { count: "exact", head: true })
     .not("resume_score", "is", null)
     .eq("is_active", true)
-    .eq("status", "new")
+    .in("status", ACTIVE_UNAPPLIED_STATUSES)
     .eq("job_state", "new");
 
   if (error) {
@@ -961,7 +997,7 @@ export async function getScoredWithOriginalResumeCount(): Promise<number> {
     .not("resume_score", "is", null)
     .eq("resume_score_stage", "initial")
     .eq("is_active", true)
-    .eq("status", "new")
+    .in("status", ACTIVE_UNAPPLIED_STATUSES)
     .eq("job_state", "new");
 
   if (error) {
@@ -984,7 +1020,7 @@ export async function getScoredWithCustomResumeCount(): Promise<number> {
     .not("resume_score", "is", null)
     .eq("resume_score_stage", "custom")
     .eq("is_active", true)
-    .eq("status", "new")
+    .in("status", ACTIVE_UNAPPLIED_STATUSES)
     .eq("job_state", "new");
 
   if (error) {
@@ -1090,7 +1126,7 @@ export async function getDashboardStats(
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .eq("is_active", true)
-      .eq("status", "new")
+      .in("status", ACTIVE_UNAPPLIED_STATUSES)
       .eq("job_state", "new"),
     supabase
       .from("jobs")
@@ -1102,7 +1138,7 @@ export async function getDashboardStats(
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .eq("is_active", true)
-      .eq("status", "new")
+      .in("status", ACTIVE_UNAPPLIED_STATUSES)
       .eq("job_state", "new")
       .not("resume_score", "is", null)
       .or("total_score.gte.50,and(total_score.is.null,resume_score.gte.50)"),
@@ -1115,14 +1151,14 @@ export async function getDashboardStats(
       .select("*", { count: "exact", head: true })
       .is("resume_score", null)
       .eq("is_active", true)
-      .eq("status", "new")
+      .in("status", ACTIVE_UNAPPLIED_STATUSES)
       .eq("job_state", "new"),
     supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .not("resume_score", "is", null)
       .eq("is_active", true)
-      .eq("status", "new")
+      .in("status", ACTIVE_UNAPPLIED_STATUSES)
       .eq("job_state", "new"),
     supabase
       .from("jobs")
@@ -1140,7 +1176,7 @@ export async function getDashboardStats(
       .not("resume_score", "is", null)
       .eq("resume_score_stage", "initial")
       .eq("is_active", true)
-      .eq("status", "new")
+      .in("status", ACTIVE_UNAPPLIED_STATUSES)
       .eq("job_state", "new"),
     supabase
       .from("jobs")
@@ -1148,7 +1184,7 @@ export async function getDashboardStats(
       .not("resume_score", "is", null)
       .eq("resume_score_stage", "custom")
       .eq("is_active", true)
-      .in("status", ["new", "resume_generated"])
+      .in("status", ACTIVE_UNAPPLIED_STATUSES)
       .eq("job_state", "new"),
     supabase
       .from("jobs")

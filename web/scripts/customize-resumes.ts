@@ -138,7 +138,7 @@ async function runResumeCustomizer(ctx?: TelemetryContext) {
         .or("is_interested.is.null,is_interested.eq.true");
 
       if (isDreamMode) {
-        query = query.or(`dream_score.is.null,dream_score.gte.${MIN_DREAM_THRESHOLD}`);
+        query = query.gte("dream_score", MIN_DREAM_THRESHOLD);
       }
     }
 
@@ -220,20 +220,18 @@ async function runResumeCustomizer(ctx?: TelemetryContext) {
           continue;
         }
 
-        // Step C: Update jobs table with customized_resume_id and mark status tailored
-        const newStatus = job.status === "new" ? "tailored" : job.status;
+        // Step C: Update jobs table with customized_resume_id (preserve status = 'new' for unapplied jobs)
         const { error: jobUpdateError } = await supabase
           .from("jobs")
           .update({
             customized_resume_id: customizedResumeId,
-            status: newStatus,
           })
           .eq("job_id", job.job_id);
 
         if (jobUpdateError) {
           console.warn("  ⚠ Failed to link customized_resume_id to job:", jobUpdateError.message);
         } else {
-          console.log(`  ✓ Linked customized resume to job ${job.job_id} (Status -> ${newStatus}).`);
+          console.log(`  ✓ Linked customized resume to job ${job.job_id}.`);
         }
 
         // Step D: Re-score job with customized resume

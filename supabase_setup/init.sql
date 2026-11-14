@@ -441,16 +441,16 @@ DECLARE
     result json;
 BEGIN
     SELECT json_build_object(
-        'totalNewJobs', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new'),
+        'totalNewJobs', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new'),
         'totalAppliedJobs', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new'),
-        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND (total_score >= 50 OR (total_score IS NULL AND resume_score >= 50))),
+        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND (total_score >= 50 OR (total_score IS NULL AND resume_score >= 50))),
         'expiredJobsCount', count(*) FILTER (WHERE job_state = 'expired'),
-        'pendingScoreJobsCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NULL),
-        'scoredJobsCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL),
+        'pendingScoreJobsCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND resume_score IS NULL),
+        'scoredJobsCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL),
         'customResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NOT NULL),
         'noCustomResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NULL),
-        'scoredWithOriginalResumeCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'initial'),
-        'scoredWithCustomResumeCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'custom'),
+        'scoredWithOriginalResumeCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'initial'),
+        'scoredWithCustomResumeCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'custom'),
         'linkedInJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'linkedin'),
         'careersFutureJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'careers_future'),
         'remoteOkJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'remote_ok'),
@@ -954,7 +954,8 @@ GRANT EXECUTE ON FUNCTION "public"."has_migration_booster"() TO service_role;
 INSERT INTO "public"."schema_migrations" ("version")
 VALUES ('20261029_01_migration_booster_and_interest_filter'),
        ('20261102_01_schedule_timezone_and_timing'),
-       ('20261103_01_automation_runs_telemetry')
+       ('20261103_01_automation_runs_telemetry'),
+       ('20261114_01_heal_tailored_jobs_status')
 ON CONFLICT ("version") DO NOTHING;
 
 -- Automation Runs Telemetry Table

@@ -495,6 +495,19 @@ ALTER FUNCTION "public"."get_dashboard_stats"("p_today_start" timestamp with tim
 -- 3. Record migration
 INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261110_05_dashboard_stats_ats_remoteok') ON CONFLICT DO NOTHING;`,
   },
+  {
+    id: "20261114_01_heal_tailored_jobs_status",
+    title: "Heal Active Tailored Jobs Status to New",
+    description:
+      "Heals active unapplied jobs with status 'tailored' back to 'new' so they are visible in Top Matches, New Jobs, and Tailored & Ready feeds.",
+    sql: `-- 1. Revert active jobs marked as 'tailored' back to 'new'
+UPDATE "public"."jobs"
+SET "status" = 'new'
+WHERE "status" = 'tailored' AND "is_active" = true;
+
+-- 2. Record migration
+INSERT INTO "public"."schema_migrations" ("version") VALUES ('20261114_01_heal_tailored_jobs_status') ON CONFLICT DO NOTHING;`,
+  },
 ];
 
 /**
