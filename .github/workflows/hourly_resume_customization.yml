@@ -2,8 +2,8 @@ name: Resume Customization
 
 on:
   schedule:
-    # Runs every 4 hours (runs 30 mins after job scorer evaluates fresh jobs)
-    - cron: "30 */4 * * *"
+    # Runs every 4 hours at minute 47 (30 mins after job scorer at minute 17, off-peak)
+    - cron: "47 */4 * * *"
   workflow_dispatch: # Allows manual triggering from the Actions tab in GitHub
 
 jobs:

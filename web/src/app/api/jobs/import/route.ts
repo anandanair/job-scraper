@@ -9,6 +9,7 @@ import {
   fetchLeverJobDetails,
 } from "@/lib/scraper/ats-boards";
 import { evaluateJobFit, formatResumeToText } from "@/lib/llm";
+import { getCompanyIntelligence } from "@/lib/company-intel";
 import { Resume } from "@/types";
 import * as cheerio from "cheerio";
 import crypto from "crypto";
@@ -261,6 +262,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
+    let returnJob = insertedJob;
+
     // Trigger AI Scoring in background or immediately
     try {
       const { data: baseResumeData } = await supabase
@@ -278,6 +281,20 @@ export async function POST(request: Request) {
           .limit(1)
           .maybeSingle();
 
+        // Fetch company intelligence (Glassdoor, public sentiment, reviews)
+        let companyIntel = null;
+        if (finalCompany) {
+          try {
+            companyIntel = await getCompanyIntelligence(
+              finalCompany,
+              finalLocation !== "Not specified" ? finalLocation : "Singapore",
+              supabase
+            );
+          } catch (intelErr: any) {
+            console.warn("[ImportJob] Could not fetch company intel:", intelErr.message);
+          }
+        }
+
         const resumeText = formatResumeToText(baseResumeData.resume_data as Resume);
         const evalResult = await evaluateJobFit(
           resumeText,
@@ -289,11 +306,12 @@ export async function POST(request: Request) {
             description: finalDescription,
           },
           dbSettings?.dream_job_profile,
-          (dbSettings?.job_search_mode as any) || "get_hired_fast"
+          (dbSettings?.job_search_mode as any) || "get_hired_fast",
+          companyIntel
         );
 
         if (evalResult) {
-          await supabase
+          const { data: updatedJob } = await supabase
             .from("jobs")
             .update({
               resume_score: evalResult.resume_score,
@@ -302,14 +320,20 @@ export async function POST(request: Request) {
               score_breakdown: evalResult.score_breakdown,
               resume_score_stage: "initial",
             })
-            .eq("job_id", jobId);
+            .eq("job_id", jobId)
+            .select()
+            .single();
+
+          if (updatedJob) {
+            returnJob = updatedJob;
+          }
         }
       }
     } catch (scoreErr) {
       console.warn("[ImportJob] Scoring failed after import:", scoreErr);
     }
 
-    return NextResponse.json({ success: true, job: insertedJob });
+    return NextResponse.json({ success: true, job: returnJob });
   } catch (err: any) {
     console.error("[ImportJob] Unexpected error:", err);
     return NextResponse.json({ error: err.message || "Failed to import job" }, { status: 500 });

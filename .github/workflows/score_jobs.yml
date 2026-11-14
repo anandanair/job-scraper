@@ -3,8 +3,8 @@ name: Job Scorer
 
 on:
   schedule:
-    # Runs every 4 hours (configurable in Step 5 Automation)
-    - cron: "0 */4 * * *"
+    # Runs every 4 hours at minute 17 (off-peak to bypass GitHub Actions runner queue delays)
+    - cron: "17 */4 * * *"
   workflow_dispatch: # Allows manual triggering from the Actions tab
 
 jobs:

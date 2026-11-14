@@ -3,8 +3,8 @@ name: Daily Job Scraper
 
 on:
   schedule:
-    # Runs hourly (at minute 0) to evaluate the user's configured local timezone schedule
-    - cron: "0 * * * *"
+    # Runs hourly at minute 12 (off-peak to evaluate user's configured local timezone schedule)
+    - cron: "12 * * * *"
   workflow_dispatch:
 
 jobs:

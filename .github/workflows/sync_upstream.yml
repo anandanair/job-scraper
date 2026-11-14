@@ -9,8 +9,8 @@ name: Sync Fork with Upstream
 
 on:
   schedule:
-    # Daily at 18:00 UTC (1 hour before the daily scraper runs at 19:00 UTC / 3:00 AM SGT)
-    - cron: "0 18 * * *"
+    # Daily at 18:35 UTC (off-peak to prevent runner delays)
+    - cron: "35 18 * * *"
   workflow_dispatch: # Allows manual trigger anytime from the Actions tab
 
 # Never let two syncs race each other on the same fork.

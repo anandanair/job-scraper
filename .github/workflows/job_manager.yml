@@ -3,8 +3,8 @@ name: Daily Job Manager
 
 on:
   schedule:
-    # Runs every day at 17:00 UTC (1:00 AM SGT the next day)
-    - cron: "0 17 * * *"
+    # Runs daily at 17:25 UTC (off-peak to prevent runner delays; 1:25 AM SGT next day)
+    - cron: "25 17 * * *"
   workflow_dispatch: # Allows manual triggering from the Actions tab
 
 jobs:

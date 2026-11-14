@@ -224,7 +224,7 @@ graph TD
       - **Salary Floor Enforcement**: Scraped compensation (`salary_min`, `salary_max`, `salary_currency`, `salary_period`) is forwarded to the LLM. Undisclosed salary is treated as Neutral (0 penalty), while disclosed pay with `salary_max < salary_floor_min` is capped at $\le 40$ with a `"Below Salary Floor"` red flag.
   - **Grounded Company Intelligence & Zero-Cost Intel Pipeline (`web/src/lib/company-intel.ts`)**:
     - Queries public DuckDuckGo search indexes (`"{company}" "{location}" working culture reviews glassdoor`) to extract real employee review sentiment, Glassdoor star ratings, review counts, and source URLs with zero paid APIs or bot blockers.
-    - Caches intelligence in Supabase `company_profiles` table with 30-day TTL (`is_cached: true`). On-demand testing rescore button (`/api/jobs/[job_id]/rescore`) passes `forceLive: true` to bypass cache and query fresh web intelligence immediately.
+    - Caches intelligence in Supabase `company_profiles` table with 30-day TTL (`is_cached: true`). On-demand testing rescore button (`/api/jobs/[job_id]/rescore`), scheduled scoring (`score-jobs.ts`), and interactive job import (`/api/jobs/import`) query web intelligence and cache profiles.
     - **Transparent 4-Part Rubric for Dream Score**:
       1. `dream_craft_score` (0-35 pts): Favorite tech stack matches vs dealbreakers avoided.
       2. `dream_workplace_score` (0-25 pts): Remote, Hybrid, or Onsite preference match.
