@@ -83,8 +83,8 @@ function parseCliArgs(): CliArgs {
       const lower = p.toLowerCase();
       if (!result.force && (lower === "--force" || lower === "-f" || lower === "force")) {
         result.force = true;
-      } else if (!result.source && (lower === "linkedin" || lower === "careers_future" || lower === "all")) {
-        result.source = lower;
+      } else if (!result.source && (lower === "linkedin" || lower === "careers_future" || lower === "ats" || lower === "remote_ok" || lower === "all")) {
+        result.source = lower as CliArgs["source"];
       } else if (!result.limit && /^\d+$/.test(p)) {
         result.limit = parseInt(p, 10);
       } else if (!result.query) {

@@ -68,7 +68,7 @@ graph TD
 ```
 .
 ├── .github/workflows/          # Automated GitHub Actions
-│   ├── scrape_jobs.yml         # Daily TypeScript job scraper (hourly gatekeeper evaluating user local timezone)
+│   ├── scrape_jobs.yml         # Daily TypeScript job scraper (hourly gatekeeper evaluating user local timezone across active sources: LinkedIn, CareersFuture, RemoteOK, Direct ATS)
 │   ├── score_jobs.yml          # TypeScript AI job scorer (every 4 hrs)
 │   ├── hourly_resume_customization.yml # TypeScript resume tailor (every 4 hrs)
 │   ├── job_manager.yml         # TypeScript job status manager (daily)

@@ -23,7 +23,7 @@ export interface CandidateJob {
 }
 
 export interface ScraperOptions {
-  source?: "all" | "linkedin" | "careers_future";
+  source?: "all" | "linkedin" | "careers_future" | "ats" | "remote_ok";
   query?: string;
   limit?: number;
   dryRun?: boolean;

@@ -77,7 +77,7 @@ const WORKFLOWS: {
     name: "Daily Job Scraper",
     schedule: "Hourly gatekeeper (12 * * * *)",
     cron: "12 * * * *",
-    description: "Evaluates your local timezone schedule hourly and scrapes LinkedIn & CareersFuture for fresh postings.",
+    description: "Evaluates your local timezone schedule hourly and scrapes active sources (LinkedIn, CareersFuture, RemoteOK, Direct ATS) for fresh postings.",
     badge: "TypeScript Engine",
   },
   {
