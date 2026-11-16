@@ -68,6 +68,11 @@ export default function DashboardHero({
       ? summaryParts.join(" · ")
       : "Your pipeline is set up — run a scrape to find opportunities";
 
+  const hoursSinceScrape = lastScrapedAt
+    ? (now.getTime() - new Date(lastScrapedAt).getTime()) / (1000 * 60 * 60)
+    : Infinity;
+  const isStale = hoursSinceScrape >= 24;
+
   return (
     <section className="mb-8">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -80,10 +85,40 @@ export default function DashboardHero({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {lastScrapedAt && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
-              <RefreshCw className="h-3.5 w-3.5" />
-              Updated {getRelativeTime(lastScrapedAt, now)}
+          {lastScrapedAt ? (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
+                isStale
+                  ? "bg-amber-50 text-amber-800 border border-amber-200/80 shadow-2xs"
+                  : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isStale ? "text-amber-600" : ""}`} />
+              <span>
+                {isStale
+                  ? `Last scraped ${getRelativeTime(lastScrapedAt, now)}`
+                  : `Updated ${getRelativeTime(lastScrapedAt, now)}`}
+              </span>
+              {isStale && (
+                <Link
+                  href="/settings?tab=cloud"
+                  className="ml-1 font-bold underline hover:no-underline text-amber-900"
+                  title="Open Cloud Workflows to run scraper locally or inspect execution"
+                >
+                  Run Now
+                </Link>
+              )}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/80 px-3 py-1.5 text-xs font-medium shadow-2xs">
+              <RefreshCw className="h-3.5 w-3.5 text-amber-600" />
+              <span>No scrapes recorded</span>
+              <Link
+                href="/settings?tab=cloud"
+                className="ml-1 font-bold underline hover:no-underline text-amber-900"
+              >
+                Run Now
+              </Link>
             </span>
           )}
           <Link

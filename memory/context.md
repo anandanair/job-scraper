@@ -68,7 +68,7 @@ graph TD
 ```
 .
 ├── .github/workflows/          # Automated GitHub Actions
-│   ├── scrape_jobs.yml         # Daily TypeScript job scraper (hourly gatekeeper evaluating user local timezone across active sources: LinkedIn, CareersFuture, RemoteOK, Direct ATS)
+│   ├── scrape_jobs.yml         # Daily TypeScript job scraper (hourly gatekeeper with automatic missed-window catch-up evaluating user local timezone across active sources: LinkedIn, CareersFuture, RemoteOK, Direct ATS)
 │   ├── score_jobs.yml          # TypeScript AI job scorer (every 4 hrs)
 │   ├── hourly_resume_customization.yml # TypeScript resume tailor (every 4 hrs)
 │   ├── job_manager.yml         # TypeScript job status manager (daily)
@@ -146,7 +146,7 @@ graph TD
       - Search strategy mode (migration `20261110_02_job_search_mode_and_strategy`): `job_search_mode` (text, default 'get_hired_fast'). Supports 'get_hired_fast' (pure ATS qualification, dream checklist dormant, zero gating penalty) and 'dream_hunter' (dual ATS + dream checklist evaluation, strict gating).
      - Multi-country preferences (migration `20261109_01_dream_job_enhancements`): `search_locations` (JSONB array of `{label, country, query, active}`).
      - Dream Job Checklist (migration `20261109_01_dream_job_enhancements`): `dream_job_profile` (JSONB: min salary, preferred work modes, must-have skills, dealbreakers, culture priorities; desired titles removed in favor of stack/seniority; target_ats_companies decoupled from scoring and managed under Job Search Settings).
-     - Scheduling (migration `20261102_01_schedule_timezone_and_timing`): `schedule_timezone` (text, default `'Asia/Singapore'`), `schedule_hour` (int, default `19`), `schedule_minute` (int, default `0`), `last_scraped_at` (timestamptz).
+     - Scheduling (migration `20261102_01_schedule_timezone_and_timing`): `schedule_timezone` (text, default `'Asia/Singapore'`), `schedule_hour` (int, default `19`), `schedule_minute` (int, default `0`), `last_scraped_at` (timestamptz). Gatekeeper (`web/src/lib/schedule-utils.ts`) features automatic catch-up execution if scheduled runners are delayed or dropped past the target window, initial run immediate dispatch, and 4-hour spacing safeguards. Dashboard Hero surfaces an amber stale scrape banner with 1-click execution when last scrape is >= 24h old.
      - Onboarding status: `setup_step`, `setup_completed`.
 6. **`linkedin_geo_locations`**:
    - Pre-populated mapping of global locations to LinkedIn `geoId`s (e.g., Singapore `102454443`, United States `103644278`).

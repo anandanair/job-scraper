@@ -127,57 +127,82 @@ export interface ScheduleEvaluationResult {
 }
 
 /**
+ * Converts a given year, month (1-12), day, hour, and minute in a specific IANA timezone
+ * into its exact UTC Date representation.
+ */
+export function zonedDateToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string
+): Date {
+  const guess = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(guess);
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || "0", 10);
+  const gh = get("hour") === 24 ? 0 : get("hour");
+  const guessUtc = Date.UTC(get("year"), get("month") - 1, get("day"), gh, get("minute"));
+  const targetUtc = Date.UTC(year, month - 1, day, hour, minute);
+  const diff = guessUtc - targetUtc;
+  return new Date(guess.getTime() - diff);
+}
+
+/**
+ * Extracts numeric date and time parts for a Date in a specific IANA timezone.
+ */
+export function getZonedParts(
+  date: Date,
+  timeZone: string
+): { year: number; month: number; day: number; hour: number; minute: number; second: number } {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || "0", 10);
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour") === 24 ? 0 : get("hour"),
+    minute: get("minute"),
+    second: get("second"),
+  };
+}
+
+/**
  * Evaluates whether the scraper should execute right now based on user settings
  * and the triggering event.
+ *
+ * Supports catch-up execution if GitHub Actions drops or delays scheduled runs
+ * past the target execution window.
  */
 export function evaluateSchedule(
   settings: Partial<AppSettings> | null | undefined,
-  eventName: string = "schedule"
+  eventName: string = "schedule",
+  referenceDate?: Date
 ): ScheduleEvaluationResult {
-  // Manual dispatch always runs immediately
-  if (eventName === "workflow_dispatch") {
-    const tz = normalizeTimezone(settings?.schedule_timezone);
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      dateStyle: "medium",
-      timeStyle: "medium",
-    });
-    return {
-      shouldRun: true,
-      reason: "Manual workflow dispatch trigger",
-      localTimeStr: formatter.format(now),
-      currentLocalHour: now.getHours(),
-      currentLocalMinute: now.getMinutes(),
-      targetHour: settings?.schedule_hour ?? 19,
-      targetMinute: settings?.schedule_minute ?? 0,
-      timezone: tz,
-    };
-  }
-
+  const now = referenceDate || new Date();
   const tz = normalizeTimezone(settings?.schedule_timezone);
   const targetHour = typeof settings?.schedule_hour === "number" ? settings.schedule_hour : 19;
   const targetMinute = typeof settings?.schedule_minute === "number" ? settings.schedule_minute : 0;
-  const now = new Date();
-
-  // 1. Current local time parts in user's timezone
-  const dateFmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }); // Output: YYYY-MM-DD
-  const todayStr = dateFmt.format(now);
-
-  const timeFmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour: "numeric",
-    minute: "numeric",
-    hour12: false,
-  });
-  const parts = timeFmt.formatToParts(now);
-  const currentLocalHour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
-  const currentLocalMinute = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
 
   const fullFmt = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
@@ -186,48 +211,22 @@ export function evaluateSchedule(
   });
   const localTimeStr = fullFmt.format(now);
 
-  // 2. Check last_scraped_at
-  if (settings?.last_scraped_at) {
-    const lastDate = new Date(settings.last_scraped_at);
-    if (!isNaN(lastDate.getTime())) {
-      const lastDateStr = dateFmt.format(lastDate);
-      const hoursSince = (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60);
+  const dateFmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const todayStr = dateFmt.format(now);
+  const nowParts = getZonedParts(now, tz);
+  const currentLocalHour = nowParts.hour;
+  const currentLocalMinute = nowParts.minute;
 
-      // Already completed on the same local calendar day
-      if (lastDateStr === todayStr) {
-        return {
-          shouldRun: false,
-          reason: `Already completed today (${todayStr}) in timezone ${tz}`,
-          localTimeStr,
-          currentLocalHour,
-          currentLocalMinute,
-          targetHour,
-          targetMinute,
-          timezone: tz,
-        };
-      }
-
-      // Safeguard against running within 4 hours (e.g. if manual run happened just before schedule)
-      if (hoursSince < 4) {
-        return {
-          shouldRun: false,
-          reason: `Recently executed ${hoursSince.toFixed(1)} hours ago`,
-          localTimeStr,
-          currentLocalHour,
-          currentLocalMinute,
-          targetHour,
-          targetMinute,
-          timezone: tz,
-        };
-      }
-    }
-  }
-
-  // 3. Check if local hour has reached target hour
-  if (currentLocalHour < targetHour) {
+  // Manual dispatch always runs immediately
+  if (eventName === "workflow_dispatch") {
     return {
-      shouldRun: false,
-      reason: `Current local hour (${currentLocalHour}:00) is before target hour (${targetHour}:00)`,
+      shouldRun: true,
+      reason: "Manual workflow dispatch trigger",
       localTimeStr,
       currentLocalHour,
       currentLocalMinute,
@@ -237,9 +236,105 @@ export function evaluateSchedule(
     };
   }
 
+  // 1. Initial setup: no previous scrape recorded yet
+  if (!settings?.last_scraped_at) {
+    return {
+      shouldRun: true,
+      reason: "Initial run: no previous scrape recorded",
+      localTimeStr,
+      currentLocalHour,
+      currentLocalMinute,
+      targetHour,
+      targetMinute,
+      timezone: tz,
+    };
+  }
+
+  const lastDate = new Date(settings.last_scraped_at);
+  if (isNaN(lastDate.getTime())) {
+    return {
+      shouldRun: true,
+      reason: "Initial run: invalid last_scraped_at timestamp",
+      localTimeStr,
+      currentLocalHour,
+      currentLocalMinute,
+      targetHour,
+      targetMinute,
+      timezone: tz,
+    };
+  }
+
+  const lastDateStr = dateFmt.format(lastDate);
+  const hoursSince = (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60);
+
+  // 2. Already completed on the same local calendar day in the user's timezone
+  if (lastDateStr === todayStr) {
+    return {
+      shouldRun: false,
+      reason: `Already completed today (${todayStr}) in timezone ${tz}`,
+      localTimeStr,
+      currentLocalHour,
+      currentLocalMinute,
+      targetHour,
+      targetMinute,
+      timezone: tz,
+    };
+  }
+
+  // 3. Minimum spacing safeguard (at least 4 hours between any executions)
+  if (hoursSince < 4) {
+    return {
+      shouldRun: false,
+      reason: `Recently executed ${hoursSince.toFixed(1)} hours ago (minimum 4h spacing)`,
+      localTimeStr,
+      currentLocalHour,
+      currentLocalMinute,
+      targetHour,
+      targetMinute,
+      timezone: tz,
+    };
+  }
+
+  // 4. Determine the most recent scheduled target window
+  const todayTarget = zonedDateToUtc(nowParts.year, nowParts.month, nowParts.day, targetHour, targetMinute, tz);
+  const yesterdayDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const yParts = getZonedParts(yesterdayDate, tz);
+  const yesterdayTarget = zonedDateToUtc(yParts.year, yParts.month, yParts.day, targetHour, targetMinute, tz);
+
+  const mostRecentTarget = now.getTime() >= todayTarget.getTime() ? todayTarget : yesterdayTarget;
+
+  // 5. Check if the most recent target window was missed
+  if (lastDate.getTime() < mostRecentTarget.getTime()) {
+    const isTodayWindow = mostRecentTarget.getTime() === todayTarget.getTime();
+    if (isTodayWindow) {
+      return {
+        shouldRun: true,
+        reason: `Local time matches target window (${targetHour}:${targetMinute.toString().padStart(2, "0")}) and has not run today`,
+        localTimeStr,
+        currentLocalHour,
+        currentLocalMinute,
+        targetHour,
+        targetMinute,
+        timezone: tz,
+      };
+    } else {
+      return {
+        shouldRun: true,
+        reason: `Catch-up run: missed previous scheduled window (last scrape was ${hoursSince.toFixed(1)}h ago on ${lastDateStr})`,
+        localTimeStr,
+        currentLocalHour,
+        currentLocalMinute,
+        targetHour,
+        targetMinute,
+        timezone: tz,
+      };
+    }
+  }
+
+  // 6. Yesterday's window was satisfied and today's target window hasn't arrived yet
   return {
-    shouldRun: true,
-    reason: `Local time matches target window (${targetHour}:${targetMinute.toString().padStart(2, "0")}) and has not run today`,
+    shouldRun: false,
+    reason: `Current local hour (${currentLocalHour}:00) is before target hour (${targetHour}:00)`,
     localTimeStr,
     currentLocalHour,
     currentLocalMinute,
