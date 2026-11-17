@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
     return config;
   },
   serverExternalPackages: ["pdfkit", "pdfjs-dist", "impit"],
+  experimental: {
+    agentUpgrade: "security",
+  },
 };
 
 export default nextConfig;
