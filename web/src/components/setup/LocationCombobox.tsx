@@ -12,7 +12,7 @@ import {
   Loader2,
   ExternalLink,
 } from "lucide-react";
-import { GeoLocationItem } from "@/lib/setup/geoLocations";
+import { GeoLocationItem, resolveGeoLocation } from "@/lib/setup/geoLocations";
 
 interface LocationComboboxProps {
   locations: GeoLocationItem[];
@@ -50,10 +50,44 @@ export function LocationCombobox({
     }
   }, [initialLocations]);
 
-  // Close dropdown on outside click
+  // Filtered locations based on search query
+  const query = searchQuery.trim().toLowerCase();
+  const filtered = locations.filter((loc) => {
+    if (!query) return true;
+    const nameMatch = loc.name.toLowerCase().includes(query);
+    const countryMatch = loc.country.toLowerCase().includes(query);
+    const typeMatch = Boolean(loc.entity_type && loc.entity_type.toLowerCase().includes(query));
+    const aliasMatch = Boolean(
+      loc.aliases &&
+        loc.aliases.some((a) => {
+          const aLow = a.toLowerCase();
+          return aLow === query || aLow.includes(query) || query.includes(aLow);
+        })
+    );
+    return nameMatch || countryMatch || typeMatch || aliasMatch;
+  });
+
+  const handleSelect = (loc: GeoLocationItem) => {
+    onSelect({ name: loc.name, geoId: loc.geo_id });
+    setIsOpen(false);
+    setIsAddingCustom(false);
+    setSearchQuery("");
+  };
+
+  // Close dropdown on outside click or commit typed location
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        if (searchQuery.trim()) {
+          // If the user typed a location but didn't click an item before advancing/clicking outside,
+          // automatically resolve and commit the typed location instead of reverting to default.
+          if (filtered.length > 0) {
+            handleSelect(filtered[0]);
+          } else {
+            const resolved = resolveGeoLocation(searchQuery.trim());
+            onSelect({ name: resolved.name, geoId: resolved.geoId });
+          }
+        }
         setIsOpen(false);
         setIsAddingCustom(false);
         setCustomError(null);
@@ -64,24 +98,25 @@ export function LocationCombobox({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [searchQuery, filtered]);
 
-  // Filtered locations based on search query
-  const query = searchQuery.trim().toLowerCase();
-  const filtered = locations.filter((loc) => {
-    if (!query) return true;
-    return (
-      loc.name.toLowerCase().includes(query) ||
-      loc.country.toLowerCase().includes(query) ||
-      (loc.entity_type && loc.entity_type.toLowerCase().includes(query))
-    );
-  });
-
-  const handleSelect = (loc: GeoLocationItem) => {
-    onSelect({ name: loc.name, geoId: loc.geo_id });
-    setIsOpen(false);
-    setIsAddingCustom(false);
-    setSearchQuery("");
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (filtered.length > 0) {
+        handleSelect(filtered[0]);
+      } else if (searchQuery.trim()) {
+        const resolved = resolveGeoLocation(searchQuery.trim());
+        onSelect({ name: resolved.name, geoId: resolved.geoId });
+        setIsOpen(false);
+        setIsAddingCustom(false);
+        setSearchQuery("");
+      }
+    } else if (e.key === "Escape") {
+      setIsOpen(false);
+      setIsAddingCustom(false);
+      setSearchQuery("");
+    }
   };
 
   const handleStartCustom = (presetName?: string) => {
@@ -93,15 +128,18 @@ export function LocationCombobox({
 
   const handleSaveCustomLocation = async () => {
     const trimmedName = customName.trim();
-    const trimmedGeoId = customGeoId.trim();
+    let trimmedGeoId = customGeoId.trim();
 
     if (!trimmedName) {
       setCustomError("Location name is required.");
       return;
     }
+
     if (!trimmedGeoId) {
-      setCustomError("LinkedIn Geo ID is required. (e.g. 100477049)");
-      return;
+      const resolved = resolveGeoLocation(trimmedName);
+      if (resolved.geoId) {
+        trimmedGeoId = resolved.geoId;
+      }
     }
 
     setIsSavingCustom(true);
@@ -172,6 +210,7 @@ export function LocationCombobox({
             if (isAddingCustom) setIsAddingCustom(false);
           }}
           onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
           placeholder={selectedLocation || "Search country, city, or metro hub..."}
           className="w-full py-2.5 pr-9 text-xs sm:text-sm font-semibold text-slate-900 bg-transparent focus:outline-none placeholder:text-slate-400"
         />

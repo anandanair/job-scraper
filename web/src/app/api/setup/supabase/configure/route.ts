@@ -120,7 +120,16 @@ export async function POST(req: Request) {
       // Non-fatal control plane update
     }
 
-    // 5. Write .env.local and root .env files (Database credentials ONLY)
+    // 5. Ensure all migrations are recorded and applied via booster
+    try {
+      const { runPendingMigrations } = await import("@/lib/setup/runMigrations");
+      const client = createClient(supabaseUrl, serviceRoleKey);
+      await runPendingMigrations(client, true);
+    } catch (migErr: any) {
+      console.warn("Notice running migrations during configure:", migErr?.message || migErr);
+    }
+
+    // 6. Write .env.local and root .env files (Database credentials ONLY)
     writeEnvFiles({
       supabaseUrl,
       anonKey,

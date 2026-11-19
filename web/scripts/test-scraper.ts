@@ -54,8 +54,17 @@ async function runDiagnostics() {
   const sourceArg = args.find((_, i) => args[i - 1] === "--source");
   const queryArg = args.find((_, i) => args[i - 1] === "--query") || "Software Engineer";
   const limitArg = parseInt(args.find((_, i) => args[i - 1] === "--limit") || "1", 10);
+  const locationArg = args.find((_, i) => args[i - 1] === "--location");
 
   const supabase = createSupabaseStaticClient();
+  let testLocation = locationArg;
+  if (!testLocation && supabase) {
+    try {
+      const { data: s } = await supabase.from("app_settings").select("linkedin_location").limit(1).maybeSingle();
+      if (s?.linkedin_location) testLocation = s.linkedin_location;
+    } catch {}
+  }
+  if (!testLocation) testLocation = "Singapore";
 
   // Test 2: CareersFuture
   if (!sourceArg || sourceArg === "all" || sourceArg === "careers_future") {
@@ -94,7 +103,7 @@ async function runDiagnostics() {
 
       const liJobs = await processLinkedInQuery(
         queryArg,
-        "Singapore",
+        testLocation,
         supabase,
         linkedInConfig,
         limitArg

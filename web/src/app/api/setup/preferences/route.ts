@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { updateAppSettings, getAppSettings } from "@/lib/supabase/queries";
+import { resolveGeoLocation } from "@/lib/setup/geoLocations";
 
 export const dynamic = "force-dynamic";
 
@@ -28,18 +29,28 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!linkedinLocation || !linkedinGeoId) {
+    if (!linkedinLocation) {
       return NextResponse.json(
-        { error: "Location and LinkedIn Geo ID are required." },
+        { error: "Location is required." },
         { status: 400 }
       );
+    }
+
+    const resolved = resolveGeoLocation(linkedinLocation, linkedinGeoId);
+    const finalLocation = resolved.name;
+    const finalGeoId = resolved.geoId;
+    const isSingapore = finalLocation.toLowerCase().includes("singapore");
+
+    let finalSources = Array.isArray(scrapingSources) && scrapingSources.length > 0 ? scrapingSources : ["linkedin"];
+    if (!isSingapore) {
+      finalSources = finalSources.filter((s: string) => s !== "careers_future");
     }
 
     // Save preferences to app_settings in Supabase
     const updated = await updateAppSettings({
       linkedin_search_queries: linkedinSearchQueries,
-      linkedin_location: linkedinLocation,
-      linkedin_geo_id: String(linkedinGeoId),
+      linkedin_location: finalLocation,
+      linkedin_geo_id: String(finalGeoId),
       linkedin_job_type: linkedinJobType,
       linkedin_job_posting_date: linkedinJobPostingDate,
       linkedin_f_wt: linkedinFWt,
@@ -47,7 +58,7 @@ export async function POST(req: Request) {
       careers_future_search_queries: linkedinSearchQueries,
       careers_future_search_categories: careersFutureSearchCategories,
       careers_future_search_employment_types: careersFutureSearchEmploymentTypes,
-      scraping_sources: scrapingSources,
+      scraping_sources: finalSources,
       ...(scheduleTimezone ? { schedule_timezone: scheduleTimezone } : {}),
       ...(typeof scheduleHour === "number" ? { schedule_hour: scheduleHour } : {}),
       ...(typeof scheduleMinute === "number" ? { schedule_minute: scheduleMinute } : {}),

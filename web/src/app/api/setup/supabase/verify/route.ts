@@ -32,6 +32,15 @@ export async function POST(req: Request) {
 
     const allTablesExist = hasJobs && hasAppSettings && hasBaseResume && hasStyles;
 
+    if (allTablesExist) {
+      try {
+        const { runPendingMigrations } = await import("@/lib/setup/runMigrations");
+        await runPendingMigrations(supabase, true);
+      } catch (migErr: any) {
+        console.warn("Notice checking migrations during verify:", migErr?.message || migErr);
+      }
+    }
+
     return NextResponse.json({
       allTablesExist,
       tables: {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseStaticClient } from "@/utils/supabase/server";
-import { PRESET_GEO_LOCATIONS, GeoLocationItem } from "@/lib/setup/geoLocations";
+import { PRESET_GEO_LOCATIONS, GeoLocationItem, resolveGeoLocation } from "@/lib/setup/geoLocations";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +20,16 @@ export async function GET() {
       });
     }
 
+    const merged = (data as any[]).map((d) => {
+      const preset = PRESET_GEO_LOCATIONS.find((p) => p.geo_id === d.geo_id);
+      return {
+        ...d,
+        aliases: preset?.aliases || d.aliases || [],
+      };
+    });
+
     return NextResponse.json({
-      locations: data as GeoLocationItem[],
+      locations: merged as GeoLocationItem[],
       source: "database",
     });
   } catch (err: any) {
@@ -38,9 +46,19 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { name, country, geo_id, entity_type = "Custom" } = body;
 
-    if (!name || !geo_id) {
+    if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json(
-        { error: "Name and LinkedIn Geo ID are required." },
+        { error: "Location name is required." },
+        { status: 400 }
+      );
+    }
+
+    const resolved = resolveGeoLocation(name, geo_id);
+    const finalGeoId = (geo_id || resolved.geoId || "").trim();
+
+    if (!finalGeoId) {
+      return NextResponse.json(
+        { error: "LinkedIn Geo ID is required. (e.g. 100205264)" },
         { status: 400 }
       );
     }

@@ -1,6 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { ScrapedJob, LinkedInConfig, CareersFutureConfig } from "./types";
 import { DreamJobProfile, SearchLocation } from "@/types";
+import { resolveGeoLocation } from "../setup/geoLocations";
 
 export interface LoadedScraperSettings {
   scrapingSources: string[];
@@ -131,9 +132,22 @@ export async function loadScraperSettings(
       careers_future: Math.min(SAFE_MAX_SCRAPE_PER_SOURCE, cfPerQuery),
     };
 
-    const sources = Array.isArray(data.scraping_sources) && data.scraping_sources.length > 0
+    const resolvedGeo = resolveGeoLocation(data.linkedin_location, data.linkedin_geo_id);
+    const isSingapore = resolvedGeo.name.toLowerCase().includes("singapore");
+
+    let sources = Array.isArray(data.scraping_sources) && data.scraping_sources.length > 0
       ? data.scraping_sources
       : defaults.scrapingSources;
+
+    // Safety guardrail: CareersFuture only operates in Singapore. If location is non-Singapore, exclude it.
+    if (!isSingapore && sources.includes("careers_future")) {
+      console.warn(`ℹ️ [Scraper Config] Target location is "${resolvedGeo.name}" (non-Singapore). Automatically excluding Singapore-only CareersFuture scraper.`);
+      sources = sources.filter((s: string) => s !== "careers_future");
+    }
+
+    const effectiveGeoId = resolvedGeo.geoId
+      ? (Number(resolvedGeo.geoId) || resolvedGeo.geoId)
+      : "";
 
     return {
       scrapingSources: sources,
@@ -141,8 +155,8 @@ export async function loadScraperSettings(
       linkedinQueries: data.linkedin_search_queries || [],
       linkedinConfig: {
         ...DEFAULT_LINKEDIN_CONFIG,
-        location: data.linkedin_location || DEFAULT_LINKEDIN_CONFIG.location,
-        geoId: data.linkedin_geo_id ? Number(data.linkedin_geo_id) || data.linkedin_geo_id : DEFAULT_LINKEDIN_CONFIG.geoId,
+        location: resolvedGeo.name,
+        geoId: effectiveGeoId,
         jobType: data.linkedin_job_type || DEFAULT_LINKEDIN_CONFIG.jobType,
         jobPostingDate: data.linkedin_job_posting_date || DEFAULT_LINKEDIN_CONFIG.jobPostingDate,
         f_WT: data.linkedin_f_wt || DEFAULT_LINKEDIN_CONFIG.f_WT,

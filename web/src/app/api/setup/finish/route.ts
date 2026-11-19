@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { updateAppSettings } from "@/lib/supabase/queries";
 import { markSetupComplete } from "@/lib/setup/setupState";
+import { resolveGeoLocation } from "@/lib/setup/geoLocations";
 
 export const dynamic = "force-dynamic";
 
@@ -47,13 +48,26 @@ export async function POST(req: Request) {
         updatePayload.careers_future_search_queries = linkedinSearchQueries;
       }
       if (linkedinLocation && typeof linkedinLocation === "string") {
-        updatePayload.linkedin_location = linkedinLocation;
+        const resolved = resolveGeoLocation(linkedinLocation);
+        updatePayload.linkedin_location = resolved.name;
+        updatePayload.linkedin_geo_id = resolved.geoId;
       }
 
       try {
         await updateAppSettings(updatePayload);
       } catch (dbErr: any) {
         console.warn("Notice updating app_settings during finish:", dbErr.message);
+      }
+
+      // Auto-apply any pending migrations if booster RPC is available
+      // Ensures the user never sees a pending migration banner upon landing on dashboard
+      try {
+        const { createSupabaseStaticClient } = await import("@/utils/supabase/server");
+        const { runPendingMigrations } = await import("@/lib/setup/runMigrations");
+        const adminSupabase = createSupabaseStaticClient();
+        await runPendingMigrations(adminSupabase, true);
+      } catch (migErr: any) {
+        console.warn("Notice checking migrations during finish:", migErr?.message || migErr);
       }
     }
 

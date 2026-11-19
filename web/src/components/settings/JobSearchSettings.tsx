@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { AppSettings, DreamJobProfile } from "@/types";
 import { LocationCombobox } from "@/components/setup/LocationCombobox";
-import { PRESET_GEO_LOCATIONS, GeoLocationItem } from "@/lib/setup/geoLocations";
+import { PRESET_GEO_LOCATIONS, GeoLocationItem, resolveGeoLocation } from "@/lib/setup/geoLocations";
 
 interface JobSearchSettingsProps {
   settings: AppSettings;
@@ -102,8 +102,13 @@ export function JobSearchSettings({ settings, onChange }: JobSearchSettingsProps
     onChange("linkedin_f_wt", updated.join(","));
   };
 
+  const isSingaporeActive = (settings.linkedin_location || "").toLowerCase().includes("singapore");
+
   // Scraping platform toggles
   const toggleSource = (source: string) => {
+    if (source === "careers_future" && !isSingaporeActive) {
+      return; // Cannot enable CareersFuture for non-Singapore locations
+    }
     const current = new Set(settings.scraping_sources);
     if (current.has(source)) {
       if (current.size > 1) current.delete(source);
@@ -114,8 +119,18 @@ export function JobSearchSettings({ settings, onChange }: JobSearchSettingsProps
   };
 
   const handleLocationSelect = (loc: { name: string; geoId: string }) => {
-    onChange("linkedin_location", loc.name);
-    onChange("linkedin_geo_id", loc.geoId);
+    const resolved = resolveGeoLocation(loc.name, loc.geoId);
+    onChange("linkedin_location", resolved.name);
+    onChange("linkedin_geo_id", resolved.geoId);
+
+    // If switching to a non-Singapore location, automatically exclude CareersFuture
+    if (!resolved.name.toLowerCase().includes("singapore")) {
+      const currentSources = new Set(settings.scraping_sources || ["linkedin"]);
+      if (currentSources.has("careers_future")) {
+        currentSources.delete("careers_future");
+        onChange("scraping_sources", Array.from(currentSources));
+      }
+    }
   };
 
   // Tag chip handlers for Target Job Titles
@@ -208,11 +223,13 @@ export function JobSearchSettings({ settings, onChange }: JobSearchSettingsProps
 
           {/* MyCareersFuture */}
           <div
-            onClick={() => toggleSource("careers_future")}
-            className={`p-4 rounded-xl border text-left cursor-pointer transition flex items-center justify-between ${
-              settings.scraping_sources.includes("careers_future")
-                ? "border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-500/20"
-                : "border-slate-200 bg-white hover:bg-slate-50"
+            onClick={() => isSingaporeActive && toggleSource("careers_future")}
+            className={`p-4 rounded-xl border text-left transition flex items-center justify-between ${
+              !isSingaporeActive
+                ? "border-slate-200 bg-slate-50/60 opacity-60 cursor-not-allowed"
+                : settings.scraping_sources.includes("careers_future")
+                ? "border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-500/20 cursor-pointer"
+                : "border-slate-200 bg-white hover:bg-slate-50 cursor-pointer"
             }`}
           >
             <div className="flex items-center gap-3">
@@ -220,18 +237,29 @@ export function JobSearchSettings({ settings, onChange }: JobSearchSettingsProps
                 SG
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-900">MyCareersFuture</p>
-                <p className="text-[11px] text-slate-500">Government portal for Singapore listings</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-slate-900">MyCareersFuture</p>
+                  {!isSingaporeActive && (
+                    <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      Singapore Only
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {isSingaporeActive
+                    ? "Government portal for Singapore listings"
+                    : "Only active when Target Location is Singapore"}
+                </p>
               </div>
             </div>
             <span
               className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                settings.scraping_sources.includes("careers_future")
+                isSingaporeActive && settings.scraping_sources.includes("careers_future")
                   ? "bg-indigo-100 text-indigo-800 border-indigo-200"
                   : "bg-slate-100 text-slate-600 border-slate-200"
               }`}
             >
-              {settings.scraping_sources.includes("careers_future") ? "Active" : "Disabled"}
+              {isSingaporeActive && settings.scraping_sources.includes("careers_future") ? "Active" : "Disabled"}
             </span>
           </div>
 

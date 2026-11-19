@@ -441,16 +441,16 @@ DECLARE
     result json;
 BEGIN
     SELECT json_build_object(
-        'totalNewJobs', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new'),
+        'totalNewJobs', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new'),
         'totalAppliedJobs', count(*) FILTER (WHERE is_active = true AND status IN ('applied', 'interviewing', 'offer') AND job_state = 'new'),
-        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND (total_score >= 50 OR (total_score IS NULL AND resume_score >= 50))),
+        'totalTopMatches', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND (total_score >= 50 OR (total_score IS NULL AND resume_score >= 50))),
         'expiredJobsCount', count(*) FILTER (WHERE job_state = 'expired'),
-        'pendingScoreJobsCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND resume_score IS NULL),
-        'scoredJobsCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL),
+        'pendingScoreJobsCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NULL),
+        'scoredJobsCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL),
         'customResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NOT NULL),
         'noCustomResumeJobsCount', count(*) FILTER (WHERE is_active = true AND customized_resume_id IS NULL),
-        'scoredWithOriginalResumeCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'initial'),
-        'scoredWithCustomResumeCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'tailored', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'custom'),
+        'scoredWithOriginalResumeCount', count(*) FILTER (WHERE is_active = true AND status = 'new' AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'initial'),
+        'scoredWithCustomResumeCount', count(*) FILTER (WHERE is_active = true AND status IN ('new', 'resume_generated') AND job_state = 'new' AND resume_score IS NOT NULL AND resume_score_stage = 'custom'),
         'linkedInJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'linkedin'),
         'careersFutureJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'careers_future'),
         'remoteOkJobsCount', count(*) FILTER (WHERE is_active = true AND job_state = 'new' AND provider = 'remote_ok'),
@@ -948,13 +948,21 @@ ALTER FUNCTION "public"."has_migration_booster"() OWNER TO "postgres";
 REVOKE ALL ON FUNCTION "public"."has_migration_booster"() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION "public"."has_migration_booster"() TO service_role;
 
--- This script already contains the DDL for the booster migration, so record it
--- as applied. Without this seed every fresh install would immediately report a
--- pending migration and show a false "Database Update Available" banner.
+-- This script already contains the cumulative DDL for all migrations up to this release,
+-- so record them as applied. Without this seed, fresh installs would immediately report
+-- pending migrations and show a false-positive "Database Update Available" banner.
 INSERT INTO "public"."schema_migrations" ("version")
 VALUES ('20261029_01_migration_booster_and_interest_filter'),
+       ('20261101_01_applied_jobs_tracking'),
        ('20261102_01_schedule_timezone_and_timing'),
        ('20261103_01_automation_runs_telemetry'),
+       ('20261103_02_cover_letters'),
+       ('20261109_01_dream_job_enhancements'),
+       ('20261110_01_composite_score_and_dream_gating'),
+       ('20261110_02_job_search_mode_and_strategy'),
+       ('20261110_03_company_profiles_and_grounded_scoring'),
+       ('20261110_04_realtime_jobs_publication'),
+       ('20261110_05_dashboard_stats_ats_remoteok'),
        ('20261114_01_heal_tailored_jobs_status')
 ON CONFLICT ("version") DO NOTHING;
 

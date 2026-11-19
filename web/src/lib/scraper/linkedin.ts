@@ -4,6 +4,7 @@ import { ScrapedJob, CandidateJob, LinkedInConfig } from "./types";
 import { convertHtmlToMarkdown } from "./html-to-markdown";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { getExistingJobsCache } from "./supabase-utils";
+import { resolveGeoLocation } from "../setup/geoLocations";
 
 let linkedinSession: Impit | null = null;
 
@@ -38,15 +39,21 @@ export async function fetchLinkedInJobIds(
   let start = 0;
   const maxStart = config.maxStart;
 
+  // Resolve canonical location and prevent stale/mismatched Singapore Geo ID
+  const resolved = resolveGeoLocation(location, config.geoId);
+  const effectiveLocation = resolved.name || location;
+  const effectiveGeoId = resolved.geoId || (String(config.geoId) !== "102454443" ? config.geoId : "");
+  const geoIdParam = effectiveGeoId ? `&geoId=${encodeURIComponent(String(effectiveGeoId))}` : "";
+
   const fWtParam = config.f_WT ? `&f_WT=${encodeURIComponent(config.f_WT)}` : "";
   const client = getLinkedInClient();
 
-  console.log(`[LinkedIn] --- Starting Phase 1: Scraping Candidate IDs (Max Start: ${maxStart}) ---`);
+  console.log(`[LinkedIn] --- Starting Phase 1: Scraping Candidate IDs (Location: "${effectiveLocation}", GeoID: ${effectiveGeoId || "none"}, Max Start: ${maxStart}) ---`);
 
   while (start <= maxStart) {
     const targetUrl = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(
       searchQuery
-    )}&location=${encodeURIComponent(location)}&geoId=${config.geoId}&f_TPR=${config.jobPostingDate}&f_JT=${
+    )}&location=${encodeURIComponent(effectiveLocation)}${geoIdParam}&f_TPR=${config.jobPostingDate}&f_JT=${
       config.jobType
     }${fWtParam}&start=${start}`;
 

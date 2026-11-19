@@ -15,7 +15,7 @@ import {
   Globe,
   Building,
 } from "lucide-react";
-import { PRESET_GEO_LOCATIONS, GeoLocationItem } from "@/lib/setup/geoLocations";
+import { PRESET_GEO_LOCATIONS, GeoLocationItem, resolveGeoLocation } from "@/lib/setup/geoLocations";
 import { LocationCombobox } from "./LocationCombobox";
 import { AppSettings } from "@/types";
 
@@ -255,8 +255,9 @@ export function Step3Preferences({
 
   // Location selection from Combobox
   const handleLocationSelect = (loc: { name: string; geoId: string }) => {
-    setSelectedLocation(loc.name);
-    setSelectedGeoId(loc.geoId);
+    const resolved = resolveGeoLocation(loc.name, loc.geoId);
+    setSelectedLocation(resolved.name);
+    setSelectedGeoId(resolved.geoId);
     setErrorMsg(null);
   };
 
@@ -326,8 +327,13 @@ export function Step3Preferences({
     }
 
     // 2. Save search preferences
+    const resolved = resolveGeoLocation(selectedLocation.trim(), selectedGeoId);
+    const finalLocation = resolved.name;
+    const finalGeoId = resolved.geoId;
+    const isSingapore = finalLocation.toLowerCase().includes("singapore");
+
     const scrapingSources = ["linkedin"];
-    if (includeCareersFuture && isSingaporeActive) {
+    if (includeCareersFuture && isSingapore) {
       scrapingSources.push("careers_future");
     }
     if (includeRemoteOk) {
@@ -340,8 +346,8 @@ export function Step3Preferences({
     try {
       await onNext({
         queries,
-        location: selectedLocation.trim(),
-        geoId: selectedGeoId,
+        location: finalLocation,
+        geoId: finalGeoId,
         jobTypes: selectedJobTypes.join(","),
         workplaceTypes: selectedWorkplaceTypes.join(","),
         scrapingSources,

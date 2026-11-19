@@ -149,7 +149,8 @@ graph TD
      - Scheduling (migration `20261102_01_schedule_timezone_and_timing`): `schedule_timezone` (text, default `'Asia/Singapore'`), `schedule_hour` (int, default `19`), `schedule_minute` (int, default `0`), `last_scraped_at` (timestamptz). Gatekeeper (`web/src/lib/schedule-utils.ts`) features automatic catch-up execution if scheduled runners are delayed or dropped past the target window, initial run immediate dispatch, and 4-hour spacing safeguards. Dashboard Hero surfaces an amber stale scrape banner with 1-click execution when last scrape is >= 24h old.
      - Onboarding status: `setup_step`, `setup_completed`.
 6. **`linkedin_geo_locations`**:
-   - Pre-populated mapping of global locations to LinkedIn `geoId`s (e.g., Singapore `102454443`, United States `103644278`).
+   - Pre-populated mapping of global locations to LinkedIn `geoId`s (e.g., Singapore `102454443`, United States `103644278`, Dubai / United Arab Emirates `100205264`).
+   - `resolveGeoLocation(location, geoId)` in `web/src/lib/setup/geoLocations.ts` provides multi-alias resolution (e.g. "Dubai / UAE", "UAE", "UK", "US"), commits typed queries on Enter/blur in `LocationCombobox`, auto-heals stale Singapore GeoID fallbacks (`102454443`) for non-Singapore locations, and automatically excludes Singapore-only `careers_future` from scraping sources.
 7. **`jobs` application-tracking columns** (migration `20261101_01_applied_jobs_tracking`):
    - `follow_up_at` (timestamptz): user-set follow-up reminder; surfaced as due/overdue badges on the Applied page.
    - `next_event_at` (timestamptz) + `next_event_label` (text): next scheduled event (e.g., interview round) with countdown banner.
@@ -342,12 +343,14 @@ npm run parse-resume     # Parse master resume.pdf into base_resume table
    - `GET /api/system/schema-status` is **read-only**; `POST` applies migrations. The banner never triggers DDL on page load.
    - `getMigrationStatus()` distinguishes `not_configured`, `unreachable`, `up_to_date`, and `pending`, so an offline or unconfigured project never shows a false update banner.
    - For legacy databases lacking the booster, `SchemaUpdateBanner` surfaces a 1-click modal with direct links to the user's Supabase SQL Editor (`/sql/new`).
-4. **Three migration entry points (all share `runPendingMigrations()`)**:
+4. **Migration entry points (all share `runPendingMigrations()`)**:
    - **App startup** — `web/src/instrumentation.ts` runs once per server process, so launching the app applies pending migrations automatically.
+   - **Setup completion & verification** — `/api/setup/finish`, `/api/setup/supabase/verify`, and `/api/setup/supabase/configure` auto-apply pending migrations via booster so new or newly migrated installs never see false pending migration banners upon first launch.
    - **Cloud workflows** — every automation workflow runs `npm run migrate` (`web/scripts/migrate.ts`) before touching the database, so cloud-only users who never launch the app locally still receive schema updates. The step exits non-zero when migrations remain, failing the workflow loudly instead of running against a stale schema.
-   - **Dashboard banner** — manual fallback for databases without the booster.
+   - **Dashboard banner** — 1-click automated update when booster is installed (`exec_migration`), or manual SQL fallback with direct links to Supabase SQL Editor (`/sql/new`) if booster is missing.
 5. **Adding a schema change (required workflow)**:
    - Update `supabase_setup/init.sql` **and** append a new entry to `ALL_MIGRATIONS` in `web/src/lib/setup/migrations.ts` with a new `YYYYMMDD_NN_*` id.
+   - Always ensure `supabase_setup/init.sql`'s `INSERT INTO "public"."schema_migrations"` seeds all migration version ids so fresh installs report 0 pending migrations out of the box.
    - `init.sql` is the fresh-install path; `ALL_MIGRATIONS` is the upgrade path for existing users. Both must stay in sync.
    - Never edit an already-released migration id — existing databases have already recorded it and will skip it.
 6. **What cannot be synced**: user data (jobs, settings, resumes) lives in each user's own Supabase project and is never overwritten. Only schema and reference/seed data propagate.
