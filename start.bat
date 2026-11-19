@@ -62,19 +62,19 @@ if %errorlevel% neq 0 (
 set BEHIND=0
 for /f %%i in ('git rev-list HEAD..upstream/main --count 2^>nul') do set BEHIND=%%i
 
-if not "%BEHIND%" gtr "0" (
+if "!BEHIND!"=="0" (
     echo     JobTrack is up to date.
     echo.
     goto :eof
 )
 
 echo.
-echo [*] Update available: %BEHIND% new commit^(s^) found on upstream repository.
+echo [*] Update available: !BEHIND! new commit^(s^) found on upstream repository.
 
 :: Refuse to touch a dirty working tree - a merge would clobber local edits
 set DIRTY=0
 for /f %%i in ('git status --porcelain 2^>nul') do set DIRTY=1
-if "%DIRTY%"=="1" (
+if "!DIRTY!"=="1" (
     echo [WARNING] You have uncommitted local changes, so the update was skipped.
     echo           Commit or stash them, then run update.bat to update.
     echo.
